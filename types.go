@@ -21,6 +21,7 @@ type Provider struct {
 	Healthy      bool
 	Client       OpenAIClient
 	ActiveCompletions int64
+	StaticModels bool   // true if models list is static (from config)
 }
 
 type Router struct {

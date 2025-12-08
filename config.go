@@ -19,8 +19,9 @@ type LoggingConfig struct {
 }
 
 type ProviderConfig struct {
-	Name    string `json:"name"`
-	BaseURL string `json:"base_url"`
-	Token   string `json:"token"`
-	Enabled bool   `json:"enabled"`
+	Name    string   `json:"name"`
+	BaseURL string   `json:"base_url"`
+	Token   string   `json:"token"`
+	Enabled bool     `json:"enabled"`
+	Models  []string `json:"models,omitempty"`
 }

@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"sort"
 	"strings"
@@ -38,6 +37,7 @@ func NewRouter(config *Config, logger Logger) (*Router, error) {
 			Healthy:           true, // Start as healthy, will be verified
 			Client:            NewOpenAIClient(providerConfig.BaseURL, providerConfig.Token, logger),
 			ActiveCompletions: 0,
+			StaticModels:      len(providerConfig.Models) > 0, // Static if models are provided in config
 		}
 
 		router.Providers[provider.Name] = provider
@@ -61,9 +61,45 @@ func (r *Router) RefreshModels(ctx context.Context) error {
 	// Use WaitGroup to fetch models from all healthy providers concurrently
 	var wg sync.WaitGroup
 
+	// First, add static models from providers with predefined model lists
 	for providerName, provider := range r.Providers {
-		if !provider.Enabled || !provider.Healthy {
-			r.logger.Debug("skipping unhealthy provider", "provider", providerName, "enabled", provider.Enabled, "healthy", provider.Healthy)
+		if !provider.Enabled {
+			continue
+		}
+
+		if provider.StaticModels {
+			// Get static models from config
+			var staticModels []string
+			for _, providerConfig := range r.config.Providers {
+				if providerConfig.Name == providerName {
+					staticModels = providerConfig.Models
+					break
+				}
+			}
+
+			modelSetMu.Lock()
+			for _, modelID := range staticModels {
+				if modelSet[modelID] == nil {
+					modelSet[modelID] = make(map[string]bool)
+				}
+				modelSet[modelID][providerName] = true
+			}
+			modelSetMu.Unlock()
+
+			r.logger.Info("using static models from config",
+				"provider", providerName,
+				"count", len(staticModels))
+		}
+	}
+
+	// Then, fetch dynamic models from providers without static lists
+	for providerName, provider := range r.Providers {
+		if !provider.Enabled || !provider.Healthy || provider.StaticModels {
+			r.logger.Debug("skipping provider",
+				"provider", providerName,
+				"enabled", provider.Enabled,
+				"healthy", provider.Healthy,
+				"static_models", provider.StaticModels)
 			continue
 		}
 
@@ -152,7 +188,15 @@ func (r *Router) DisableProvider(providerName, reason string) {
 	}
 
 	provider.Healthy = false
-	r.logger.Warn("provider disabled", "provider", providerName, "reason", reason)
+
+	if provider.StaticModels {
+		r.logger.Warn("static model provider disabled",
+			"provider", providerName,
+			"reason", reason,
+			"static_models", true)
+	} else {
+		r.logger.Warn("provider disabled", "provider", providerName, "reason", reason)
+	}
 
 	// Remove all models from this provider
 	modelsToRemove := make([]string, 0)
@@ -422,6 +466,10 @@ func (r *Router) handleNonStreamingChatCompletion(w http.ResponseWriter, req *ht
 func (r *Router) handleStreamingChatCompletion(w http.ResponseWriter, req *http.Request, completionReq *ChatCompletionRequest) {
 	ctx := req.Context()
 
+	// Create token counter for usage estimation
+	tokenCounter := openai.NewTokenCounter()
+	tokenCounter.AddPromptTokensFromMessages(completionReq.Messages)
+
 	// Get raw response from provider
 	resp, providerName, err := r.CreateChatCompletionRaw(ctx, completionReq)
 	if err != nil {
@@ -452,33 +500,45 @@ func (r *Router) handleStreamingChatCompletion(w http.ResponseWriter, req *http.
 		return
 	}
 
-	// Create a TeeReader to both copy the stream and accumulate content for token counting
-	var accumulatedContent strings.Builder
-	teeReader := io.TeeReader(resp.Body, &accumulatedContent)
-
-	// Copy the streaming response to the client
-	scanner := bufio.NewScanner(teeReader)
-	var chunks []string
-
+	// Copy the streaming response to the client and inject usage when needed
+	scanner := bufio.NewScanner(resp.Body)
 	for scanner.Scan() {
 		line := scanner.Text()
-		chunks = append(chunks, line)
-		fmt.Fprintln(w, line)
+
+		// Check if this is a data line that needs modification
+		if strings.HasPrefix(line, "data:") && !strings.HasPrefix(line, "data: [DONE]") {
+			dataStr := strings.TrimPrefix(line, "data: ")
+			var chunk openai.ChatCompletionResponse
+
+			if err := json.Unmarshal([]byte(dataStr), &chunk); err == nil && len(chunk.Choices) > 0 {
+				tokenCounter.AddCompletionTokensFromDelta(&chunk.Choices[0].Delta)
+
+				// If this chunk has a finish_reason and no usage, inject our estimates
+				if chunk.Choices[0].FinishReason == "stop" && chunk.Usage == nil {
+					tokenCounter.InjectUsageIfMissing(&chunk)
+					modifiedJSON, _ := json.Marshal(chunk)
+					fmt.Fprintf(w, "data: %s\n", string(modifiedJSON))
+				} else {
+					// Pass through unchanged
+					fmt.Fprintln(w, line)
+				}
+			} else {
+				// Parse failed or no choices, pass through unchanged
+				fmt.Fprintln(w, line)
+			}
+		} else {
+			// Not a data line or is [DONE], pass through unchanged
+			fmt.Fprintln(w, line)
+		}
+
 		if flusher != nil {
 			flusher.Flush()
 		}
 	}
 
-	// Send final [DONE] message
-	fmt.Fprintln(w, "data: [DONE]")
-	if flusher != nil {
-		flusher.Flush()
-	}
-
 	r.logger.Debug("streaming response completed",
 		"model", completionReq.Model,
-		"provider", providerName,
-		"chunks", len(chunks))
+		"provider", providerName)
 }
 
 func (r *Router) HandleHealth(w http.ResponseWriter, req *http.Request) {
@@ -495,9 +555,9 @@ func (r *Router) HandleHealth(w http.ResponseWriter, req *http.Request) {
 	providerStatus := make(map[string]interface{})
 	for name, provider := range r.Providers {
 		providerStatus[name] = map[string]interface{}{
-			"enabled":             provider.Enabled,
-			"healthy":             provider.Healthy,
-			"active_completions":  provider.ActiveCompletions,
+			"enabled":            provider.Enabled,
+			"healthy":            provider.Healthy,
+			"active_completions": provider.ActiveCompletions,
 		}
 	}
 	health["provider_status"] = providerStatus
@@ -550,9 +610,9 @@ func (r *Router) healthCheckTask() {
 func (r *Router) checkDisabledProviders() {
 	unhealthyProviders := make([]string, 0)
 
-	// Find unhealthy providers
+	// Find unhealthy providers (skip static model providers)
 	for name, provider := range r.Providers {
-		if provider.Enabled && !provider.Healthy {
+		if provider.Enabled && !provider.Healthy && !provider.StaticModels {
 			unhealthyProviders = append(unhealthyProviders, name)
 		}
 	}

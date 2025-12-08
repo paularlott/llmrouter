@@ -44,7 +44,39 @@ name = "local-llm"
 base_url = "http://localhost:8080/v1"
 token = ""
 enabled = true
+
+# Provider with static models (no model fetching)
+[[providers]]
+name = "google"
+base_url = "https://generativelanguage.googleapis.com/v1beta/openai/"
+token = "your-google-key"
+enabled = true
+models = ["gemini-2.5-flash-lite", "gemini-2.5-pro"]
 ```
+
+## Static Models
+
+You can optionally specify a list of available models for a provider instead of fetching them dynamically:
+
+```toml
+[[providers]]
+name = "google"
+base_url = "https://generativelanguage.googleapis.com/v1beta/openai/"
+token = "your-google-key"
+enabled = true
+models = ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-pro"]
+```
+
+**Benefits of Static Models:**
+- **Faster startup**: No need to query provider API for available models
+- **Reliability**: Works even when provider's API is temporarily unavailable
+- **Privacy**: No need to expose model list to provider
+- **Predictable behavior**: Always use the same predefined model list
+
+**Static Model Behavior:**
+- Router uses the provided model list instead of fetching from provider
+- No reconnection attempts if provider fails (models remain available)
+- Perfect for providers with fixed model catalogs or private deployments
 
 ## Usage
 

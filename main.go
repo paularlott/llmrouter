@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -105,9 +106,10 @@ func main() {
 						for _, providerMap := range providerList {
 							provider := ProviderConfig{
 								Name:    getString(providerMap, "name"),
-								BaseURL: getString(providerMap, "base_url"),
+								BaseURL: strings.TrimSuffix(getString(providerMap, "base_url"), "/"),
 								Token:   getString(providerMap, "token"),
 								Enabled: getBool(providerMap, "enabled"),
+								Models:  getStringSlice(providerMap, "models"),
 							}
 							config.Providers = append(config.Providers, provider)
 						}
@@ -216,4 +218,19 @@ func getBool(m map[string]interface{}, key string) bool {
 		}
 	}
 	return false
+}
+
+func getStringSlice(m map[string]interface{}, key string) []string {
+	if val, ok := m[key]; ok {
+		if slice, ok := val.([]interface{}); ok {
+			result := make([]string, len(slice))
+			for i, item := range slice {
+				if str, ok := item.(string); ok {
+					result[i] = str
+				}
+			}
+			return result
+		}
+	}
+	return nil
 }
