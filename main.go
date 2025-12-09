@@ -100,23 +100,22 @@ func main() {
 
 			// Load providers from config file if available
 			if cmd.ConfigFile != nil {
-				providers, exists := cmd.ConfigFile.GetValue("providers")
-				if exists {
-					if providerList, ok := providers.([]map[string]interface{}); ok {
-						for _, providerMap := range providerList {
-							provider := ProviderConfig{
-								Name:      getString(providerMap, "name"),
-								BaseURL:   strings.TrimSuffix(getString(providerMap, "base_url"), "/"),
-								Token:     getString(providerMap, "token"),
-								Enabled:   getBool(providerMap, "enabled"),
-								Models:    getStringSlice(providerMap, "models"),
-								Allowlist: getStringSlice(providerMap, "allowlist"),
-								Denylist:  getStringSlice(providerMap, "denylist"),
-							}
-							config.Providers = append(config.Providers, provider)
+				typedConfig := cli.NewTypedConfigFile(cmd.ConfigFile)
+				providers := typedConfig.GetObjectSlice("providers")
+				if providers != nil {
+					for _, providerConfig := range providers {
+						provider := ProviderConfig{
+							Name:      providerConfig.GetString("name"),
+							BaseURL:   strings.TrimSuffix(providerConfig.GetString("base_url"), "/"),
+							Token:     providerConfig.GetString("token"),
+							Enabled:   providerConfig.GetBool("enabled"),
+							Models:    providerConfig.GetStringSlice("models"),
+							Allowlist: providerConfig.GetStringSlice("allowlist"),
+							Denylist:  providerConfig.GetStringSlice("denylist"),
 						}
-						logger.Info("loaded providers from config", "count", len(config.Providers))
+						config.Providers = append(config.Providers, provider)
 					}
+					logger.Info("loaded providers from config", "count", len(config.Providers))
 				}
 			}
 
@@ -201,38 +200,4 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
-}
-
-// Helper functions to extract values from config file interface{}
-func getString(m map[string]interface{}, key string) string {
-	if val, ok := m[key]; ok {
-		if str, ok := val.(string); ok {
-			return str
-		}
-	}
-	return ""
-}
-
-func getBool(m map[string]interface{}, key string) bool {
-	if val, ok := m[key]; ok {
-		if b, ok := val.(bool); ok {
-			return b
-		}
-	}
-	return false
-}
-
-func getStringSlice(m map[string]interface{}, key string) []string {
-	if val, ok := m[key]; ok {
-		if slice, ok := val.([]interface{}); ok {
-			result := make([]string, len(slice))
-			for i, item := range slice {
-				if str, ok := item.(string); ok {
-					result[i] = str
-				}
-			}
-			return result
-		}
-	}
-	return nil
 }
