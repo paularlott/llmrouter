@@ -38,6 +38,8 @@ func NewRouter(config *Config, logger Logger) (*Router, error) {
 			Client:            NewOpenAIClient(providerConfig.BaseURL, providerConfig.Token, logger),
 			ActiveCompletions: 0,
 			StaticModels:      len(providerConfig.Models) > 0, // Static if models are provided in config
+			Whitelist:         providerConfig.Whitelist,
+			Blacklist:         providerConfig.Blacklist,
 		}
 
 		router.Providers[provider.Name] = provider
@@ -79,10 +81,12 @@ func (r *Router) RefreshModels(ctx context.Context) error {
 
 			modelSetMu.Lock()
 			for _, modelID := range staticModels {
-				if modelSet[modelID] == nil {
-					modelSet[modelID] = make(map[string]bool)
+				if shouldIncludeModel(modelID, provider.Whitelist, provider.Blacklist) {
+					if modelSet[modelID] == nil {
+						modelSet[modelID] = make(map[string]bool)
+					}
+					modelSet[modelID][providerName] = true
 				}
-				modelSet[modelID][providerName] = true
 			}
 			modelSetMu.Unlock()
 
@@ -133,13 +137,15 @@ func (r *Router) RefreshModels(ctx context.Context) error {
 				"count", len(modelsResp.Data),
 				"models", modelIDs)
 
-			// Safely update the shared modelSet
+			// Safely update the shared modelSet with filtering
 			modelSetMu.Lock()
 			for _, model := range modelsResp.Data {
-				if modelSet[model.ID] == nil {
-					modelSet[model.ID] = make(map[string]bool)
+				if shouldIncludeModel(model.ID, p.Whitelist, p.Blacklist) {
+					if modelSet[model.ID] == nil {
+						modelSet[model.ID] = make(map[string]bool)
+					}
+					modelSet[model.ID][name] = true
 				}
-				modelSet[model.ID][name] = true
 			}
 			modelSetMu.Unlock()
 		}(providerName, provider)
@@ -237,6 +243,32 @@ func (r *Router) EnableProvider(providerName string) {
 
 	provider.Healthy = true
 	r.logger.Info("provider re-enabled", "provider", providerName)
+}
+
+// shouldIncludeModel checks if a model should be included based on whitelist and blacklist
+func shouldIncludeModel(model string, whitelist, blacklist []string) bool {
+	// If blacklist is provided, check if model is in it
+	if len(blacklist) > 0 {
+		for _, blacklisted := range blacklist {
+			if model == blacklisted {
+				return false
+			}
+		}
+	}
+
+	// If whitelist is provided, check if model is in it
+	if len(whitelist) > 0 {
+		for _, whitelisted := range whitelist {
+			if model == whitelisted {
+				return true
+			}
+		}
+		// Model not found in whitelist, exclude it
+		return false
+	}
+
+	// No whitelist, include model (assuming not blacklisted)
+	return true
 }
 
 func (r *Router) GetProviderForModel(model string) (string, error) {

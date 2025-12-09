@@ -105,11 +105,13 @@ func main() {
 					if providerList, ok := providers.([]map[string]interface{}); ok {
 						for _, providerMap := range providerList {
 							provider := ProviderConfig{
-								Name:    getString(providerMap, "name"),
-								BaseURL: strings.TrimSuffix(getString(providerMap, "base_url"), "/"),
-								Token:   getString(providerMap, "token"),
-								Enabled: getBool(providerMap, "enabled"),
-								Models:  getStringSlice(providerMap, "models"),
+								Name:      getString(providerMap, "name"),
+								BaseURL:   strings.TrimSuffix(getString(providerMap, "base_url"), "/"),
+								Token:     getString(providerMap, "token"),
+								Enabled:   getBool(providerMap, "enabled"),
+								Models:    getStringSlice(providerMap, "models"),
+								Whitelist: getStringSlice(providerMap, "whitelist"),
+								Blacklist: getStringSlice(providerMap, "blacklist"),
 							}
 							config.Providers = append(config.Providers, provider)
 						}

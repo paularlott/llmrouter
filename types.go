@@ -22,6 +22,8 @@ type Provider struct {
 	Client       OpenAIClient
 	ActiveCompletions int64
 	StaticModels bool   // true if models list is static (from config)
+	Whitelist    []string // allowed models from this provider
+	Blacklist    []string // blocked models from this provider
 }
 
 type Router struct {

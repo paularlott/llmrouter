@@ -52,6 +52,22 @@ base_url = "https://generativelanguage.googleapis.com/v1beta/openai/"
 token = "your-google-key"
 enabled = true
 models = ["gemini-2.5-flash-lite", "gemini-2.5-pro"]
+
+# Provider with whitelist (only these models will be available)
+[[providers]]
+name = "openai-filtered"
+base_url = "https://api.openai.com/v1"
+token = "your-api-key"
+enabled = true
+whitelist = ["gpt-4", "gpt-4-turbo", "gpt-3.5-turbo"]
+
+# Provider with blacklist (these models will be excluded)
+[[providers]]
+name = "azure-openai"
+base_url = "https://your-resource.openai.azure.com"
+token = "your-azure-key"
+enabled = true
+blacklist = ["text-davinci-003", "text-curie-001"]
 ```
 
 ## Static Models
@@ -77,6 +93,53 @@ models = ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-pro"]
 - Router uses the provided model list instead of fetching from provider
 - No reconnection attempts if provider fails (models remain available)
 - Perfect for providers with fixed model catalogs or private deployments
+
+## Model Filtering (Whitelist/Blacklist)
+
+You can control which models from each provider are exposed to clients using whitelist and blacklist filters:
+
+### Whitelist
+Only models explicitly listed in the whitelist will be available from the provider:
+
+```toml
+[[providers]]
+name = "openai-enterprise"
+base_url = "https://api.openai.com/v1"
+token = "your-api-key"
+enabled = true
+whitelist = ["gpt-4", "gpt-4-turbo-preview", "gpt-3.5-turbo"]
+```
+
+### Blacklist
+All models from the provider will be available except those listed in the blacklist:
+
+```toml
+[[providers]]
+name = "azure-openai"
+base_url = "https://your-resource.openai.azure.com"
+token = "your-azure-key"
+enabled = true
+blacklist = ["text-davinci-003", "text-curie-001", "text-ada-001"]
+```
+
+### Combining with Static Models
+You can use whitelist/blacklist with static models for precise control:
+
+```toml
+[[providers]]
+name = "google"
+base_url = "https://generativelanguage.googleapis.com/v1beta/openai/"
+token = "your-google-key"
+enabled = true
+models = ["gemini-2.0-flash-exp", "gemini-2.0-flash-thinking-exp", "gemini-1.5-pro", "gemini-1.5-flash"]
+whitelist = ["gemini-2.0-flash-exp", "gemini-1.5-pro"]  # Only expose these two
+```
+
+**Filtering Rules:**
+- Blacklist is applied first - any model in the blacklist is always excluded
+- If whitelist is provided, only models in the whitelist are included
+- If no whitelist is provided, all non-blacklisted models are included
+- Filtering works with both dynamic and static model lists
 
 ## Usage
 
