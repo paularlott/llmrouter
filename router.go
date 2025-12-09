@@ -38,8 +38,8 @@ func NewRouter(config *Config, logger Logger) (*Router, error) {
 			Client:            NewOpenAIClient(providerConfig.BaseURL, providerConfig.Token, logger),
 			ActiveCompletions: 0,
 			StaticModels:      len(providerConfig.Models) > 0, // Static if models are provided in config
-			Whitelist:         providerConfig.Whitelist,
-			Blacklist:         providerConfig.Blacklist,
+			Allowlist:         providerConfig.Allowlist,
+			Denylist:          providerConfig.Denylist,
 		}
 
 		router.Providers[provider.Name] = provider
@@ -81,7 +81,7 @@ func (r *Router) RefreshModels(ctx context.Context) error {
 
 			modelSetMu.Lock()
 			for _, modelID := range staticModels {
-				if shouldIncludeModel(modelID, provider.Whitelist, provider.Blacklist) {
+				if shouldIncludeModel(modelID, provider.Allowlist, provider.Denylist) {
 					if modelSet[modelID] == nil {
 						modelSet[modelID] = make(map[string]bool)
 					}
@@ -140,7 +140,7 @@ func (r *Router) RefreshModels(ctx context.Context) error {
 			// Safely update the shared modelSet with filtering
 			modelSetMu.Lock()
 			for _, model := range modelsResp.Data {
-				if shouldIncludeModel(model.ID, p.Whitelist, p.Blacklist) {
+				if shouldIncludeModel(model.ID, p.Allowlist, p.Denylist) {
 					if modelSet[model.ID] == nil {
 						modelSet[model.ID] = make(map[string]bool)
 					}
@@ -245,29 +245,29 @@ func (r *Router) EnableProvider(providerName string) {
 	r.logger.Info("provider re-enabled", "provider", providerName)
 }
 
-// shouldIncludeModel checks if a model should be included based on whitelist and blacklist
-func shouldIncludeModel(model string, whitelist, blacklist []string) bool {
-	// If blacklist is provided, check if model is in it
-	if len(blacklist) > 0 {
-		for _, blacklisted := range blacklist {
-			if model == blacklisted {
+// shouldIncludeModel checks if a model should be included based on allowlist and denylist
+func shouldIncludeModel(model string, allowlist, denylist []string) bool {
+	// If denylist is provided, check if model is in it
+	if len(denylist) > 0 {
+		for _, denied := range denylist {
+			if model == denied {
 				return false
 			}
 		}
 	}
 
-	// If whitelist is provided, check if model is in it
-	if len(whitelist) > 0 {
-		for _, whitelisted := range whitelist {
-			if model == whitelisted {
+	// If allowlist is provided, check if model is in it
+	if len(allowlist) > 0 {
+		for _, allowed := range allowlist {
+			if model == allowed {
 				return true
 			}
 		}
-		// Model not found in whitelist, exclude it
+		// Model not found in allowlist, exclude it
 		return false
 	}
 
-	// No whitelist, include model (assuming not blacklisted)
+	// No allowlist, include model (assuming not denylisted)
 	return true
 }
 

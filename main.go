@@ -110,8 +110,8 @@ func main() {
 								Token:     getString(providerMap, "token"),
 								Enabled:   getBool(providerMap, "enabled"),
 								Models:    getStringSlice(providerMap, "models"),
-								Whitelist: getStringSlice(providerMap, "whitelist"),
-								Blacklist: getStringSlice(providerMap, "blacklist"),
+								Allowlist: getStringSlice(providerMap, "allowlist"),
+								Denylist:  getStringSlice(providerMap, "denylist"),
 							}
 							config.Providers = append(config.Providers, provider)
 						}

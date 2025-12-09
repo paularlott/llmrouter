@@ -24,6 +24,6 @@ type ProviderConfig struct {
 	Token     string   `json:"token"`
 	Enabled   bool     `json:"enabled"`
 	Models    []string `json:"models,omitempty"`
-	Whitelist []string `json:"whitelist,omitempty"`
-	Blacklist []string `json:"blacklist,omitempty"`
+	Allowlist []string `json:"allowlist,omitempty"`
+	Denylist  []string `json:"denylist,omitempty"`
 }
