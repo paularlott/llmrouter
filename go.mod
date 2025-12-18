@@ -6,7 +6,7 @@ require (
 	github.com/BurntSushi/toml v1.5.0
 	github.com/paularlott/cli v0.6.0
 	github.com/paularlott/logger v0.3.0
-	github.com/paularlott/mcp v0.6.4
+	github.com/paularlott/mcp v0.6.5
 	github.com/paularlott/scriptling v0.0.0-20251213112516-e39fc4cc9d10
 	golang.org/x/net v0.48.0
 )
@@ -22,6 +22,6 @@ require (
 // Use local versions for development
 //replace github.com/paularlott/cli => /Users/paul/Code/Source/cli
 
-replace github.com/paularlott/mcp => /Users/paul/Code/Source/mcp
+//replace github.com/paularlott/mcp => /Users/paul/Code/Source/mcp
 
 //replace github.com/paularlott/scriptling => /Users/paul/Code/Source/scriptling
