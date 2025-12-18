@@ -3,10 +3,10 @@ module github.com/paularlott/llmrouter
 go 1.25.5
 
 require (
-	github.com/BurntSushi/toml v1.5.0
+	github.com/BurntSushi/toml v1.6.0
 	github.com/paularlott/cli v0.6.0
 	github.com/paularlott/logger v0.3.0
-	github.com/paularlott/mcp v0.6.5
+	github.com/paularlott/mcp v0.6.6
 	github.com/paularlott/scriptling v0.0.0-20251213112516-e39fc4cc9d10
 	golang.org/x/net v0.48.0
 )
