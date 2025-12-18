@@ -486,7 +486,8 @@ func (r *Router) decrementActiveCompletions(providerName string) {
 
 // HTTP Handlers
 func (r *Router) HandleModels(w http.ResponseWriter, req *http.Request) {
-	// Use the cached models list
+	// Update the models list and return it
+	r.RefreshModels(req.Context())
 	models := r.ListModels()
 
 	w.Header().Set("Content-Type", "application/json")
