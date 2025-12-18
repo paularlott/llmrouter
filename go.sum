@@ -10,6 +10,8 @@ github.com/paularlott/logger v0.3.0 h1:QwVUoxmlEFkfHI25y5dn56OJvK4Bpe3OvoJu4GZM7
 github.com/paularlott/logger v0.3.0/go.mod h1:vjAOY1vUvYigmJxxQ0eMclryIjDS6VWNK6FprtTMce0=
 github.com/paularlott/mcp v0.6.3 h1:qNjfRMSDr3pnt0IlI8xGDui0nQZAwjyrxvYa2IaJBSk=
 github.com/paularlott/mcp v0.6.3/go.mod h1:3+zKx8GaNHy5tjI1MBOgbflWTfV1eKGKziNc6Xn0pQI=
+github.com/paularlott/scriptling v0.0.0-20251213112516-e39fc4cc9d10 h1:MBIIh91yfb9aneDAc3Im2/OnUzwniSlD+3ugo4dLv04=
+github.com/paularlott/scriptling v0.0.0-20251213112516-e39fc4cc9d10/go.mod h1:v8t8g31EXKYS1TRBJnNlOONyF7iPwV7iAwzLQz6TTBM=
 golang.org/x/net v0.48.0 h1:zyQRTTrjc33Lhh0fBgT/H3oZq9WuvRR5gPC70xpDiQU=
 golang.org/x/net v0.48.0/go.mod h1:+ndRgGjkh8FGtu1w1FGbEC31if4VrNVMuKTgcAAnQRY=
 golang.org/x/oauth2 v0.34.0 h1:hqK/t4AKgbqWkdkcAeI8XLmbK+4m4G5YeQRrmiotGlw=
