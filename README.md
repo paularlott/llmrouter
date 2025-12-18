@@ -87,6 +87,7 @@ denylist = ["text-davinci-003"]
 #   namespace = "ai"
 #   url = "https://ai.example.com/mcp"
 #   token = "your-bearer-token"
+#   hidden = false
 
 [scriptling]
 tools_path = "./example-tools"
@@ -110,6 +111,32 @@ libraries_path = "./example-libs"
 1. Denylist is applied first - matching models are always excluded
 2. If allowlist is provided, only matching models are included
 3. If no allowlist, all non-denylisted models are included
+
+### MCP Configuration
+
+| Field | Description |
+|-------|-------------|
+| `namespace` | Namespace for the remote MCP server (prevents tool name conflicts) |
+| `url` | URL of the remote MCP server |
+| `token` | Optional bearer token for authentication |
+| `hidden` | If true, tools are callable but not listed in discovery (default: false) |
+
+#### Hidden Servers
+
+When `hidden = true` is set on a remote MCP server:
+- Tools from that server can still be executed by name
+- Tools won't appear in `tool_search` results
+- Tools won't be listed in general tool discovery
+- This is useful for internal tools that should only be called from scripts
+
+Example:
+```toml
+[[mcp.remote_servers]]
+  namespace = "internal"
+  url = "https://internal.example.com/mcp"
+  token = "internal-api-key"
+  hidden = true  # Tools only callable from scripts
+```
 
 ## API Endpoints
 

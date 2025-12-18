@@ -353,11 +353,19 @@ Use execute_code for custom Scriptling/Python code execution.`)
 			// For now, skip token auth as API might have changed
 			logger.Warn("remote MCP server token auth not implemented yet", "namespace", remoteServer.Namespace, "url", remoteServer.URL)
 		}
-		// Try to connect without auth for now
-		if err := server.RegisterRemoteServer(remoteServer.URL, remoteServer.Namespace, nil); err != nil {
-			logger.Warn("failed to connect to remote MCP server", "namespace", remoteServer.Namespace, "url", remoteServer.URL, "error", err)
+		// Try to connect with hidden option if configured
+		if remoteServer.Hidden {
+			if err := server.RegisterRemoteServerHidden(remoteServer.URL, remoteServer.Namespace, nil); err != nil {
+				logger.Warn("failed to connect to remote MCP server (hidden)", "namespace", remoteServer.Namespace, "url", remoteServer.URL, "error", err)
+			} else {
+				logger.Info("connected to remote MCP server (hidden)", "namespace", remoteServer.Namespace, "url", remoteServer.URL)
+			}
 		} else {
-			logger.Info("connected to remote MCP server", "namespace", remoteServer.Namespace, "url", remoteServer.URL)
+			if err := server.RegisterRemoteServer(remoteServer.URL, remoteServer.Namespace, nil); err != nil {
+				logger.Warn("failed to connect to remote MCP server", "namespace", remoteServer.Namespace, "url", remoteServer.URL, "error", err)
+			} else {
+				logger.Info("connected to remote MCP server", "namespace", remoteServer.Namespace, "url", remoteServer.URL)
+			}
 		}
 	}
 

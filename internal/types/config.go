@@ -38,6 +38,7 @@ type MCPRemoteServerConfig struct {
 	Namespace string `json:"namespace"`
 	URL       string `json:"url"`
 	Token     string `json:"token,omitempty"`
+	Hidden    bool   `json:"hidden,omitempty"`
 }
 
 type ScriptlingConfig struct {
