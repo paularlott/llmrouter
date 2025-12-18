@@ -1,0 +1,19 @@
+name = "mcp_demo"
+description = "Demonstrates MCP library functions: list_tools, search_tools, execute_tool, and execute_script"
+keywords = ["demo", "mcp", "example", "tools", "search", "list"]
+script = "mcp_demo.py"
+
+[parameters.action]
+type = "string"
+description = "The action to perform: list, search, execute, or script"
+required = true
+
+[parameters.query]
+type = "string"
+description = "Search query (for search action) or tool name (for execute action)"
+required = false
+
+[parameters.args]
+type = "string"
+description = "JSON string of arguments for execute action"
+required = false

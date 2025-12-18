@@ -1,0 +1,14 @@
+name = "weather_checker"
+description = "Check the weather for a given location"
+keywords = ["weather", "temperature", "forecast"]
+script = "weather.py"
+
+[parameters.location]
+type = "string"
+description = "The city or location to check weather for"
+required = true
+
+[parameters.units]
+type = "string"
+description = "Temperature units: celsius or fahrenheit"
+required = false

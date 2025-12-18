@@ -3,14 +3,12 @@ package main
 import (
 	"context"
 	"fmt"
-	"net/http"
 	"os"
-	"os/signal"
 	"path/filepath"
-	"strings"
-	"syscall"
-	"time"
 
+	"github.com/paularlott/llmrouter/cmd"
+	"github.com/paularlott/llmrouter/internal/server"
+	"github.com/paularlott/llmrouter/internal/types"
 	"github.com/paularlott/llmrouter/log"
 
 	"github.com/paularlott/cli"
@@ -19,9 +17,25 @@ import (
 
 var configFile = "config.toml"
 
+// Type aliases for compatibility
+type (
+	Config                = types.Config
+	ServerConfig          = types.ServerConfig
+	LoggingConfig         = types.LoggingConfig
+	ProviderConfig        = types.ProviderConfig
+	MCPConfig             = types.MCPConfig
+	MCPRemoteServerConfig = types.MCPRemoteServerConfig
+	ScriptlingConfig      = types.ScriptlingConfig
+)
+
 func main() {
+	// Set the NewRouter function in the server package
+	server.SetNewRouterFunc(func(config *types.Config, logger interface{}) (server.Router, error) {
+		return NewRouter((*Config)(config), logger.(Logger))
+	})
+
 	// Create the root command
-	cmd := &cli.Command{
+	rootCmd := &cli.Command{
 		Name:        "llmrouter",
 		Version:     "1.0.0",
 		Usage:       "LLM Routing Service",
@@ -53,151 +67,39 @@ func main() {
 				Global:   true,
 			},
 			&cli.StringFlag{
-				Name:         "host",
-				Aliases:      []string{"H"},
-				Usage:        "Host to bind to",
-				DefaultValue: "0.0.0.0",
-				ConfigPath:   []string{"server.host"},
-			},
-			&cli.IntFlag{
-				Name:         "port",
-				Aliases:      []string{"p"},
-				Usage:        "Port to bind to",
-				DefaultValue: 12345,
-				ConfigPath:   []string{"server.port"},
-			},
-			&cli.StringFlag{
 				Name:         "log-level",
 				Usage:        "Log level (trace|debug|info|warn|error)",
 				DefaultValue: "info",
 				ConfigPath:   []string{"logging.level"},
+				Global:       true,
 			},
 			&cli.StringFlag{
 				Name:         "log-format",
 				Usage:        "Log format (console|json)",
 				DefaultValue: "console",
 				ConfigPath:   []string{"logging.format"},
+				Global:       true,
 			},
 		},
-		Run: func(ctx context.Context, cmd *cli.Command) error {
-			// Build configuration from CLI and config file
-			config := &Config{
-				Server: ServerConfig{
-					Host: cmd.GetString("host"),
-					Port: cmd.GetInt("port"),
-				},
-				Logging: LoggingConfig{
-					Level:  cmd.GetString("log-level"),
-					Format: cmd.GetString("log-format"),
-				},
-				Providers: []ProviderConfig{},
-			}
-
-			// Setup logging first so we can log during provider loading
-			log.Configure(config.Logging.Level, config.Logging.Format)
-			logger := log.GetLogger()
-			logger.Info("starting LLM router", "version", "1.0.0")
-
-			// Load providers from config file if available
-			if cmd.ConfigFile != nil {
-				typedConfig := cli.NewTypedConfigFile(cmd.ConfigFile)
-				providers := typedConfig.GetObjectSlice("providers")
-				if providers != nil {
-					for _, providerConfig := range providers {
-						provider := ProviderConfig{
-							Name:      providerConfig.GetString("name"),
-							BaseURL:   strings.TrimSuffix(providerConfig.GetString("base_url"), "/"),
-							Token:     providerConfig.GetString("token"),
-							Enabled:   providerConfig.GetBool("enabled"),
-							Models:    providerConfig.GetStringSlice("models"),
-							Allowlist: providerConfig.GetStringSlice("allowlist"),
-							Denylist:  providerConfig.GetStringSlice("denylist"),
-						}
-						config.Providers = append(config.Providers, provider)
-					}
-					logger.Info("loaded providers from config", "count", len(config.Providers))
-				}
-			}
-
-			logger.Info("using config file", "path", configFile)
-
-			// Create router
-			router, err := NewRouter(config, logger)
-			if err != nil {
-				logger.WithError(err).Error("failed to create router")
-				return err
-			}
-
-			// Start background health check task
-			router.StartBackgroundTasks()
-			defer router.StopBackgroundTasks()
-
-			// Initialize models in background goroutine for faster startup
-			go func() {
-				initCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-				defer cancel()
-
-				if err := router.RefreshModels(initCtx); err != nil {
-					logger.WithError(err).Error("failed to refresh models during startup")
-					// Continue running even if model fetch fails - providers might be temporarily down
-				}
-			}()
-
-			// Setup HTTP server
-			mux := http.NewServeMux()
-			mux.HandleFunc("GET /v1/models", router.HandleModels)
-			mux.HandleFunc("POST /v1/chat/completions", router.HandleChatCompletions)
-			mux.HandleFunc("GET /health", router.HandleHealth)
-			mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
-				w.Header().Set("Content-Type", "application/json")
-				fmt.Fprintf(w, `{"service":"llmrouter","version":"1.0.0"}`)
-			})
-
-			server := &http.Server{
-				Addr:         fmt.Sprintf("%s:%d", config.Server.Host, config.Server.Port),
-				Handler:      mux,
-				ReadTimeout:  30 * time.Second,
-				WriteTimeout: 60 * time.Second,
-				IdleTimeout:  120 * time.Second,
-			}
-
-			// Start server in goroutine
-			serverErr := make(chan error, 1)
-			go func() {
-				logger.Info("server listening", "host", config.Server.Host, "port", config.Server.Port)
-				if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-					serverErr <- fmt.Errorf("server failed: %w", err)
-				}
-			}()
-
-			// Wait for interrupt signal or server error
-			quit := make(chan os.Signal, 1)
-			signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-
-			select {
-			case err := <-serverErr:
-				return err
-			case <-quit:
-				logger.Info("shutting down server")
-			}
-
-			// Graceful shutdown with timeout
-			shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-			defer cancel()
-
-			if err := server.Shutdown(shutdownCtx); err != nil {
-				logger.WithError(err).Error("server forced to shutdown")
-				return err
-			}
-
-			logger.Info("server stopped")
-			return nil
+		PreRun: func(ctx context.Context, cmd *cli.Command) (context.Context, error) {
+			// Setup logging at root level as per knot pattern
+			logLevel := cmd.GetString("log-level")
+			logFormat := cmd.GetString("log-format")
+			log.Configure(logLevel, logFormat)
+			return ctx, nil
+		},
+		Commands: []*cli.Command{
+			cmd.ServerCmd,
+			cmd.ScriptCmd,
+			cmd.ToolCmd,
 		},
 	}
 
-	// Run the CLI application
-	if err := cmd.Execute(context.Background()); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+	err := rootCmd.Execute(context.Background())
+	if err != nil {
+		fmt.Println("Error:", err)
 		os.Exit(1)
 	}
+
+	os.Exit(0)
 }

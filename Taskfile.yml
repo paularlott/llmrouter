@@ -1,0 +1,95 @@
+version: '3'
+
+vars:
+  BINARY_NAME: llmrouter
+  VERSION:
+    sh: git describe --tags --always --dirty 2>/dev/null || echo "dev"
+  BUILD_TIME:
+    sh: date -u '+%Y-%m-%d_%H:%M:%S'
+  LDFLAGS: -s -w -X main.Version={{.VERSION}} -X main.BuildTime={{.BUILD_TIME}}
+
+tasks:
+  default:
+    desc: Build for the current platform
+    cmds:
+      - go build -ldflags "{{.LDFLAGS}}" -o {{.BINARY_NAME}} .
+
+  clean:
+    desc: Clean build artifacts
+    cmds:
+      - rm -rf dist/
+      - rm -f {{.BINARY_NAME}}
+
+  test:
+    desc: Run tests
+    cmds:
+      - go test -v ./...
+
+  lint:
+    desc: Run linter
+    cmds:
+      - golangci-lint run
+
+  # Individual platform builds
+  build-linux-amd64:
+    desc: Build for Linux AMD64
+    cmds:
+      - GOOS=linux GOARCH=amd64 go build -ldflags "{{.LDFLAGS}}" -o dist/{{.BINARY_NAME}}-linux-amd64 .
+
+  build-linux-arm64:
+    desc: Build for Linux ARM64
+    cmds:
+      - GOOS=linux GOARCH=arm64 go build -ldflags "{{.LDFLAGS}}" -o dist/{{.BINARY_NAME}}-linux-arm64 .
+
+  build-darwin-amd64:
+    desc: Build for macOS AMD64
+    cmds:
+      - GOOS=darwin GOARCH=amd64 go build -ldflags "{{.LDFLAGS}}" -o dist/{{.BINARY_NAME}}-darwin-amd64 .
+
+  build-darwin-arm64:
+    desc: Build for macOS ARM64
+    cmds:
+      - GOOS=darwin GOARCH=arm64 go build -ldflags "{{.LDFLAGS}}" -o dist/{{.BINARY_NAME}}-darwin-arm64 .
+
+  build-windows-amd64:
+    desc: Build for Windows AMD64
+    cmds:
+      - GOOS=windows GOARCH=amd64 go build -ldflags "{{.LDFLAGS}}" -o dist/{{.BINARY_NAME}}-windows-amd64.exe .
+
+  build-windows-arm64:
+    desc: Build for Windows ARM64
+    cmds:
+      - GOOS=windows GOARCH=arm64 go build -ldflags "{{.LDFLAGS}}" -o dist/{{.BINARY_NAME}}-windows-arm64.exe .
+
+  # Build all platforms in parallel
+  build-all:
+    desc: Build for all platforms (in parallel)
+    deps:
+      - build-linux-amd64
+      - build-linux-arm64
+      - build-darwin-amd64
+      - build-darwin-arm64
+      - build-windows-amd64
+      - build-windows-arm64
+
+  release:
+    desc: Create release builds with checksums
+    cmds:
+      - task: clean
+      - task: build-all
+      - cd dist && sha256sum * > checksums.txt
+
+  dev:
+    desc: Run the server in development mode
+    cmds:
+      - go run . server
+
+  watch:
+    desc: Watch for changes and rebuild
+    cmds:
+      - |
+        while true; do
+          fswatch -1 -e ".*" -i "\\.go$" .
+          go build -ldflags "{{.LDFLAGS}}" -o {{.BINARY_NAME}} .
+          echo "Rebuilt at $(date)"
+        done

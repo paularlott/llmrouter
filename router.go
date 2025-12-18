@@ -46,6 +46,28 @@ func NewRouter(config *Config, logger Logger) (*Router, error) {
 		logger.Info("initialized provider", "name", provider.Name, "base_url", provider.BaseURL)
 	}
 
+	// Initialize MCP server
+	mcpServer, err := NewMCPServer(config, logger, router)
+	if err != nil {
+		logger.Warn("failed to initialize MCP server", "error", err)
+		// Continue running even if MCP server fails - it's optional
+	} else {
+		router.mcpServer = mcpServer
+		logger.Info("initialized MCP server")
+	}
+
+	// Setup HTTP mux
+	router.mux = http.NewServeMux()
+	router.mux.HandleFunc("/v1/models", router.HandleModels)
+	router.mux.HandleFunc("/v1/chat/completions", router.HandleChatCompletions)
+	router.mux.HandleFunc("/health", router.HandleHealth)
+
+	// Add MCP endpoint if server is available
+	if router.mcpServer != nil {
+		router.mux.HandleFunc("/mcp", router.HandleMCP)
+		logger.Info("MCP server endpoint available at /mcp")
+	}
+
 	return router, nil
 }
 
@@ -349,7 +371,12 @@ func (r *Router) CreateChatCompletion(ctx context.Context, req *ChatCompletionRe
 
 	// Create token counter for usage estimation
 	tokenCounter := openai.NewTokenCounter()
-	tokenCounter.AddPromptTokensFromMessages(req.Messages)
+	// Convert messages to openai format for token counting
+	openaiMessages := make([]openai.Message, len(req.Messages))
+	for i, msg := range req.Messages {
+		openaiMessages[i] = openai.Message{Role: msg.Role, Content: msg.Content}
+	}
+	tokenCounter.AddPromptTokensFromMessages(openaiMessages)
 
 	// Make the request
 	resp, err := provider.Client.CreateChatCompletion(ctx, req)
@@ -363,11 +390,22 @@ func (r *Router) CreateChatCompletion(ctx context.Context, req *ChatCompletionRe
 
 	// Add completion tokens from response
 	if len(resp.Choices) > 0 {
-		tokenCounter.AddCompletionTokensFromMessage(&resp.Choices[0].Message)
+		openaiMsg := openai.Message{Role: resp.Choices[0].Message.Role, Content: resp.Choices[0].Message.Content}
+		tokenCounter.AddCompletionTokensFromMessage(&openaiMsg)
 	}
 
 	// Inject usage if missing
-	tokenCounter.InjectUsageIfMissing(resp)
+	// Convert to openai format for usage injection
+	openaiResp := &openai.ChatCompletionResponse{}
+	tokenCounter.InjectUsageIfMissing(openaiResp)
+	// Copy usage back to our response
+	if openaiResp.Usage != nil && resp.Usage == nil {
+		resp.Usage = &Usage{
+			PromptTokens:     openaiResp.Usage.PromptTokens,
+			CompletionTokens: openaiResp.Usage.CompletionTokens,
+			TotalTokens:      openaiResp.Usage.TotalTokens,
+		}
+	}
 
 	return resp, nil
 }
@@ -540,14 +578,26 @@ func (r *Router) handleStreamingChatCompletion(w http.ResponseWriter, req *http.
 		// Check if this is a data line that needs modification
 		if strings.HasPrefix(line, "data:") && !strings.HasPrefix(line, "data: [DONE]") {
 			dataStr := strings.TrimPrefix(line, "data: ")
-			var chunk openai.ChatCompletionResponse
+			var chunk ChatCompletionResponse
 
 			if err := json.Unmarshal([]byte(dataStr), &chunk); err == nil && len(chunk.Choices) > 0 {
-				tokenCounter.AddCompletionTokensFromDelta(&chunk.Choices[0].Delta)
+				// Convert delta to openai format for token counting
+				openaiDelta := openai.Delta{Role: chunk.Choices[0].Delta.Role, Content: chunk.Choices[0].Delta.Content}
+				tokenCounter.AddCompletionTokensFromDelta(&openaiDelta)
 
 				// If this chunk has a finish_reason and no usage, inject our estimates
 				if chunk.Choices[0].FinishReason == "stop" && chunk.Usage == nil {
-					tokenCounter.InjectUsageIfMissing(&chunk)
+					// Convert to openai format for usage injection
+					openaiChunk := openai.ChatCompletionResponse{}
+					tokenCounter.InjectUsageIfMissing(&openaiChunk)
+					// Copy usage back to our chunk
+					if openaiChunk.Usage != nil {
+						chunk.Usage = &Usage{
+							PromptTokens:     openaiChunk.Usage.PromptTokens,
+							CompletionTokens: openaiChunk.Usage.CompletionTokens,
+							TotalTokens:      openaiChunk.Usage.TotalTokens,
+						}
+					}
 					modifiedJSON, _ := json.Marshal(chunk)
 					fmt.Fprintf(w, "data: %s\n", string(modifiedJSON))
 				} else {
@@ -608,6 +658,16 @@ func writeJSON(w http.ResponseWriter, v interface{}) error {
 	return json.NewEncoder(w).Encode(v)
 }
 
+// HandleMCP handles MCP protocol requests
+func (r *Router) HandleMCP(w http.ResponseWriter, req *http.Request) {
+	if r.mcpServer == nil {
+		http.Error(w, "MCP server not available", http.StatusServiceUnavailable)
+		return
+	}
+
+	r.mcpServer.HandleRequest(w, req)
+}
+
 // StartBackgroundTasks starts the background health check task
 func (r *Router) StartBackgroundTasks() {
 	r.wg.Add(1)
@@ -616,7 +676,9 @@ func (r *Router) StartBackgroundTasks() {
 
 // StopBackgroundTasks stops all background tasks
 func (r *Router) StopBackgroundTasks() {
-	close(r.shutdownChan)
+	r.shutdownOnce.Do(func() {
+		close(r.shutdownChan)
+	})
 	r.wg.Wait()
 }
 
@@ -691,4 +753,17 @@ func (r *Router) checkDisabledProviders() {
 	}
 
 	wg.Wait()
+}
+
+// ServeHTTP implements http.Handler
+func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	r.mux.ServeHTTP(w, req)
+}
+
+// Shutdown gracefully shuts down the router
+func (r *Router) Shutdown() {
+	r.shutdownOnce.Do(func() {
+		close(r.shutdownChan)
+	})
+	r.wg.Wait()
 }

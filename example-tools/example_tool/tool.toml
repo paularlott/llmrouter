@@ -1,0 +1,9 @@
+name = "greet"
+description = "A simple tool that greets the user"
+keywords = ["hello", "greeting", "welcome"]
+script = "hello.py"
+
+[parameters.name]
+type = "string"
+description = "The name to greet (optional, defaults to 'World')"
+required = false

@@ -1,0 +1,14 @@
+name = "ai_test_tool"
+description = "Test AI completion with automatic tool calling support. The AI can use tool_search and execute_tool as needed."
+keywords = ["ai", "test", "completion", "tools"]
+script = "ai_test.py"
+
+[parameters.question]
+type = "string"
+description = "Question to ask the AI"
+required = true
+
+[parameters.model]
+type = "string"
+description = "The model to use for completion (default: mistralai/devstral-small-2-2512)"
+required = false

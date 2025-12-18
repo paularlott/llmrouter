@@ -1,17 +1,35 @@
 # LLM Router
 
-A simple router for LLM services that supports the OpenAI protocol. It aggregates models from multiple OpenAI-compatible servers and routes chat completion requests based on model availability and load.
+A powerful router for LLM services that supports the OpenAI protocol and provides a complete Model Context Protocol (MCP) server with Scriptling integration.
 
 ## Features
 
-- **OpenAI Protocol Compatible**: Supports the standard OpenAI API endpoints
-- **Multiple Provider Support**: Configure multiple OpenAI-compatible servers
-- **Model Aggregation**: Automatically aggregates available models from all providers
-- **Load-Based Routing**: Routes to the provider with the least active completions when a model is available on multiple servers
-- **Transparent Proxying**: Passes through all OpenAI protocol features including tool calls without server-side interpretation
-- **Token Usage Estimation**: Estimates token usage when not provided by the upstream service
-- **Configuration via TOML**: Simple TOML configuration file
-- **Structured Logging**: Uses slog for structured logging
+- **OpenAI Protocol Compatible**: Supports standard OpenAI API endpoints
+- **Multiple Provider Support**: Aggregate models from multiple OpenAI-compatible servers
+- **Load-Based Routing**: Routes to the provider with the least active completions
+- **MCP Server**: Full Model Context Protocol server with tool discovery and execution
+- **Scriptling Integration**: Python-like scripting environment for custom tools
+- **Dynamic Tool Loading**: Edit tool scripts without restarting the server
+- **Automatic Tool Calling**: AI completions automatically execute tools
+- **CLI Tools**: Command-line interface for script and tool execution
+
+## Quick Start
+
+```bash
+# Build
+go build -o llmrouter .
+
+# Or use task/make for multi-platform builds
+task              # Build for current platform
+make              # Build for current platform
+task build-all    # Build for all platforms
+
+# Run the server
+./llmrouter server
+
+# Run with custom config
+./llmrouter -config /path/to/config.toml server
+```
 
 ## Configuration
 
@@ -23,29 +41,23 @@ port = 12345
 host = "0.0.0.0"
 
 [logging]
-level = "info"
-format = "console"
+level = "info"       # trace, debug, info, warn, error
+format = "console"   # console, json
 
-[[providers]]
-name = "openai1"
-base_url = "https://api.openai.com/v1"
-token = "your-api-key-here"
-enabled = true
-
-[[providers]]
-name = "openai2"
-base_url = "https://api.openai.com/v1"
-token = "another-api-key"
-enabled = true
-
-# Add more providers as needed
+# LLM Providers
 [[providers]]
 name = "local-llm"
 base_url = "http://localhost:8080/v1"
 token = ""
 enabled = true
 
-# Provider with static models (no model fetching)
+[[providers]]
+name = "openai"
+base_url = "https://api.openai.com/v1"
+token = "your-api-key"
+enabled = true
+
+# Provider with static models (no API fetching)
 [[providers]]
 name = "google"
 base_url = "https://generativelanguage.googleapis.com/v1beta/openai/"
@@ -53,7 +65,7 @@ token = "your-google-key"
 enabled = true
 models = ["gemini-2.5-flash-lite", "gemini-2.5-pro"]
 
-# Provider with allowlist (only these models will be available)
+# Provider with allowlist (only these models exposed)
 [[providers]]
 name = "openai-filtered"
 base_url = "https://api.openai.com/v1"
@@ -61,185 +73,200 @@ token = "your-api-key"
 enabled = true
 allowlist = ["gpt-4", "gpt-4-turbo", "gpt-3.5-turbo"]
 
-# Provider with denylist (these models will be excluded)
+# Provider with denylist (these models excluded)
 [[providers]]
-name = "azure-openai"
+name = "azure"
 base_url = "https://your-resource.openai.azure.com"
 token = "your-azure-key"
 enabled = true
-denylist = ["text-davinci-003", "text-curie-001"]
+denylist = ["text-davinci-003"]
+
+[mcp]
+# Remote MCP servers (optional)
+# [[mcp.remote_servers]]
+#   namespace = "ai"
+#   url = "https://ai.example.com/mcp"
+#   token = "your-bearer-token"
+
+[scriptling]
+tools_path = "./example-tools"
+libraries_path = "./example-libs"
 ```
 
-## Static Models
+### Provider Configuration
 
-You can optionally specify a list of available models for a provider instead of fetching them dynamically:
+| Field | Description |
+|-------|-------------|
+| `name` | Unique identifier for the provider |
+| `base_url` | OpenAI-compatible API base URL |
+| `token` | API token/key (optional for local servers) |
+| `enabled` | Enable/disable the provider |
+| `models` | Static model list (skips API model fetching) |
+| `allowlist` | Only expose these models |
+| `denylist` | Exclude these models |
 
-```toml
-[[providers]]
-name = "google"
-base_url = "https://generativelanguage.googleapis.com/v1beta/openai/"
-token = "your-google-key"
-enabled = true
-models = ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-pro"]
-```
+### Model Filtering Rules
 
-**Benefits of Static Models:**
-- **Faster startup**: No need to query provider API for available models
-- **Reliability**: Works even when provider's API is temporarily unavailable
-- **Privacy**: No need to expose model list to provider
-- **Predictable behavior**: Always use the same predefined model list
+1. Denylist is applied first - matching models are always excluded
+2. If allowlist is provided, only matching models are included
+3. If no allowlist, all non-denylisted models are included
 
-**Static Model Behavior:**
-- Router uses the provided model list instead of fetching from provider
-- No reconnection attempts if provider fails (models remain available)
-- Perfect for providers with fixed model catalogs or private deployments
+## API Endpoints
 
-## Model Filtering (Allowlist/Denylist)
+### GET /v1/models
 
-You can control which models from each provider are exposed to clients using allowlist and denylist filters:
-
-### Allowlist
-Only models explicitly listed in the allowlist will be available from the provider:
-
-```toml
-[[providers]]
-name = "openai-enterprise"
-base_url = "https://api.openai.com/v1"
-token = "your-api-key"
-enabled = true
-allowlist = ["gpt-4", "gpt-4-turbo-preview", "gpt-3.5-turbo"]
-```
-
-### Denylist
-All models from the provider will be available except those listed in the denylist:
-
-```toml
-[[providers]]
-name = "azure-openai"
-base_url = "https://your-resource.openai.azure.com"
-token = "your-azure-key"
-enabled = true
-denylist = ["text-davinci-003", "text-curie-001", "text-ada-001"]
-```
-
-### Combining with Static Models
-You can use allowlist/denylist with static models for precise control:
-
-```toml
-[[providers]]
-name = "google"
-base_url = "https://generativelanguage.googleapis.com/v1beta/openai/"
-token = "your-google-key"
-enabled = true
-models = ["gemini-2.0-flash-exp", "gemini-2.0-flash-thinking-exp", "gemini-1.5-pro", "gemini-1.5-flash"]
-allowlist = ["gemini-2.0-flash-exp", "gemini-1.5-pro"]  # Only expose these two
-```
-
-**Filtering Rules:**
-- Denylist is applied first - any model in the denylist is always excluded
-- If allowlist is provided, only models in the allowlist are included
-- If no allowlist is provided, all non-denylisted models are included
-- Filtering works with both dynamic and static model lists
-
-## Usage
-
-### Running the Router
-
-```bash
-# Build the router
-go build -o llmrouter .
-
-# Run with default config
-./llmrouter
-
-# Run with custom config
-./llmrouter -config /path/to/config.toml
-
-# Override port
-./llmrouter -port 8080
-
-# Set log level
-./llmrouter -log-level debug
-
-# Use JSON logging format
-./llmrouter -log-format json
-```
-
-### API Endpoints
-
-The router exposes the following endpoints:
-
-#### GET /v1/models
-Returns the aggregated list of models from all enabled providers.
+Returns aggregated models from all enabled providers.
 
 ```bash
 curl http://localhost:12345/v1/models
 ```
 
-#### POST /v1/chat/completions
-Creates a chat completion. The request is routed to the appropriate provider based on the selected model.
+### POST /v1/chat/completions
+
+Creates a chat completion (routed to appropriate provider).
 
 ```bash
 curl -X POST http://localhost:12345/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
     "model": "gpt-3.5-turbo",
-    "messages": [
-      {"role": "user", "content": "Hello, world!"}
-    ],
-    "max_tokens": 100
+    "messages": [{"role": "user", "content": "Hello!"}]
   }'
 ```
 
-#### GET /health
+### POST /mcp
+
+Model Context Protocol endpoint for tool discovery and execution.
+
+```bash
+# List available tools
+curl -X POST http://localhost:12345/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
+
+# Search for tools
+curl -X POST http://localhost:12345/mcp \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc":"2.0","id":1,"method":"tools/call",
+    "params":{"name":"tool_search","arguments":{"query":"calculator"}}
+  }'
+
+# Execute a tool
+curl -X POST http://localhost:12345/mcp \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc":"2.0","id":1,"method":"tools/call",
+    "params":{
+      "name":"execute_tool",
+      "arguments":{"name":"calculator","arguments":{"operation":"add","a":5,"b":3}}
+    }
+  }'
+
+# Execute arbitrary code
+curl -X POST http://localhost:12345/mcp \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc":"2.0","id":1,"method":"tools/call",
+    "params":{
+      "name":"execute_code",
+      "arguments":{"code":"import mcp\nmcp.return_string(str(2+2))"}
+    }
+  }'
+```
+
+### GET /health
+
 Returns health information including provider status.
 
 ```bash
 curl http://localhost:12345/health
 ```
 
-## Routing Logic
+## CLI Commands
 
-1. **Model Selection**: When a chat completion request comes in, the router checks which providers have the requested model
-2. **Load Balancing**: If the model is available on multiple providers, the request is routed to the provider with the least active completions
-3. **Failover**: If a provider doesn't have the requested model, the router returns a 404 error
+### Server
 
-## Token Estimation
-
-The router includes token usage estimation based on the OpenAI token counting logic from `/Users/paul/Code/Source/mcp/openai/tokens.go`. If the upstream provider doesn't return token usage information, the router estimates it using:
-- Word boundaries and punctuation for basic text
-- Overhead for chat message structure (roles, special tokens)
-- Tool call arguments estimation
-
-## Logging
-
-The router uses structured logging with configurable levels:
-- `trace` - Most verbose
-- `debug` - Debug information
-- `info` - General information (default)
-- `warn` - Warning messages
-- `error` - Error messages
-
-Log formats:
-- `console` - Human-readable format (default)
-- `json` - JSON format for machine processing
-
-## Command Line Options
-
-```
--config string
-    Configuration file path (default "config.toml")
--log-level string
-    Log level: trace, debug, info, warn, error
--log-format string
-    Log format: console, json
--port int
-    Port to listen on (overrides config)
+```bash
+./llmrouter server                    # Run with default config
+./llmrouter -config custom.toml server  # Custom config
+./llmrouter server -port 8080         # Override port
 ```
 
-## Example Use Cases
+### Script Execution
 
-1. **Load Balancing**: Balance requests across multiple API keys for the same service
-2. **Provider Failover**: Route to different providers if one is unavailable
-3. **Local + Cloud**: Use both local LLM servers and cloud-based APIs
-4. **Model Gateway**: Provide a single endpoint that aggregates multiple LLM providers
+```bash
+./llmrouter script path/to/script.py arg1 arg2
+./llmrouter script -server http://localhost:8080 script.py
+./llmrouter script -v script.py       # Verbose output
+```
+
+### Tool Execution
+
+```bash
+./llmrouter tool calculator '{"operation":"add","a":5,"b":3}'
+./llmrouter tool -server http://localhost:8080 my_tool args
+./llmrouter tool -v tool_name args    # Verbose output
+```
+
+## Building
+
+### Using Taskfile (parallel builds)
+
+```bash
+task              # Build for current platform
+task build-all    # Build all platforms (parallel)
+task release      # Build all with checksums
+task clean        # Clean build artifacts
+task test         # Run tests
+```
+
+### Using Makefile
+
+```bash
+make              # Build for current platform
+make build-all    # Build all platforms
+make release      # Build all with checksums
+make clean        # Clean build artifacts
+make help         # Show all targets
+```
+
+### Supported Platforms
+
+- Linux (AMD64, ARM64)
+- macOS (AMD64, ARM64)
+- Windows (AMD64, ARM64)
+
+## Documentation
+
+- [Creating Custom Tools](docs/creating_tools.md) - Guide to creating MCP tools
+- [MCP Library Reference](docs/mcp_library.md) - `mcp` library functions for tools
+- [AI Library Reference](docs/ai_library.md) - `ai` library for LLM integration
+
+## Architecture
+
+### Routing Logic
+
+1. **Model Selection**: Router checks which providers have the requested model
+2. **Load Balancing**: Routes to provider with fewest active completions
+3. **Failover**: Returns 404 if model not available on any provider
+
+### MCP Server
+
+The MCP server provides three built-in tools:
+
+| Tool | Description |
+|------|-------------|
+| `tool_search` | Search for available tools by keyword |
+| `execute_tool` | Execute a discovered tool with arguments |
+| `execute_code` | Execute arbitrary Python/Scriptling code |
+
+### Dynamic Loading
+
+- **Tool scripts**: Loaded from disk on each execution (edit without restart)
+- **Tool definitions**: Dynamically scanned from filesystem (add/remove/edit without restart)
+- **Libraries**: Loaded on-demand when first imported (edit without restart)
+
+## License
+
+See [LICENSE.txt](LICENSE.txt) for details.

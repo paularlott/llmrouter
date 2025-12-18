@@ -1,0 +1,19 @@
+name = "calculator"
+description = "A simple calculator that performs basic arithmetic operations"
+keywords = ["calculator", "math", "arithmetic", "add", "subtract", "multiply", "divide"]
+script = "calculator.py"
+
+[parameters.operation]
+type = "string"
+description = "The operation to perform: add, subtract, multiply, or divide"
+required = true
+
+[parameters.a]
+type = "number"
+description = "The first number"
+required = true
+
+[parameters.b]
+type = "number"
+description = "The second number"
+required = true
