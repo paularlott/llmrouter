@@ -273,6 +273,7 @@ curl http://localhost:12345/health
 ./llmrouter server                    # Run with default config
 ./llmrouter -config custom.toml server  # Custom config
 ./llmrouter server -port 8080         # Override port
+./llmrouter server -token secret123   # Set bearer token via CLI
 ```
 
 ### Script Execution
@@ -281,6 +282,7 @@ curl http://localhost:12345/health
 ./llmrouter script path/to/script.py arg1 arg2
 ./llmrouter script -server http://localhost:8080 script.py
 ./llmrouter script -v script.py       # Verbose output
+./llmrouter script -token secret123 script.py  # With authentication
 ```
 
 ### Tool Execution
@@ -289,6 +291,7 @@ curl http://localhost:12345/health
 ./llmrouter tool calculator '{"operation":"add","a":5,"b":3}'
 ./llmrouter tool -server http://localhost:8080 my_tool args
 ./llmrouter tool -v tool_name args    # Verbose output
+./llmrouter tool -token secret123 calculator args  # With authentication
 ```
 
 ## Building

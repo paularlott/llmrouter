@@ -19,8 +19,9 @@ func RunServer(ctx context.Context, cmd *cli.Command) error {
 	// Build configuration from CLI and config file
 	config := &types.Config{
 		Server: types.ServerConfig{
-			Host: "0.0.0.0", // Default host
-			Port: 12345,     // Default port
+			Host:  cmd.GetString("host"),
+			Port:  cmd.GetInt("port"),
+			Token: cmd.GetString("token"),
 		},
 		Logging: types.LoggingConfig{
 			Level:  cmd.GetString("log-level"),
@@ -36,14 +37,6 @@ func RunServer(ctx context.Context, cmd *cli.Command) error {
 		},
 	}
 
-	// Override with CLI values if provided
-	if host := cmd.GetString("host"); host != "" {
-		config.Server.Host = host
-	}
-	if port := cmd.GetInt("port"); port != 0 {
-		config.Server.Port = port
-	}
-
 	// Setup logging first so we can log during provider loading
 	log.Configure(config.Logging.Level, config.Logging.Format)
 	logger := log.GetLogger()
@@ -52,14 +45,6 @@ func RunServer(ctx context.Context, cmd *cli.Command) error {
 	// Load providers from config file if available
 	if cmd.ConfigFile != nil {
 		typedConfig := cli.NewTypedConfigFile(cmd.ConfigFile)
-
-		// Load server config
-		serverConfig := typedConfig.GetObject("server")
-		if serverConfig != nil {
-			if token := serverConfig.GetString("token"); token != "" {
-				config.Server.Token = token
-			}
-		}
 		providers := typedConfig.GetObjectSlice("providers")
 		for _, providerConfig := range providers {
 			provider := types.ProviderConfig{

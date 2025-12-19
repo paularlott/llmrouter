@@ -44,12 +44,18 @@ var ToolCmd = &cli.Command{
 			Usage:        "Enable verbose output",
 			DefaultValue: false,
 		},
+		&cli.StringFlag{
+			Name:    "token",
+			Aliases: []string{"t"},
+			Usage:   "Bearer token for server authentication",
+		},
 	},
 	Run: func(ctx context.Context, cmd *cli.Command) error {
 		toolName := cmd.GetStringArg("toolname")
 		argsStr := cmd.GetStringArg("arguments")
 		serverURL := cmd.GetString("server")
 		verbose := cmd.GetBool("verbose")
+		token := cmd.GetString("token")
 
 		var toolArgs map[string]interface{}
 		if argsStr != "" {
@@ -96,6 +102,6 @@ var ToolCmd = &cli.Command{
 			}
 		}
 
-		return ExecuteMCPRequest(serverURL, request, verbose)
+		return ExecuteMCPRequest(serverURL, request, token, verbose)
 	},
 }

@@ -38,6 +38,12 @@ var ServerCmd = &cli.Command{
 			DefaultValue: "./libs",
 			ConfigPath:   []string{"scriptling.libraries_path"},
 		},
+		&cli.StringFlag{
+			Name:       "token",
+			Aliases:    []string{"t"},
+			Usage:      "Bearer token for API authentication",
+			ConfigPath: []string{"server.token"},
+		},
 	},
 	Run: func(ctx context.Context, cmd *cli.Command) error {
 		return server.RunServer(ctx, cmd)

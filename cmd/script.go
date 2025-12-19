@@ -39,6 +39,11 @@ var ScriptCmd = &cli.Command{
 			Usage:        "Enable verbose output",
 			DefaultValue: false,
 		},
+		&cli.StringFlag{
+			Name:    "token",
+			Aliases: []string{"t"},
+			Usage:   "Bearer token for server authentication",
+		},
 	},
 	Run: func(ctx context.Context, cmd *cli.Command) error {
 		scriptFile := cmd.GetStringArg("scriptfile")
@@ -47,6 +52,7 @@ var ScriptCmd = &cli.Command{
 		// Get flags
 		serverURL := cmd.GetString("server")
 		verbose := cmd.GetBool("verbose")
+		token := cmd.GetString("token")
 
 		// Get logger for verbose output
 		logger := log.GetLogger()
@@ -89,12 +95,12 @@ var ScriptCmd = &cli.Command{
 			},
 		}
 
-		return ExecuteMCPRequest(serverURL, request, verbose)
+		return ExecuteMCPRequest(serverURL, request, token, verbose)
 	},
 }
 
 // ExecuteMCPRequest sends an MCP request and processes the response
-func ExecuteMCPRequest(serverURL string, request map[string]interface{}, verbose bool) error {
+func ExecuteMCPRequest(serverURL string, request map[string]interface{}, token string, verbose bool) error {
 	logger := log.GetLogger()
 
 	// Marshal request
@@ -119,6 +125,9 @@ func ExecuteMCPRequest(serverURL string, request map[string]interface{}, verbose
 		return fmt.Errorf("failed to create request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
 
 	// Send request
 	resp, err := client.Do(req)
