@@ -23,13 +23,14 @@ type LoggingConfig struct {
 }
 
 type ProviderConfig struct {
-	Name      string   `json:"name"`
-	BaseURL   string   `json:"base_url"`
-	Token     string   `json:"token"`
-	Enabled   bool     `json:"enabled"`
-	Models    []string `json:"models,omitempty"`
-	Allowlist []string `json:"allowlist,omitempty"`
-	Denylist  []string `json:"denylist,omitempty"`
+	Name            string   `json:"name"`
+	BaseURL         string   `json:"base_url"`
+	Token           string   `json:"token"`
+	Enabled         bool     `json:"enabled"`
+	Models          []string `json:"models,omitempty"`
+	Allowlist       []string `json:"allowlist,omitempty"`
+	Denylist        []string `json:"denylist,omitempty"`
+	NativeResponses bool     `json:"native_responses,omitempty"`
 }
 
 type MCPConfig struct {

@@ -26,6 +26,12 @@ type Provider struct {
 	StaticModels      bool     // true if models list is static (from config)
 	Allowlist         []string // allowed models from this provider
 	Denylist          []string // blocked models from this provider
+	NativeResponses   bool     // true if provider supports native responses API
+}
+
+// GetNativeResponses returns whether the provider supports native responses API
+func (p *Provider) GetNativeResponses() bool {
+	return p.NativeResponses
 }
 
 type Router struct {

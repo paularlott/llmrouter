@@ -58,6 +58,7 @@ name = "openai"
 base_url = "https://api.openai.com/v1"
 token = "your-api-key"
 enabled = true
+native_responses = true  # Provider supports native responses API
 
 # Provider with static models (no API fetching)
 [[providers]]

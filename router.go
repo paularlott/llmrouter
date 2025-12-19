@@ -42,6 +42,7 @@ func NewRouter(config *Config, logger Logger) (*Router, error) {
 			StaticModels:      len(providerConfig.Models) > 0, // Static if models are provided in config
 			Allowlist:         providerConfig.Allowlist,
 			Denylist:          providerConfig.Denylist,
+			NativeResponses:   providerConfig.NativeResponses,
 		}
 
 		router.Providers[provider.Name] = provider
@@ -317,6 +318,10 @@ func shouldIncludeModel(model string, allowlist, denylist []string) bool {
 
 	// No allowlist, include model (assuming not denylisted)
 	return true
+}
+
+func (r *Router) GetProvider(name string) interface{ GetNativeResponses() bool } {
+	return r.Providers[name]
 }
 
 func (r *Router) GetProviderForModel(model string) (string, error) {

@@ -76,17 +76,6 @@ func RunServer(ctx context.Context, cmd *cli.Command) error {
 				config.MCP.RemoteServers = append(config.MCP.RemoteServers, server)
 			}
 		}
-
-		// Load Scriptling config
-		scriptlingConfig := typedConfig.GetObject("scriptling")
-		if scriptlingConfig != nil {
-			if toolsPath := scriptlingConfig.GetString("tools_path"); toolsPath != "" {
-				config.Scriptling.ToolsPath = toolsPath
-			}
-			if libsPath := scriptlingConfig.GetString("libraries_path"); libsPath != "" {
-				config.Scriptling.LibrariesPath = libsPath
-			}
-		}
 	}
 
 	logger.Info("loaded providers from config", "count", len(config.Providers))
