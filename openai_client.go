@@ -194,3 +194,56 @@ func (c *OpenAIClientImpl) CreateChatCompletionRaw(ctx context.Context, req *Cha
 
 	return resp, nil
 }
+
+func (c *OpenAIClientImpl) CreateEmbedding(ctx context.Context, req *EmbeddingRequest) (*EmbeddingResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", c.BaseURL+"/embeddings", bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	if c.Token != "" {
+		httpReq.Header.Set("Authorization", "Bearer "+c.Token)
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.Client.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("failed to make request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, readErr := io.ReadAll(resp.Body)
+	if readErr != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", readErr)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		var errResp map[string]interface{}
+		if json.Unmarshal(body, &errResp) == nil {
+			return nil, fmt.Errorf("API returned status %d: %v", resp.StatusCode, errResp)
+		}
+		return nil, fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(body))
+	}
+
+	var embeddingResp EmbeddingResponse
+	if err := json.Unmarshal(body, &embeddingResp); err != nil {
+		maxLen := 500
+		if len(body) < maxLen {
+			maxLen = len(body)
+		}
+		c.logger.Error("failed to decode embedding response",
+			"error", err,
+			"status_code", resp.StatusCode,
+			"content_type", resp.Header.Get("Content-Type"),
+			"response_body", string(body[:maxLen]))
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	c.logger.Debug("embedding completed", "model", req.Model, "embeddings_count", len(embeddingResp.Data))
+	return &embeddingResp, nil
+}

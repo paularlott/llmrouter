@@ -60,6 +60,7 @@ func NewRouter(config *Config, logger Logger) (*Router, error) {
 	router.mux = http.NewServeMux()
 	router.mux.HandleFunc("/v1/models", router.HandleModels)
 	router.mux.HandleFunc("/v1/chat/completions", router.HandleChatCompletions)
+	router.mux.HandleFunc("/v1/embeddings", router.HandleEmbeddings)
 	router.mux.HandleFunc("/health", router.HandleHealth)
 
 	// Add MCP endpoint if server is available
@@ -410,6 +411,30 @@ func (r *Router) CreateChatCompletion(ctx context.Context, req *ChatCompletionRe
 	return resp, nil
 }
 
+func (r *Router) CreateEmbedding(ctx context.Context, req *EmbeddingRequest) (*EmbeddingResponse, error) {
+	// Find provider for the model
+	providerName, err := r.GetProviderForModel(req.Model)
+	if err != nil {
+		return nil, err
+	}
+
+	provider := r.Providers[providerName]
+
+	r.logger.Info("routing embedding request", "model", req.Model, "provider", providerName)
+
+	// Make the request
+	resp, err := provider.Client.CreateEmbedding(ctx, req)
+	if err != nil {
+		// Check if this is a connection error and disable the provider
+		if r.isConnectionError(err) {
+			r.DisableProvider(providerName, fmt.Sprintf("connection error: %v", err))
+		}
+		return nil, err
+	}
+
+	return resp, nil
+}
+
 func (r *Router) CreateChatCompletionRaw(ctx context.Context, req *ChatCompletionRequest) (*http.Response, string, error) {
 	// Find provider for the model
 	providerName, err := r.GetProviderForModel(req.Model)
@@ -622,6 +647,33 @@ func (r *Router) handleStreamingChatCompletion(w http.ResponseWriter, req *http.
 	r.logger.Debug("streaming response completed",
 		"model", completionReq.Model,
 		"provider", providerName)
+}
+
+func (r *Router) HandleEmbeddings(w http.ResponseWriter, req *http.Request) {
+	var embeddingReq EmbeddingRequest
+	if err := readJSON(req, &embeddingReq); err != nil {
+		r.logger.WithError(err).Error("failed to parse embedding request")
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	ctx := req.Context()
+	resp, err := r.CreateEmbedding(ctx, &embeddingReq)
+	if err != nil {
+		r.logger.WithError(err).Error("embedding request failed")
+
+		if strings.Contains(err.Error(), "not found") {
+			http.Error(w, err.Error(), http.StatusNotFound)
+		} else {
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+		}
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := writeJSON(w, resp); err != nil {
+		r.logger.WithError(err).Error("failed to write embedding response")
+	}
 }
 
 func (r *Router) HandleHealth(w http.ResponseWriter, req *http.Request) {

@@ -45,6 +45,7 @@ type OpenAIClient interface {
 	ListModelsWithTimeout(ctx context.Context) (*openai.ModelsResponse, error)
 	CreateChatCompletion(ctx context.Context, req *openai.ChatCompletionRequest) (*openai.ChatCompletionResponse, error)
 	CreateChatCompletionRaw(ctx context.Context, req *openai.ChatCompletionRequest) (*http.Response, error)
+	CreateEmbedding(ctx context.Context, req *openai.EmbeddingRequest) (*openai.EmbeddingResponse, error)
 }
 
 // Type aliases for OpenAI types
@@ -63,4 +64,7 @@ type (
 	ToolCallFunction        = openai.ToolCallFunction
 	PromptTokensDetails     = openai.PromptTokensDetails
 	CompletionTokensDetails = openai.CompletionTokensDetails
+	EmbeddingRequest        = openai.EmbeddingRequest
+	EmbeddingResponse       = openai.EmbeddingResponse
+	Embedding               = openai.Embedding
 )

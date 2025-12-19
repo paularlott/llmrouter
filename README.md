@@ -161,6 +161,28 @@ curl -X POST http://localhost:12345/v1/chat/completions \
   }'
 ```
 
+### POST /v1/embeddings
+
+Creates embeddings (routed to appropriate provider).
+
+```bash
+# Single text input
+curl -X POST http://localhost:12345/v1/embeddings \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "text-embedding-embeddinggemma-300m-qat",
+    "input": "Hello world"
+  }'
+
+# Multiple text inputs
+curl -X POST http://localhost:12345/v1/embeddings \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "text-embedding-embeddinggemma-300m-qat",
+    "input": ["Hello", "World"]
+  }'
+```
+
 ### POST /mcp
 
 Model Context Protocol endpoint for tool discovery and execution.
