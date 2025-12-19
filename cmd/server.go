@@ -44,6 +44,17 @@ var ServerCmd = &cli.Command{
 			Usage:      "Bearer token for API authentication",
 			ConfigPath: []string{"server.token"},
 		},
+		&cli.StringFlag{
+			Name:       "responses-db",
+			Usage:      "Path for persistent storage of responses",
+			ConfigPath: []string{"responses.storage_path"},
+		},
+		&cli.IntFlag{
+			Name:         "responses-ttl",
+			Usage:        "Maximum age of a response in days",
+			ConfigPath:   []string{"responses.ttl_days"},
+			DefaultValue: 30,
+		},
 	},
 	Run: func(ctx context.Context, cmd *cli.Command) error {
 		return server.RunServer(ctx, cmd)

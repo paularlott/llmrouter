@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"sync"
 
+	"github.com/paularlott/llmrouter/internal/responses"
+	"github.com/paularlott/llmrouter/internal/storage"
 	"github.com/paularlott/logger"
 	"github.com/paularlott/mcp/openai"
 )
@@ -27,16 +29,17 @@ type Provider struct {
 }
 
 type Router struct {
-	Providers    map[string]*Provider
-	ModelMap     map[string][]string // model -> provider names
-	ModelMapMu   sync.RWMutex        // protects ModelMap
-	config       *Config
-	logger       Logger
-	shutdownChan chan struct{}  // for background task
-	shutdownOnce sync.Once      // ensures shutdown is only called once
-	wg           sync.WaitGroup // for background task cleanup
-	mcpServer    *MCPServer     // MCP server instance
-	mux          *http.ServeMux
+	Providers       map[string]*Provider
+	ModelMap        map[string][]string // model -> provider names
+	ModelMapMu      sync.RWMutex        // protects ModelMap
+	config          *Config
+	logger          Logger
+	shutdownChan    chan struct{}  // for background task
+	shutdownOnce    sync.Once      // ensures shutdown is only called once
+	wg              sync.WaitGroup // for background task cleanup
+	mcpServer       *MCPServer     // MCP server instance
+	mux             *http.ServeMux
+	responsesService *responses.Service // responses service instance
 }
 
 // OpenAI client interface
@@ -67,4 +70,9 @@ type (
 	EmbeddingRequest        = openai.EmbeddingRequest
 	EmbeddingResponse       = openai.EmbeddingResponse
 	Embedding               = openai.Embedding
+	// Responses types
+	ResponseObject        = openai.ResponseObject
+	ResponseListResponse  = openai.ResponseListResponse
+	CreateResponseRequest = openai.CreateResponseRequest
+	ResponseFilter        = storage.ResponseFilter
 )

@@ -11,6 +11,7 @@ A powerful router for LLM services that supports the OpenAI protocol and provide
 - **Scriptling Integration**: Python-like scripting environment for custom tools
 - **Dynamic Tool Loading**: Edit tool scripts without restarting the server
 - **Automatic Tool Calling**: AI completions automatically execute tools
+- **Responses API**: OpenAI-compatible responses storage and retrieval
 - **CLI Tools**: Command-line interface for script and tool execution
 
 ## Quick Start
@@ -93,6 +94,10 @@ denylist = ["text-davinci-003"]
 [scriptling]
 tools_path = "./example-tools"
 libraries_path = "./example-libs"
+
+[responses]
+storage_path = "./responses.db"
+ttl_days = 30
 ```
 
 ### Provider Configuration
@@ -138,6 +143,13 @@ If no token is configured, the server runs without authentication.
 | `url` | URL of the remote MCP server |
 | `token` | Optional bearer token for authentication |
 | `hidden` | If true, tools are callable but not listed in discovery (default: false) |
+
+### Responses Configuration
+
+| Field | Description |
+|-------|-------------|
+| `storage_path` | Path to BadgerDB storage directory (default: "./responses.db") |
+| `ttl_days` | Time-to-live for stored responses in days (default: 30) |
 
 #### Hidden Servers
 
@@ -263,6 +275,78 @@ Returns health information including provider status.
 
 ```bash
 curl http://localhost:12345/health
+```
+
+## Responses API Endpoints
+
+The responses API allows storing, retrieving, and managing chat completion responses.
+
+### POST /v1/responses
+
+Create a new response entry.
+
+```bash
+curl -X POST http://localhost:12345/v1/responses \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer your-secret-token" \
+  -d '{
+    "model": "gpt-3.5-turbo",
+    "messages": [{"role": "user", "content": "Hello!"}],
+    "metadata": {"user_id": "123"}
+  }'
+```
+
+### GET /v1/responses/{id}
+
+Retrieve a specific response by ID.
+
+```bash
+curl -H "Authorization: Bearer your-secret-token" \
+  http://localhost:12345/v1/responses/resp_abc123
+```
+
+### DELETE /v1/responses/{id}
+
+Delete a specific response.
+
+```bash
+curl -X DELETE \
+  -H "Authorization: Bearer your-secret-token" \
+  http://localhost:12345/v1/responses/resp_abc123
+```
+
+### GET /v1/responses
+
+List responses with optional filtering.
+
+```bash
+# List all responses
+curl -H "Authorization: Bearer your-secret-token" \
+  http://localhost:12345/v1/responses
+
+# List with limit
+curl -H "Authorization: Bearer your-secret-token" \
+  "http://localhost:12345/v1/responses?limit=10&order=desc"
+```
+
+### POST /v1/responses/{id}/cancel
+
+Cancel an in-progress response.
+
+```bash
+curl -X POST \
+  -H "Authorization: Bearer your-secret-token" \
+  http://localhost:12345/v1/responses/resp_abc123/cancel
+```
+
+### POST /v1/responses/compact
+
+Trigger garbage collection and compaction of stored responses.
+
+```bash
+curl -X POST \
+  -H "Authorization: Bearer your-secret-token" \
+  http://localhost:12345/v1/responses/compact
 ```
 
 ## CLI Commands
