@@ -8,6 +8,7 @@ type Config struct {
 	Providers  []ProviderConfig `json:"providers"`
 	MCP        MCPConfig        `json:"mcp"`
 	Scriptling ScriptlingConfig `json:"scriptling"`
+	Responses  ResponsesConfig  `json:"responses"`
 }
 
 type ServerConfig struct {
@@ -45,4 +46,9 @@ type MCPRemoteServerConfig struct {
 type ScriptlingConfig struct {
 	ToolsPath     string `json:"tools_path,omitempty"`
 	LibrariesPath string `json:"libraries_path,omitempty"`
+}
+
+type ResponsesConfig struct {
+	StoragePath string `json:"storage_path,omitempty"`
+	TTLDays     int    `json:"ttl_days,omitempty"`
 }

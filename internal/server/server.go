@@ -35,6 +35,10 @@ func RunServer(ctx context.Context, cmd *cli.Command) error {
 			ToolsPath:     cmd.GetString("tools-path"),
 			LibrariesPath: cmd.GetString("libs-path"),
 		},
+		Responses: types.ResponsesConfig{
+			StoragePath: cmd.GetString("responses-db"),
+			TTLDays:     cmd.GetInt("responses-ttl"),
+		},
 	}
 
 	// Setup logging first so we can log during provider loading

@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/paularlott/llmrouter/internal/responses"
 	"github.com/paularlott/llmrouter/middleware"
 	"github.com/paularlott/mcp/openai"
 )
@@ -57,6 +58,15 @@ func NewRouter(config *Config, logger Logger) (*Router, error) {
 		logger.Info("initialized MCP server")
 	}
 
+	// Initialize responses service (always enabled)
+	responsesService, err := responses.NewService(&config.Responses, router)
+	if err != nil {
+		logger.Warn("failed to initialize responses service", "error", err)
+	} else {
+		router.responsesService = responsesService
+		logger.Info("initialized responses service")
+	}
+
 	// Setup HTTP mux with auth middleware
 	auth := middleware.Auth(config.Server.Token)
 	router.mux = http.NewServeMux()
@@ -64,6 +74,19 @@ func NewRouter(config *Config, logger Logger) (*Router, error) {
 	router.mux.HandleFunc("/v1/chat/completions", auth(router.HandleChatCompletions))
 	router.mux.HandleFunc("/v1/embeddings", auth(router.HandleEmbeddings))
 	router.mux.HandleFunc("/health", router.HandleHealth) // Health endpoint is not protected
+
+	// Add responses endpoints if service is available
+	if router.responsesService != nil {
+		router.mux.HandleFunc("POST /v1/responses", auth(router.HandleCreateResponse))
+		router.mux.HandleFunc("GET /v1/responses/{id}", auth(router.HandleGetResponse))
+		router.mux.HandleFunc("DELETE /v1/responses/{id}", auth(router.HandleDeleteResponse))
+		router.mux.HandleFunc("GET /v1/responses", auth(router.HandleListResponses))
+		router.mux.HandleFunc("POST /v1/responses/{id}/cancel", auth(router.HandleCancelResponse))
+		router.mux.HandleFunc("POST /v1/responses/compact", auth(router.HandleCompactResponses))
+		router.mux.HandleFunc("GET /v1/responses/{id}/input-items", auth(router.HandleUnsupported))
+		router.mux.HandleFunc("GET /v1/responses/{id}/input-tokens", auth(router.HandleUnsupported))
+		logger.Info("responses endpoints available")
+	}
 
 	// Add MCP endpoint if server is available
 	if router.mcpServer != nil {
@@ -819,6 +842,177 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 func (r *Router) Shutdown() {
 	r.shutdownOnce.Do(func() {
 		close(r.shutdownChan)
+		if r.responsesService != nil {
+			r.responsesService.Close()
+		}
 	})
 	r.wg.Wait()
+}
+
+// Responses HTTP Handlers
+func (r *Router) HandleCreateResponse(w http.ResponseWriter, req *http.Request) {
+	if r.responsesService == nil {
+		http.Error(w, "Responses service not available", http.StatusServiceUnavailable)
+		return
+	}
+
+	var createReq CreateResponseRequest
+	if err := readJSON(req, &createReq); err != nil {
+		r.logger.WithError(err).Error("failed to parse create response request")
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	resp, err := r.responsesService.CreateResponse(req.Context(), &createReq, nil) // Use default completion for API calls
+	if err != nil {
+		r.logger.WithError(err).Error("failed to create response")
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	writeJSON(w, resp)
+}
+
+func (r *Router) HandleGetResponse(w http.ResponseWriter, req *http.Request) {
+	if r.responsesService == nil {
+		http.Error(w, "Responses service not available", http.StatusServiceUnavailable)
+		return
+	}
+
+	id := req.PathValue("id")
+	if id == "" {
+		http.Error(w, "Response ID required", http.StatusBadRequest)
+		return
+	}
+
+	resp, err := r.responsesService.GetResponse(req.Context(), id)
+	if err != nil {
+		if err.Error() == "response not found" {
+			http.Error(w, "Response not found", http.StatusNotFound)
+		} else {
+			r.logger.WithError(err).Error("failed to get response")
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+		}
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	writeJSON(w, resp)
+}
+
+func (r *Router) HandleDeleteResponse(w http.ResponseWriter, req *http.Request) {
+	if r.responsesService == nil {
+		http.Error(w, "Responses service not available", http.StatusServiceUnavailable)
+		return
+	}
+
+	id := req.PathValue("id")
+	if id == "" {
+		http.Error(w, "Response ID required", http.StatusBadRequest)
+		return
+	}
+
+	if err := r.responsesService.DeleteResponse(req.Context(), id); err != nil {
+		if err.Error() == "response not found" {
+			http.Error(w, "Response not found", http.StatusNotFound)
+		} else {
+			r.logger.WithError(err).Error("failed to delete response")
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+		}
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (r *Router) HandleListResponses(w http.ResponseWriter, req *http.Request) {
+	if r.responsesService == nil {
+		http.Error(w, "Responses service not available", http.StatusServiceUnavailable)
+		return
+	}
+
+	// Parse query parameters
+	filter := ResponseFilter{}
+	if limitStr := req.URL.Query().Get("limit"); limitStr != "" {
+		if limit, err := parseIntParam(limitStr); err == nil {
+			filter.Limit = limit
+		}
+	}
+	filter.Order = req.URL.Query().Get("order")
+	filter.After = req.URL.Query().Get("after")
+	filter.Before = req.URL.Query().Get("before")
+
+	resp, err := r.responsesService.ListResponses(req.Context(), filter)
+	if err != nil {
+		r.logger.WithError(err).Error("failed to list responses")
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	writeJSON(w, resp)
+}
+
+func (r *Router) HandleCancelResponse(w http.ResponseWriter, req *http.Request) {
+	if r.responsesService == nil {
+		http.Error(w, "Responses service not available", http.StatusServiceUnavailable)
+		return
+	}
+
+	id := req.PathValue("id")
+	if id == "" {
+		http.Error(w, "Response ID required", http.StatusBadRequest)
+		return
+	}
+
+	resp, err := r.responsesService.CancelResponse(req.Context(), id)
+	if err != nil {
+		if err.Error() == "response not found" {
+			http.Error(w, "Response not found", http.StatusNotFound)
+		} else {
+			r.logger.WithError(err).Error("failed to cancel response")
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+		}
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	writeJSON(w, resp)
+}
+
+func (r *Router) HandleCompactResponses(w http.ResponseWriter, req *http.Request) {
+	if r.responsesService == nil {
+		http.Error(w, "Responses service not available", http.StatusServiceUnavailable)
+		return
+	}
+
+	if err := r.responsesService.CompactResponses(req.Context()); err != nil {
+		r.logger.WithError(err).Error("failed to compact responses")
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	writeJSON(w, map[string]string{"status": "completed"})
+}
+
+func (r *Router) HandleUnsupported(w http.ResponseWriter, req *http.Request) {
+	http.Error(w, "Not supported", http.StatusNotFound)
+}
+
+// Helper function to parse integer parameters
+func parseIntParam(s string) (int, error) {
+	if s == "" {
+		return 0, fmt.Errorf("empty string")
+	}
+	var result int
+	for _, c := range s {
+		if c < '0' || c > '9' {
+			return 0, fmt.Errorf("invalid integer")
+		}
+		result = result*10 + int(c-'0')
+	}
+	return result, nil
 }

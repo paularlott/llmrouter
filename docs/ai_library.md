@@ -6,7 +6,12 @@ The AI library provides LLM completion capabilities within Scriptling scripts. I
 
 | Function | Description |
 |----------|-------------|
-| `ai.completion(model, messages, tools=True)` | Create a chat completion with optional tool calling |
+| `ai.completion(model, messages)` | Create a chat completion with automatic tool calling |
+| `ai.embedding(model, input)` | Generate embeddings for text or list of texts |
+| `ai.response_create(model, input, instructions=None, previous_response_id=None)` | Create a new response object for async processing with automatic tool calling |
+| `ai.response_get(id)` | Retrieve a response by ID |
+| `ai.response_delete(id)` | Delete a response by ID |
+| `ai.response_cancel(id)` | Cancel an in-progress response |
 
 ## Importing
 
@@ -23,7 +28,6 @@ Creates a chat completion with the specified model. When `tools=True` (default),
 **Parameters:**
 - `model` (string): The name of the model to use (must be available via one of the configured providers)
 - `messages` (list): A list of message dictionaries with `role` and `content` keys
-- `tools` (boolean, optional): Enable automatic tool calling. Default is `True`. Set to `False` for simple completions without tool access.
 
 **Returns:**
 - A string containing the model's response
@@ -54,6 +58,131 @@ messages = [
 ]
 response = ai.completion("mistralai/devstral-small-2-2512", messages, tools=False)
 print(response)
+```
+
+### ai.embedding(model, input)
+
+Generates embeddings for the given input using the specified embedding model.
+
+**Parameters:**
+- `model` (string): The name of the embedding model to use
+- `input` (string or list): Text string or list of text strings to embed
+
+**Returns:**
+- A list of embedding vectors (each vector is a list of floats)
+
+**Example:**
+```python
+import ai
+
+# Single text embedding
+embedding = ai.embedding("text-embedding-ada-002", "Hello world")
+print(f"Embedding dimensions: {len(embedding[0])}")
+
+# Multiple texts
+texts = ["Hello world", "Goodbye world"]
+embeddings = ai.embedding("text-embedding-ada-002", texts)
+print(f"Generated {len(embeddings)} embeddings")
+```
+
+### ai.response_create(model, input, instructions=None, previous_response_id=None)
+
+Creates a new response object for asynchronous processing. This follows the OpenAI Responses API pattern.
+
+**Parameters:**
+- `model` (string): The model to use for processing
+- `input` (string or list): Input text or list of input texts to process
+- `instructions` (string, optional): System instructions for the model
+- `previous_response_id` (string, optional): ID of previous response to continue conversation
+
+**Returns:**
+- A string containing the response ID
+
+**Example:**
+```python
+import ai
+
+# Create a response with simple input
+response_id = ai.response_create("gpt-4", "Hello, how are you?")
+print(f"Created response: {response_id}")
+
+# Create a response with instructions
+response_id = ai.response_create(
+    "gpt-4",
+    "What is 2+2?",
+    "You are a helpful math assistant."
+)
+print(f"Created response: {response_id}")
+
+# Chain conversations using previous_response_id
+first_response = ai.response_create("gpt-4", "Tell me a joke")
+# Wait for completion, then continue
+second_response = ai.response_create(
+    "gpt-4",
+    "Tell me another one",
+    None,
+    first_response  # Continue the conversation
+)
+print(f"Chained response: {second_response}")
+```
+
+### ai.response_get(id)
+
+Retrieves a response object by its ID.
+
+**Parameters:**
+- `id` (string): The response ID to retrieve
+
+**Returns:**
+- A dictionary containing response details (id, status, model, content if completed)
+
+**Example:**
+```python
+import ai
+
+# Get response details
+response = ai.response_get("resp_abc123")
+print(f"Status: {response['status']}")
+if 'content' in response:
+    print(f"Content: {response['content']}")
+```
+
+### ai.response_delete(id)
+
+Deletes a response by its ID.
+
+**Parameters:**
+- `id` (string): The response ID to delete
+
+**Returns:**
+- Boolean indicating success
+
+**Example:**
+```python
+import ai
+
+# Delete a response
+success = ai.response_delete("resp_abc123")
+print(f"Deleted: {success}")
+```
+
+### ai.response_cancel(id)
+
+Cancels an in-progress response.
+
+**Parameters:**
+- `id` (string): The response ID to cancel
+
+**Returns:**
+- String containing the new status
+
+**Example:**
+```python
+import ai
+
+# Cancel a response
+status = ai.response_cancel("resp_abc123")
+print(f"New status: {status}")
 ```
 
 ## Automatic Tool Calling

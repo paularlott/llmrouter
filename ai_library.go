@@ -12,6 +12,7 @@ import (
 // RouterInterface defines the interface needed by AILibrary
 type RouterInterface interface {
 	CreateChatCompletion(ctx context.Context, req *ChatCompletionRequest) (*ChatCompletionResponse, error)
+	CreateEmbedding(ctx context.Context, req *EmbeddingRequest) (*EmbeddingResponse, error)
 }
 
 // AILibrary provides AI completion and tool calling capabilities
@@ -94,9 +95,208 @@ func (ai *AILibrary) GetLibrary() *object.Library {
 				return &object.String{Value: ""}
 			},
 		},
+		"embedding": {
+			Fn: func(ctx context.Context, kwargs map[string]object.Object, args ...object.Object) object.Object {
+				// Parse arguments: embedding(model, input)
+				var model string
+				var input interface{}
+
+				if len(args) > 0 {
+					if m, ok := args[0].(*object.String); ok {
+						model = m.Value
+					}
+				}
+
+				if len(args) > 1 {
+					if s, ok := args[1].(*object.String); ok {
+						input = s.Value
+					} else if l, ok := args[1].(*object.List); ok {
+						inputs := make([]string, len(l.Elements))
+						for i, el := range l.Elements {
+							if s, ok := el.(*object.String); ok {
+								inputs[i] = s.Value
+							}
+						}
+						input = inputs
+					}
+				}
+
+				req := &EmbeddingRequest{
+					Model: model,
+					Input: input,
+				}
+
+				resp, err := ai.router.CreateEmbedding(ctx, req)
+				if err != nil {
+					return errors.NewError("Embedding failed: %v", err)
+				}
+
+				// Convert embeddings to scriptling list
+				embeddings := make([]object.Object, len(resp.Data))
+				for i, emb := range resp.Data {
+					vector := make([]object.Object, len(emb.Embedding))
+					for j, val := range emb.Embedding {
+						vector[j] = &object.Float{Value: val}
+					}
+					embeddings[i] = &object.List{Elements: vector}
+				}
+
+				return &object.List{Elements: embeddings}
+			},
+		},
+		"response_create": {
+			Fn: func(ctx context.Context, kwargs map[string]object.Object, args ...object.Object) object.Object {
+				// Parse arguments: response_create(model, input, instructions=None, previous_response_id=None)
+				if len(args) < 2 {
+					return errors.NewError("response_create() requires at least 2 arguments (model, input)")
+				}
+
+				var model string
+				var input []any
+				var instructions string
+				var previousResponseID string
+
+				// Required positional arguments
+				if m, ok := args[0].(*object.String); ok {
+					model = m.Value
+				} else {
+					return errors.NewError("model must be a string")
+				}
+
+				// Input can be string or list
+				if s, ok := args[1].(*object.String); ok {
+					input = []any{s.Value}
+				} else if l, ok := args[1].(*object.List); ok {
+					for _, el := range l.Elements {
+						if s, ok := el.(*object.String); ok {
+							input = append(input, s.Value)
+						}
+					}
+				} else {
+					return errors.NewError("input must be a string or list of strings")
+				}
+
+				// Optional kwargs
+				if instructionsObj, ok := kwargs["instructions"]; ok {
+					if s, ok := instructionsObj.(*object.String); ok {
+						instructions = s.Value
+					}
+				}
+
+				if prevRespObj, ok := kwargs["previous_response_id"]; ok {
+					if s, ok := prevRespObj.(*object.String); ok {
+						previousResponseID = s.Value
+					}
+				}
+
+				if ai.router.responsesService == nil {
+					return errors.NewError("Responses service not available")
+				}
+
+				req := &CreateResponseRequest{
+					Model:              model,
+					Input:              input,
+					Instructions:       instructions,
+					PreviousResponseID: previousResponseID,
+					Modalities:         []string{"text"}, // Default to text
+				}
+
+				resp, err := ai.router.responsesService.CreateResponse(ctx, req, ai.CreateChatCompletionWithTools) // Use AI library's tool-enabled completion
+				if err != nil {
+					return errors.NewError("Response creation failed: %v", err)
+				}
+
+				return &object.String{Value: resp.ID}
+			},
+		},
+		"response_get": {
+			Fn: func(ctx context.Context, kwargs map[string]object.Object, args ...object.Object) object.Object {
+				// Parse arguments: response_get(id)
+				var id string
+
+				if len(args) > 0 {
+					if s, ok := args[0].(*object.String); ok {
+						id = s.Value
+					}
+				}
+
+				if ai.router.responsesService == nil {
+					return errors.NewError("Responses service not available")
+				}
+
+				resp, err := ai.router.responsesService.GetResponse(ctx, id)
+				if err != nil {
+					return errors.NewError("Failed to get response: %v", err)
+				}
+
+				// Convert response to dict
+				result := &object.Dict{Pairs: make(map[string]object.DictPair)}
+				result.Pairs["id"] = object.DictPair{Key: &object.String{Value: "id"}, Value: &object.String{Value: resp.ID}}
+				result.Pairs["status"] = object.DictPair{Key: &object.String{Value: "status"}, Value: &object.String{Value: resp.Status}}
+				result.Pairs["model"] = object.DictPair{Key: &object.String{Value: "model"}, Value: &object.String{Value: resp.Model}}
+
+				// Add output if available
+				if len(resp.Output) > 0 {
+					if chatResp, ok := resp.Output[0].(*ChatCompletionResponse); ok {
+						if len(chatResp.Choices) > 0 {
+							content := chatResp.Choices[0].Message.GetContentAsString()
+							result.Pairs["content"] = object.DictPair{Key: &object.String{Value: "content"}, Value: &object.String{Value: content}}
+						}
+					}
+				}
+
+				return result
+			},
+		},
+		"response_delete": {
+			Fn: func(ctx context.Context, kwargs map[string]object.Object, args ...object.Object) object.Object {
+				// Parse arguments: response_delete(id)
+				var id string
+
+				if len(args) > 0 {
+					if s, ok := args[0].(*object.String); ok {
+						id = s.Value
+					}
+				}
+
+				if ai.router.responsesService == nil {
+					return errors.NewError("Responses service not available")
+				}
+
+				err := ai.router.responsesService.DeleteResponse(ctx, id)
+				if err != nil {
+					return errors.NewError("Failed to delete response: %v", err)
+				}
+
+				return &object.Boolean{Value: true}
+			},
+		},
+		"response_cancel": {
+			Fn: func(ctx context.Context, kwargs map[string]object.Object, args ...object.Object) object.Object {
+				// Parse arguments: response_cancel(id)
+				var id string
+
+				if len(args) > 0 {
+					if s, ok := args[0].(*object.String); ok {
+						id = s.Value
+					}
+				}
+
+				if ai.router.responsesService == nil {
+					return errors.NewError("Responses service not available")
+				}
+
+				resp, err := ai.router.responsesService.CancelResponse(ctx, id)
+				if err != nil {
+					return errors.NewError("Failed to cancel response: %v", err)
+				}
+
+				return &object.String{Value: resp.Status}
+			},
+		},
 	}
 
-	return object.NewLibrary(functions, map[string]object.Object{}, "AI library for LLM completion")
+	return object.NewLibrary(functions, map[string]object.Object{}, "AI library for LLM completion, embeddings, and responses")
 }
 
 // convertScriptlingDict converts a scriptling Dict to a regular Go map
