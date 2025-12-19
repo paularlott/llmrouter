@@ -863,7 +863,7 @@ func (r *Router) HandleCreateResponse(w http.ResponseWriter, req *http.Request) 
 		return
 	}
 
-	resp, err := r.responsesService.CreateResponse(req.Context(), &createReq)
+	resp, err := r.responsesService.CreateResponse(req.Context(), &createReq, nil) // Use default completion for API calls
 	if err != nil {
 		r.logger.WithError(err).Error("failed to create response")
 		http.Error(w, "Internal server error", http.StatusInternalServerError)

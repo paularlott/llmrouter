@@ -49,7 +49,10 @@ func NewService(config *types.ResponsesConfig, router ChatCompletionRouter) (*Se
 	}, nil
 }
 
-func (s *Service) CreateResponse(ctx context.Context, req *openai.CreateResponseRequest) (*openai.ResponseObject, error) {
+// CompletionFunc is a function that creates a chat completion
+type CompletionFunc func(ctx context.Context, req *openai.ChatCompletionRequest) (*openai.ChatCompletionResponse, error)
+
+func (s *Service) CreateResponse(ctx context.Context, req *openai.CreateResponseRequest, completionFunc CompletionFunc) (*openai.ResponseObject, error) {
 	responseID := storage.GenerateResponseID()
 	now := time.Now()
 
@@ -59,9 +62,12 @@ func (s *Service) CreateResponse(ctx context.Context, req *openai.CreateResponse
 		UpdatedAt: now,
 		Status:    storage.StatusPending,
 		Request: map[string]interface{}{
-			"model":    req.Model,
-			"messages": req.Messages,
-			"metadata": req.Metadata,
+			"model":        req.Model,
+			"input":        req.Input,
+			"instructions": req.Instructions,
+			"modalities":   req.Modalities,
+			"tools":        req.Tools,
+			"metadata":     req.Metadata,
 		},
 		Response: map[string]interface{}{},
 		Metadata: storage.ResponseMetadata{
@@ -76,7 +82,7 @@ func (s *Service) CreateResponse(ctx context.Context, req *openai.CreateResponse
 	}
 
 	// Process the response asynchronously
-	go s.processResponse(context.Background(), responseID, req)
+	go s.processResponse(context.Background(), responseID, req, completionFunc)
 
 	return &openai.ResponseObject{
 		ID:      responseID,
@@ -185,53 +191,59 @@ func (s *Service) StoreCompletionResponse(ctx context.Context, responseID string
 }
 
 // processResponse processes a stored response through the LLM
-func (s *Service) processResponse(ctx context.Context, responseID string, req *openai.CreateResponseRequest) {
+func (s *Service) processResponse(ctx context.Context, responseID string, req *openai.CreateResponseRequest, completionFunc CompletionFunc) {
 	// Update status to in_progress
 	if err := s.storage.UpdateStatus(ctx, responseID, storage.StatusInProgress); err != nil {
 		return
 	}
 
-	// Build conversation messages
-	messages := req.Messages
-
-	// If previous_response_id is provided, load conversation history
+	// Convert input and instructions to messages
+	var messages []openai.Message
+	
+	// Load previous conversation if previous_response_id provided
 	if req.PreviousResponseID != "" {
 		prevResponse, err := s.storage.Get(ctx, req.PreviousResponseID)
-		if err != nil {
-			// Update status to error
-			s.storage.UpdateStatus(ctx, responseID, storage.StatusError)
-			return
-		}
-
-		// Extract messages from previous response's request
-		if prevReq, ok := prevResponse.Request["messages"]; ok {
-			if prevMessages, ok := prevReq.([]interface{}); ok {
-				// Convert stored messages back to openai.Message format
-				for _, msg := range prevMessages {
-					if msgMap, ok := msg.(map[string]interface{}); ok {
-						role, _ := msgMap["role"].(string)
-						content, _ := msgMap["content"].(string)
-						messages = append([]openai.Message{{Role: role, Content: content}}, messages...)
+		if err == nil {
+			// Extract previous input as user message
+			if prevInput, ok := prevResponse.Request["input"].([]interface{}); ok {
+				for _, inp := range prevInput {
+					if inputStr, ok := inp.(string); ok {
+						messages = append(messages, openai.Message{
+							Role:    "user",
+							Content: inputStr,
+						})
+					}
+				}
+			}
+			// Extract previous output as assistant message
+			if prevOutput, ok := prevResponse.Response["output"]; ok {
+				if chatResp, ok := prevOutput.(*openai.ChatCompletionResponse); ok {
+					if len(chatResp.Choices) > 0 {
+						messages = append(messages, openai.Message{
+							Role:    chatResp.Choices[0].Message.Role,
+							Content: chatResp.Choices[0].Message.GetContentAsString(),
+						})
 					}
 				}
 			}
 		}
-
-		// Also include the assistant's response from the previous interaction
-		if prevResp, ok := prevResponse.Response["output"]; ok {
-			if outputs, ok := prevResp.([]interface{}); ok && len(outputs) > 0 {
-				if output, ok := outputs[0].(map[string]interface{}); ok {
-					if choices, ok := output["choices"].([]interface{}); ok && len(choices) > 0 {
-						if choice, ok := choices[0].(map[string]interface{}); ok {
-							if message, ok := choice["message"].(map[string]interface{}); ok {
-								role, _ := message["role"].(string)
-								content, _ := message["content"].(string)
-								messages = append(messages, openai.Message{Role: role, Content: content})
-							}
-						}
-					}
-				}
-			}
+	}
+	
+	// Add instructions as system message if provided
+	if req.Instructions != "" {
+		messages = append(messages, openai.Message{
+			Role:    "system",
+			Content: req.Instructions,
+		})
+	}
+	
+	// Convert input to user messages
+	for _, input := range req.Input {
+		if inputStr, ok := input.(string); ok {
+			messages = append(messages, openai.Message{
+				Role:    "user",
+				Content: inputStr,
+			})
 		}
 	}
 
@@ -242,8 +254,14 @@ func (s *Service) processResponse(ctx context.Context, responseID string, req *o
 		Tools:    req.Tools,
 	}
 
-	// Process through router
-	chatResp, err := s.router.CreateChatCompletion(ctx, chatReq)
+	// Process through the provided completion function or fallback to router
+	var chatResp *openai.ChatCompletionResponse
+	var err error
+	if completionFunc != nil {
+		chatResp, err = completionFunc(ctx, chatReq)
+	} else {
+		chatResp, err = s.router.CreateChatCompletion(ctx, chatReq)
+	}
 	if err != nil {
 		// Update status to error
 		s.storage.UpdateStatus(ctx, responseID, storage.StatusError)
