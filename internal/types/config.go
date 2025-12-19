@@ -11,8 +11,9 @@ type Config struct {
 }
 
 type ServerConfig struct {
-	Host string `json:"host"`
-	Port int    `json:"port"`
+	Host  string `json:"host"`
+	Port  int    `json:"port"`
+	Token string `json:"token,omitempty"`
 }
 
 type LoggingConfig struct {

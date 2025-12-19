@@ -52,6 +52,14 @@ func RunServer(ctx context.Context, cmd *cli.Command) error {
 	// Load providers from config file if available
 	if cmd.ConfigFile != nil {
 		typedConfig := cli.NewTypedConfigFile(cmd.ConfigFile)
+
+		// Load server config
+		serverConfig := typedConfig.GetObject("server")
+		if serverConfig != nil {
+			if token := serverConfig.GetString("token"); token != "" {
+				config.Server.Token = token
+			}
+		}
 		providers := typedConfig.GetObjectSlice("providers")
 		for _, providerConfig := range providers {
 			provider := types.ProviderConfig{

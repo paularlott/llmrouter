@@ -39,6 +39,7 @@ Create a `config.toml` file:
 [server]
 port = 12345
 host = "0.0.0.0"
+token = "your-secret-token"  # Optional: Bearer token for API authentication
 
 [logging]
 level = "info"       # trace, debug, info, warn, error
@@ -112,6 +113,23 @@ libraries_path = "./example-libs"
 2. If allowlist is provided, only matching models are included
 3. If no allowlist, all non-denylisted models are included
 
+### Authentication
+
+Optional bearer token authentication can be enabled by setting the `token` field in the server configuration:
+
+```toml
+[server]
+token = "your-secret-token"
+```
+
+When configured, all API endpoints (except `/health`) require a valid bearer token:
+
+```bash
+curl -H "Authorization: Bearer your-secret-token" http://localhost:12345/v1/models
+```
+
+If no token is configured, the server runs without authentication.
+
 ### MCP Configuration
 
 | Field | Description |
@@ -145,7 +163,11 @@ Example:
 Returns aggregated models from all enabled providers.
 
 ```bash
+# Without authentication
 curl http://localhost:12345/v1/models
+
+# With authentication (if token is configured)
+curl -H "Authorization: Bearer your-secret-token" http://localhost:12345/v1/models
 ```
 
 ### POST /v1/chat/completions
@@ -153,8 +175,18 @@ curl http://localhost:12345/v1/models
 Creates a chat completion (routed to appropriate provider).
 
 ```bash
+# Without authentication
 curl -X POST http://localhost:12345/v1/chat/completions \
   -H "Content-Type: application/json" \
+  -d '{
+    "model": "gpt-3.5-turbo",
+    "messages": [{"role": "user", "content": "Hello!"}]
+  }'
+
+# With authentication (if token is configured)
+curl -X POST http://localhost:12345/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer your-secret-token" \
   -d '{
     "model": "gpt-3.5-turbo",
     "messages": [{"role": "user", "content": "Hello!"}]
@@ -166,7 +198,7 @@ curl -X POST http://localhost:12345/v1/chat/completions \
 Creates embeddings (routed to appropriate provider).
 
 ```bash
-# Single text input
+# Single text input (without authentication)
 curl -X POST http://localhost:12345/v1/embeddings \
   -H "Content-Type: application/json" \
   -d '{
@@ -174,9 +206,10 @@ curl -X POST http://localhost:12345/v1/embeddings \
     "input": "Hello world"
   }'
 
-# Multiple text inputs
+# Multiple text inputs (with authentication)
 curl -X POST http://localhost:12345/v1/embeddings \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer your-secret-token" \
   -d '{
     "model": "text-embedding-embeddinggemma-300m-qat",
     "input": ["Hello", "World"]

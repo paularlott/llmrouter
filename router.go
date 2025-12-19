@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/paularlott/llmrouter/middleware"
 	"github.com/paularlott/mcp/openai"
 )
 
@@ -56,16 +57,17 @@ func NewRouter(config *Config, logger Logger) (*Router, error) {
 		logger.Info("initialized MCP server")
 	}
 
-	// Setup HTTP mux
+	// Setup HTTP mux with auth middleware
+	auth := middleware.Auth(config.Server.Token)
 	router.mux = http.NewServeMux()
-	router.mux.HandleFunc("/v1/models", router.HandleModels)
-	router.mux.HandleFunc("/v1/chat/completions", router.HandleChatCompletions)
-	router.mux.HandleFunc("/v1/embeddings", router.HandleEmbeddings)
-	router.mux.HandleFunc("/health", router.HandleHealth)
+	router.mux.HandleFunc("/v1/models", auth(router.HandleModels))
+	router.mux.HandleFunc("/v1/chat/completions", auth(router.HandleChatCompletions))
+	router.mux.HandleFunc("/v1/embeddings", auth(router.HandleEmbeddings))
+	router.mux.HandleFunc("/health", router.HandleHealth) // Health endpoint is not protected
 
 	// Add MCP endpoint if server is available
 	if router.mcpServer != nil {
-		router.mux.HandleFunc("/mcp", router.HandleMCP)
+		router.mux.HandleFunc("/mcp", auth(router.HandleMCP))
 		logger.Info("MCP server endpoint available at /mcp")
 	}
 
