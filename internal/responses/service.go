@@ -60,7 +60,7 @@ func (s *Service) CreateResponse(ctx context.Context, req *openai.CreateResponse
 			return s.createNativeResponse(ctx, req, provider)
 		}
 	}
-	
+
 	// Use emulated responses (existing logic)
 	return s.createEmulatedResponse(ctx, req, completionFunc)
 }
@@ -124,7 +124,10 @@ func (s *Service) GetResponse(ctx context.Context, id string) (*openai.ResponseO
 	// Add output if response is completed
 	if stored.Status == storage.StatusCompleted {
 		if output, ok := stored.Response["output"]; ok {
-			response.Output = []any{output}
+			// Convert ChatCompletionResponse to Response API format
+			if chatResp, ok := output.(*openai.ChatCompletionResponse); ok {
+				response.Output = s.convertChatCompletionToOutput(chatResp)
+			}
 		}
 	}
 
@@ -136,6 +139,8 @@ func (s *Service) GetResponse(ctx context.Context, id string) (*openai.ResponseO
 				CompletionTokens: int(usageMap["completion_tokens"].(float64)),
 				TotalTokens:      int(usageMap["total_tokens"].(float64)),
 			}
+		} else if usageObj, ok := usage.(*openai.Usage); ok {
+			response.Usage = usageObj
 		}
 	}
 
@@ -213,7 +218,7 @@ func (s *Service) processResponse(ctx context.Context, responseID string, req *o
 
 	// Convert input and instructions to messages
 	var messages []openai.Message
-	
+
 	// Load previous conversation if previous_response_id provided
 	if req.PreviousResponseID != "" {
 		prevResponse, err := s.storage.Get(ctx, req.PreviousResponseID)
@@ -242,7 +247,7 @@ func (s *Service) processResponse(ctx context.Context, responseID string, req *o
 			}
 		}
 	}
-	
+
 	// Add instructions as system message if provided
 	if req.Instructions != "" {
 		messages = append(messages, openai.Message{
@@ -250,7 +255,7 @@ func (s *Service) processResponse(ctx context.Context, responseID string, req *o
 			Content: req.Instructions,
 		})
 	}
-	
+
 	// Convert input to user messages
 	for _, input := range req.Input {
 		if inputStr, ok := input.(string); ok {
@@ -299,6 +304,35 @@ func (s *Service) processResponse(ctx context.Context, responseID string, req *o
 	s.storage.Store(ctx, stored)
 }
 
+// convertChatCompletionToOutput converts a ChatCompletionResponse to Response API output format
+func (s *Service) convertChatCompletionToOutput(chatResp *openai.ChatCompletionResponse) []interface{} {
+	var output []interface{}
+
+	for _, choice := range chatResp.Choices {
+		// Create message output item
+		message := map[string]interface{}{
+			"type":   "message",
+			"id":     fmt.Sprintf("msg_%s", storage.GenerateResponseID()[5:]), // Generate a message ID
+			"status": "completed",
+			"role":   choice.Message.Role,
+		}
+
+		// Convert content to output_text format
+		content := []map[string]interface{}{
+			{
+				"type":        "output_text",
+				"text":        choice.Message.GetContentAsString(),
+				"annotations": []interface{}{},
+			},
+		}
+
+		message["content"] = content
+		output = append(output, message)
+	}
+
+	return output
+}
+
 // Helper methods for provider access
 func (s *Service) getProviderForModel(model string) (string, error) {
 	if router, ok := s.router.(interface{ GetProviderForModel(string) (string, error) }); ok {
@@ -312,7 +346,9 @@ type ProviderInterface interface {
 }
 
 func (s *Service) getProvider(name string) ProviderInterface {
-	if router, ok := s.router.(interface{ GetProvider(string) interface{ GetNativeResponses() bool } }); ok {
+	if router, ok := s.router.(interface {
+		GetProvider(string) interface{ GetNativeResponses() bool }
+	}); ok {
 		return router.GetProvider(name)
 	}
 	return nil
