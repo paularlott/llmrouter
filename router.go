@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/paularlott/llmrouter/internal/conversations"
 	"github.com/paularlott/llmrouter/internal/responses"
 	"github.com/paularlott/llmrouter/middleware"
 	"github.com/paularlott/mcp/openai"
@@ -68,6 +69,15 @@ func NewRouter(config *Config, logger Logger) (*Router, error) {
 		logger.Info("initialized responses service")
 	}
 
+	// Initialize conversations service
+	conversationsService, err := conversations.NewService(&config.Conversations)
+	if err != nil {
+		logger.Warn("failed to initialize conversations service", "error", err)
+	} else {
+		router.conversationsService = conversationsService
+		logger.Info("initialized conversations service")
+	}
+
 	// Setup HTTP mux with auth middleware
 	auth := middleware.Auth(config.Server.Token)
 	router.mux = http.NewServeMux()
@@ -89,11 +99,27 @@ func NewRouter(config *Config, logger Logger) (*Router, error) {
 		logger.Info("responses endpoints available")
 	}
 
+	// Add conversations endpoints if service is available
+	if router.conversationsService != nil {
+		router.mux.HandleFunc("POST /v1/conversations", auth(router.HandleCreateConversation))
+		router.mux.HandleFunc("GET /v1/conversations/{id}", auth(router.HandleGetConversation))
+		router.mux.HandleFunc("POST /v1/conversations/{id}", auth(router.HandleUpdateConversation))
+		router.mux.HandleFunc("DELETE /v1/conversations/{id}", auth(router.HandleDeleteConversation))
+		router.mux.HandleFunc("GET /v1/conversations/{conversation_id}/items", auth(router.HandleListItems))
+		router.mux.HandleFunc("POST /v1/conversations/{conversation_id}/items", auth(router.HandleCreateItems))
+		router.mux.HandleFunc("GET /v1/conversations/{conversation_id}/items/{item_id}", auth(router.HandleGetItem))
+		router.mux.HandleFunc("DELETE /v1/conversations/{conversation_id}/items/{item_id}", auth(router.HandleDeleteItem))
+		logger.Info("conversations endpoints available")
+	}
+
 	// Add MCP endpoint if server is available
 	if router.mcpServer != nil {
 		router.mux.HandleFunc("/mcp", auth(router.HandleMCP))
 		logger.Info("MCP server endpoint available at /mcp")
 	}
+
+	// Add catch-all handler for unmatched routes (must be last)
+	router.mux.HandleFunc("/", router.HandleCatchAll)
 
 	return router, nil
 }
@@ -850,6 +876,9 @@ func (r *Router) Shutdown() {
 		if r.responsesService != nil {
 			r.responsesService.Close()
 		}
+		if r.conversationsService != nil {
+			r.conversationsService.Close()
+		}
 	})
 	r.wg.Wait()
 }
@@ -1016,6 +1045,12 @@ func (r *Router) HandleUnsupported(w http.ResponseWriter, req *http.Request) {
 	http.Error(w, "Not supported", http.StatusNotFound)
 }
 
+// HandleCatchAll handles all unmatched routes and logs a warning
+func (r *Router) HandleCatchAll(w http.ResponseWriter, req *http.Request) {
+	r.logger.Warn("unhandled request", "method", req.Method, "path", req.URL.Path, "query", req.URL.RawQuery, "user_agent", req.Header.Get("User-Agent"))
+	http.NotFound(w, req)
+}
+
 // Helper function to parse integer parameters
 func parseIntParam(s string) (int, error) {
 	if s == "" {
@@ -1029,4 +1064,254 @@ func parseIntParam(s string) (int, error) {
 		result = result*10 + int(c-'0')
 	}
 	return result, nil
+}
+
+// Conversation HTTP Handlers
+func (r *Router) HandleCreateConversation(w http.ResponseWriter, req *http.Request) {
+	if r.conversationsService == nil {
+		http.Error(w, "Conversations service not available", http.StatusServiceUnavailable)
+		return
+	}
+
+	var createReq openai.CreateConversationRequest
+	if err := readJSON(req, &createReq); err != nil {
+		r.logger.WithError(err).Error("failed to parse create conversation request")
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	conversation, err := r.conversationsService.CreateConversation(req.Context(), &createReq)
+	if err != nil {
+		r.logger.WithError(err).Error("failed to create conversation")
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	writeJSON(w, conversation)
+}
+
+func (r *Router) HandleGetConversation(w http.ResponseWriter, req *http.Request) {
+	if r.conversationsService == nil {
+		http.Error(w, "Conversations service not available", http.StatusServiceUnavailable)
+		return
+	}
+
+	id := req.PathValue("id")
+	if id == "" {
+		http.Error(w, "Conversation ID required", http.StatusBadRequest)
+		return
+	}
+
+	conversation, err := r.conversationsService.GetConversation(req.Context(), id)
+	if err != nil {
+		if err.Error() == "conversation not found" {
+			http.Error(w, "Conversation not found", http.StatusNotFound)
+		} else {
+			r.logger.WithError(err).Error("failed to get conversation")
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+		}
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	writeJSON(w, conversation)
+}
+
+func (r *Router) HandleUpdateConversation(w http.ResponseWriter, req *http.Request) {
+	if r.conversationsService == nil {
+		http.Error(w, "Conversations service not available", http.StatusServiceUnavailable)
+		return
+	}
+
+	id := req.PathValue("id")
+	if id == "" {
+		http.Error(w, "Conversation ID required", http.StatusBadRequest)
+		return
+	}
+
+	var updateReq openai.UpdateConversationRequest
+	if err := readJSON(req, &updateReq); err != nil {
+		r.logger.WithError(err).Error("failed to parse update conversation request")
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	conversation, err := r.conversationsService.UpdateConversation(req.Context(), id, &updateReq)
+	if err != nil {
+		if err.Error() == "conversation not found" {
+			http.Error(w, "Conversation not found", http.StatusNotFound)
+		} else {
+			r.logger.WithError(err).Error("failed to update conversation")
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+		}
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	writeJSON(w, conversation)
+}
+
+func (r *Router) HandleDeleteConversation(w http.ResponseWriter, req *http.Request) {
+	if r.conversationsService == nil {
+		http.Error(w, "Conversations service not available", http.StatusServiceUnavailable)
+		return
+	}
+
+	id := req.PathValue("id")
+	if id == "" {
+		http.Error(w, "Conversation ID required", http.StatusBadRequest)
+		return
+	}
+
+	deleteResp, err := r.conversationsService.DeleteConversation(req.Context(), id)
+	if err != nil {
+		if err.Error() == "conversation not found" {
+			http.Error(w, "Conversation not found", http.StatusNotFound)
+		} else {
+			r.logger.WithError(err).Error("failed to delete conversation")
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+		}
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	writeJSON(w, deleteResp)
+}
+
+func (r *Router) HandleListItems(w http.ResponseWriter, req *http.Request) {
+	if r.conversationsService == nil {
+		http.Error(w, "Conversations service not available", http.StatusServiceUnavailable)
+		return
+	}
+
+	conversationID := req.PathValue("conversation_id")
+	if conversationID == "" {
+		http.Error(w, "Conversation ID required", http.StatusBadRequest)
+		return
+	}
+
+	// Parse query parameters
+	after := req.URL.Query().Get("after")
+	limit := 20 // default
+	if limitStr := req.URL.Query().Get("limit"); limitStr != "" {
+		if l, err := parseIntParam(limitStr); err == nil && l > 0 && l <= 100 {
+			limit = l
+		}
+	}
+	order := req.URL.Query().Get("order")
+	if order == "" {
+		order = "desc"
+	}
+	include := req.URL.Query()["include"]
+
+	items, err := r.conversationsService.ListItems(req.Context(), conversationID, after, limit, order, include)
+	if err != nil {
+		if err.Error() == "conversation not found" {
+			http.Error(w, "Conversation not found", http.StatusNotFound)
+		} else {
+			r.logger.WithError(err).Error("failed to list items")
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+		}
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	writeJSON(w, items)
+}
+
+func (r *Router) HandleCreateItems(w http.ResponseWriter, req *http.Request) {
+	if r.conversationsService == nil {
+		http.Error(w, "Conversations service not available", http.StatusServiceUnavailable)
+		return
+	}
+
+	conversationID := req.PathValue("conversation_id")
+	if conversationID == "" {
+		http.Error(w, "Conversation ID required", http.StatusBadRequest)
+		return
+	}
+
+	var createReq openai.CreateItemsRequest
+	if err := readJSON(req, &createReq); err != nil {
+		r.logger.WithError(err).Error("failed to parse create items request")
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	include := req.URL.Query()["include"]
+
+	items, err := r.conversationsService.CreateItems(req.Context(), conversationID, &createReq, include)
+	if err != nil {
+		if err.Error() == "conversation not found" {
+			http.Error(w, "Conversation not found", http.StatusNotFound)
+		} else {
+			r.logger.WithError(err).Error("failed to create items")
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+		}
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	writeJSON(w, items)
+}
+
+func (r *Router) HandleGetItem(w http.ResponseWriter, req *http.Request) {
+	if r.conversationsService == nil {
+		http.Error(w, "Conversations service not available", http.StatusServiceUnavailable)
+		return
+	}
+
+	conversationID := req.PathValue("conversation_id")
+	itemID := req.PathValue("item_id")
+	if conversationID == "" || itemID == "" {
+		http.Error(w, "Conversation ID and Item ID required", http.StatusBadRequest)
+		return
+	}
+
+	include := req.URL.Query()["include"]
+
+	item, err := r.conversationsService.GetItem(req.Context(), conversationID, itemID, include)
+	if err != nil {
+		if err.Error() == "conversation not found" || err.Error() == "item not found" {
+			http.Error(w, "Not found", http.StatusNotFound)
+		} else {
+			r.logger.WithError(err).Error("failed to get item")
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+		}
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	writeJSON(w, item)
+}
+
+func (r *Router) HandleDeleteItem(w http.ResponseWriter, req *http.Request) {
+	if r.conversationsService == nil {
+		http.Error(w, "Conversations service not available", http.StatusServiceUnavailable)
+		return
+	}
+
+	conversationID := req.PathValue("conversation_id")
+	itemID := req.PathValue("item_id")
+	if conversationID == "" || itemID == "" {
+		http.Error(w, "Conversation ID and Item ID required", http.StatusBadRequest)
+		return
+	}
+
+	conversation, err := r.conversationsService.DeleteItem(req.Context(), conversationID, itemID)
+	if err != nil {
+		if err.Error() == "conversation not found" || err.Error() == "item not found" {
+			http.Error(w, "Not found", http.StatusNotFound)
+		} else {
+			r.logger.WithError(err).Error("failed to delete item")
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+		}
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	writeJSON(w, conversation)
 }

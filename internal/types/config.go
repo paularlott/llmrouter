@@ -3,12 +3,13 @@ package types
 // Configuration types
 
 type Config struct {
-	Server     ServerConfig     `json:"server"`
-	Logging    LoggingConfig    `json:"logging"`
-	Providers  []ProviderConfig `json:"providers"`
-	MCP        MCPConfig        `json:"mcp"`
-	Scriptling ScriptlingConfig `json:"scriptling"`
-	Responses  ResponsesConfig  `json:"responses"`
+	Server        ServerConfig        `json:"server"`
+	Logging       LoggingConfig       `json:"logging"`
+	Providers     []ProviderConfig    `json:"providers"`
+	MCP           MCPConfig           `json:"mcp"`
+	Scriptling    ScriptlingConfig    `json:"scriptling"`
+	Responses     ResponsesConfig     `json:"responses"`
+	Conversations ConversationsConfig `json:"conversations"`
 }
 
 type ServerConfig struct {
@@ -50,6 +51,11 @@ type ScriptlingConfig struct {
 }
 
 type ResponsesConfig struct {
+	StoragePath string `json:"storage_path,omitempty"`
+	TTLDays     int    `json:"ttl_days,omitempty"`
+}
+
+type ConversationsConfig struct {
 	StoragePath string `json:"storage_path,omitempty"`
 	TTLDays     int    `json:"ttl_days,omitempty"`
 }

@@ -57,3 +57,12 @@ type ResponseStorage interface {
 func GenerateResponseID() string {
 	return "resp_" + strings.ReplaceAll(uuid.New().String(), "-", "")
 }
+// Helper function to generate conversation IDs
+func GenerateConversationID() string {
+return "conv_" + strings.ReplaceAll(uuid.New().String(), "-", "")
+}
+
+// Helper function to generate message IDs
+func GenerateMessageID() string {
+return "msg_" + strings.ReplaceAll(uuid.New().String(), "-", "")
+}
