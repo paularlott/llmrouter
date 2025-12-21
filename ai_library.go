@@ -235,13 +235,35 @@ func (ai *AILibrary) GetLibrary() *object.Library {
 				result.Pairs["status"] = object.DictPair{Key: &object.String{Value: "status"}, Value: &object.String{Value: resp.Status}}
 				result.Pairs["model"] = object.DictPair{Key: &object.String{Value: "model"}, Value: &object.String{Value: resp.Model}}
 
-				// Add output if available
+				// Add output if available (new format: array of message objects)
 				if len(resp.Output) > 0 {
-					if chatResp, ok := resp.Output[0].(*ChatCompletionResponse); ok {
-						if len(chatResp.Choices) > 0 {
-							content := chatResp.Choices[0].Message.GetContentAsString()
-							result.Pairs["content"] = object.DictPair{Key: &object.String{Value: "content"}, Value: &object.String{Value: content}}
+					// Try to extract content from first message
+					if msgMap, ok := resp.Output[0].(map[string]interface{}); ok {
+						if contentArray, ok := msgMap["content"].([]interface{}); ok {
+							// Extract text from content array
+							var textParts []string
+							for _, item := range contentArray {
+								if contentItem, ok := item.(map[string]interface{}); ok {
+									if text, ok := contentItem["text"].(string); ok {
+										textParts = append(textParts, text)
+									}
+								}
+							}
+							if len(textParts) > 0 {
+								result.Pairs["content"] = object.DictPair{
+									Key:   &object.String{Value: "content"},
+									Value: &object.String{Value: textParts[0]}, // Return first text part
+								}
+							}
 						}
+					}
+				}
+
+				// Add error if available
+				if resp.Error != nil {
+					result.Pairs["error"] = object.DictPair{
+						Key:   &object.String{Value: "error"},
+						Value: &object.String{Value: resp.Error.Message},
 					}
 				}
 

@@ -398,7 +398,7 @@ func (r *Router) CreateChatCompletion(ctx context.Context, req *ChatCompletionRe
 	r.incrementActiveCompletions(providerName)
 	defer r.decrementActiveCompletions(providerName)
 
-	r.logger.Info("routing chat completion", "model", req.Model, "provider", providerName)
+	r.logger.Debug("routing chat completion", "model", req.Model, "provider", providerName)
 
 	// Create token counter for usage estimation
 	tokenCounter := openai.NewTokenCounter()
@@ -482,7 +482,7 @@ func (r *Router) CreateChatCompletionRaw(ctx context.Context, req *ChatCompletio
 		r.decrementActiveCompletions(providerName)
 	}()
 
-	r.logger.Info("routing chat completion (raw)", "model", req.Model, "provider", providerName, "stream", req.Stream)
+	r.logger.Debug("routing chat completion (raw)", "model", req.Model, "provider", providerName, "stream", req.Stream)
 
 	// Make the raw request
 	resp, err := provider.Client.CreateChatCompletionRaw(ctx, req)
@@ -856,6 +856,8 @@ func (r *Router) Shutdown() {
 
 // Responses HTTP Handlers
 func (r *Router) HandleCreateResponse(w http.ResponseWriter, req *http.Request) {
+	r.logger.Trace("HandleCreateResponse")
+
 	if r.responsesService == nil {
 		http.Error(w, "Responses service not available", http.StatusServiceUnavailable)
 		return
@@ -875,12 +877,17 @@ func (r *Router) HandleCreateResponse(w http.ResponseWriter, req *http.Request) 
 		return
 	}
 
+	// log.PrettyJSON(createReq)
+	// log.PrettyJSON(resp)
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	writeJSON(w, resp)
 }
 
 func (r *Router) HandleGetResponse(w http.ResponseWriter, req *http.Request) {
+	r.logger.Trace("HandleGetResponse")
+
 	if r.responsesService == nil {
 		http.Error(w, "Responses service not available", http.StatusServiceUnavailable)
 		return
@@ -908,6 +915,8 @@ func (r *Router) HandleGetResponse(w http.ResponseWriter, req *http.Request) {
 }
 
 func (r *Router) HandleDeleteResponse(w http.ResponseWriter, req *http.Request) {
+	r.logger.Trace("HandleDeleteResponse")
+
 	if r.responsesService == nil {
 		http.Error(w, "Responses service not available", http.StatusServiceUnavailable)
 		return

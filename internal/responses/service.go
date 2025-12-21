@@ -3,6 +3,7 @@ package responses
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/paularlott/llmrouter/internal/storage"
@@ -95,16 +96,44 @@ func (s *Service) createEmulatedResponse(ctx context.Context, req *openai.Create
 		return nil, fmt.Errorf("failed to store response: %w", err)
 	}
 
-	// Process the response asynchronously
-	go s.processResponse(context.Background(), responseID, req, completionFunc)
+	// Check if background processing is requested
+	background := req.Background
 
-	return &openai.ResponseObject{
-		ID:      responseID,
-		Object:  "response",
-		Created: now.Unix(),
-		Model:   req.Model,
-		Status:  string(storage.StatusPending),
-	}, nil
+	if background {
+		// Process the response asynchronously
+		go s.processResponse(context.Background(), responseID, req, completionFunc)
+
+		// Create response object with pending status
+		responseObj := &openai.ResponseObject{
+			ID:        responseID,
+			Object:    "response",
+			CreatedAt: now.Unix(),
+			Model:     req.Model,
+			Status:    string(storage.StatusPending),
+		}
+
+		// Add optional fields from request
+		if req.Instructions != "" {
+			responseObj.Instructions = req.Instructions
+		}
+		if req.Metadata != nil {
+			responseObj.Metadata = req.Metadata
+		}
+		if req.Tools != nil {
+			responseObj.Tools = req.Tools
+		}
+		if req.PreviousResponseID != "" {
+			responseObj.PreviousResponseID = req.PreviousResponseID
+		}
+
+		return responseObj, nil
+	}
+
+	// Synchronous processing (default)
+	s.processResponse(ctx, responseID, req, completionFunc)
+
+	// Retrieve the completed response
+	return s.GetResponse(ctx, responseID)
 }
 
 func (s *Service) GetResponse(ctx context.Context, id string) (*openai.ResponseObject, error) {
@@ -114,11 +143,12 @@ func (s *Service) GetResponse(ctx context.Context, id string) (*openai.ResponseO
 	}
 
 	response := &openai.ResponseObject{
-		ID:      stored.ID,
-		Object:  "response",
-		Created: stored.CreatedAt.Unix(),
-		Model:   stored.Metadata.Model,
-		Status:  string(stored.Status),
+		ID:        stored.ID,
+		Object:    "response",
+		CreatedAt: stored.CreatedAt.Unix(),
+		Model:     stored.Metadata.Model,
+		Status:    string(stored.Status),
+		Output:    []interface{}{}, // Always initialize as empty array
 	}
 
 	// Add output if response is completed
@@ -127,6 +157,15 @@ func (s *Service) GetResponse(ctx context.Context, id string) (*openai.ResponseO
 			// Convert ChatCompletionResponse to Response API format
 			if chatResp, ok := output.(*openai.ChatCompletionResponse); ok {
 				response.Output = s.convertChatCompletionToOutput(chatResp)
+			}
+		}
+	}
+
+	// Add error if response failed
+	if stored.Status == storage.StatusError {
+		if errorMsg, ok := stored.Response["error"].(string); ok {
+			response.Error = &openai.APIError{
+				Message: errorMsg,
 			}
 		}
 	}
@@ -156,11 +195,11 @@ func (s *Service) ListResponses(ctx context.Context, filter storage.ResponseFilt
 	responses := make([]openai.ResponseObject, len(stored))
 	for i, sr := range stored {
 		responses[i] = openai.ResponseObject{
-			ID:      sr.ID,
-			Object:  "response",
-			Created: sr.CreatedAt.Unix(),
-			Model:   sr.Metadata.Model,
-			Status:  string(sr.Status),
+			ID:        sr.ID,
+			Object:    "response",
+			CreatedAt: sr.CreatedAt.Unix(),
+			Model:     sr.Metadata.Model,
+			Status:    string(sr.Status),
 		}
 	}
 
@@ -258,11 +297,47 @@ func (s *Service) processResponse(ctx context.Context, responseID string, req *o
 
 	// Convert input to user messages
 	for _, input := range req.Input {
+		// Handle string input
 		if inputStr, ok := input.(string); ok {
 			messages = append(messages, openai.Message{
 				Role:    "user",
 				Content: inputStr,
 			})
+			continue
+		}
+
+		// Handle message object input (from N8N)
+		if inputMap, ok := input.(map[string]interface{}); ok {
+			msg := openai.Message{}
+
+			// Extract role
+			if role, ok := inputMap["role"].(string); ok {
+				msg.Role = role
+			} else {
+				msg.Role = "user" // Default to user if not specified
+			}
+
+			// Extract content - can be string or array
+			if contentStr, ok := inputMap["content"].(string); ok {
+				msg.Content = contentStr
+			} else if contentArray, ok := inputMap["content"].([]interface{}); ok {
+				// Handle content as array of content parts
+				var textParts []string
+				for _, part := range contentArray {
+					if partMap, ok := part.(map[string]interface{}); ok {
+						if text, ok := partMap["text"].(string); ok {
+							textParts = append(textParts, text)
+						}
+					}
+				}
+				if len(textParts) > 0 {
+					msg.Content = strings.Join(textParts, "\n")
+				}
+			}
+
+			if msg.Content != "" {
+				messages = append(messages, msg)
+			}
 		}
 	}
 
@@ -282,8 +357,19 @@ func (s *Service) processResponse(ctx context.Context, responseID string, req *o
 		chatResp, err = s.router.CreateChatCompletion(ctx, chatReq)
 	}
 	if err != nil {
-		// Update status to error
-		s.storage.UpdateStatus(ctx, responseID, storage.StatusError)
+		// Store error message
+		stored, getErr := s.storage.Get(ctx, responseID)
+		if getErr == nil {
+			stored.Status = storage.StatusError
+			stored.UpdatedAt = time.Now()
+			stored.Response = map[string]interface{}{
+				"error": err.Error(),
+			}
+			s.storage.Store(ctx, stored)
+		} else {
+			// Fallback to just updating status
+			s.storage.UpdateStatus(ctx, responseID, storage.StatusError)
+		}
 		return
 	}
 

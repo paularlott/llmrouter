@@ -1,6 +1,7 @@
 package log
 
 import (
+	"encoding/json"
 	"os"
 
 	"github.com/paularlott/logger"
@@ -32,6 +33,10 @@ func Info(msg string, keysAndValues ...any) {
 	defaultLogger.Info(msg, keysAndValues...)
 }
 
+func Trace(msg string, keysAndValues ...any) {
+	defaultLogger.Trace(msg, keysAndValues...)
+}
+
 func Debug(msg string, keysAndValues ...any) {
 	defaultLogger.Debug(msg, keysAndValues...)
 }
@@ -54,4 +59,13 @@ func WithError(err error) logger.Logger {
 
 func GetLogger() logger.Logger {
 	return defaultLogger
+}
+
+func PrettyJSON(v interface{}) error {
+	b, err := json.MarshalIndent(v, "", "  ")
+	if err != nil {
+		return err
+	}
+	defaultLogger.Trace(string(b))
+	return nil
 }
