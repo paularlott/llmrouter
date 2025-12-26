@@ -90,7 +90,7 @@ denylist = ["text-davinci-003"]
 #   namespace = "ai"
 #   url = "https://ai.example.com/mcp"
 #   token = "your-bearer-token"
-#   hidden = false
+#   tool_visibility = "visible"  # visible | hidden | ondemand
 
 [scriptling]
 tools_path = "./example-tools"
@@ -143,7 +143,21 @@ If no token is configured, the server runs without authentication.
 | `namespace` | Namespace for the remote MCP server (prevents tool name conflicts) |
 | `url` | URL of the remote MCP server |
 | `token` | Optional bearer token for authentication |
-| `hidden` | If true, tools are callable but not listed in discovery (default: false) |
+| `tool_visibility` | How tools are exposed: `visible` (default), `hidden`, or `ondemand` |
+
+#### Tool Visibility Modes
+
+| Mode | In ListTools | In tool_search | Callable Via |
+|------|--------------|----------------|-------------|
+| `visible` | ✓ | ✗ | Direct name only |
+| `hidden` | ✗ | ✗ | Direct name only |
+| `ondemand` | ✗ | ✓ | `execute_tool` only |
+
+**`visible`** (default): Tools appear in the tools/list manifest. LLM can call them directly by name. NOT in `tool_search` (use the manifest instead).
+
+**`hidden`**: Tools are not accessible through any discovery mechanism (not in tools/list, not in tool_search). Can still be called directly by name if you know it. Useful for internal tools that should only be called from scripts with explicit names.
+
+**`ondemand`**: Tools don't appear in the tools/list manifest (reducing initial context sent to LLMs) but are discoverable via `tool_search`. Can ONLY be called via `execute_tool` wrapper. This is useful for servers with many tools where you want the LLM to discover them as needed rather than receiving all tool definitions upfront.
 
 ### Responses Configuration
 
@@ -151,23 +165,6 @@ If no token is configured, the server runs without authentication.
 |-------|-------------|
 | `storage_path` | Path to BadgerDB storage directory (default: "./responses.db") |
 | `ttl_days` | Time-to-live for stored responses in days (default: 30) |
-
-#### Hidden Servers
-
-When `hidden = true` is set on a remote MCP server:
-- Tools from that server can still be executed by name
-- Tools won't appear in `tool_search` results
-- Tools won't be listed in general tool discovery
-- This is useful for internal tools that should only be called from scripts
-
-Example:
-```toml
-[[mcp.remote_servers]]
-  namespace = "internal"
-  url = "https://internal.example.com/mcp"
-  token = "internal-api-key"
-  hidden = true  # Tools only callable from scripts
-```
 
 ## API Endpoints
 

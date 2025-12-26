@@ -69,9 +69,10 @@ func RunServer(ctx context.Context, cmd *cli.Command) error {
 			remoteServers := mcpConfig.GetObjectSlice("remote_servers")
 			for _, serverConfig := range remoteServers {
 				server := types.MCPRemoteServerConfig{
-					Namespace: serverConfig.GetString("namespace"),
-					URL:       strings.TrimSuffix(serverConfig.GetString("url"), "/"),
-					Token:     serverConfig.GetString("token"),
+					Namespace:     serverConfig.GetString("namespace"),
+					URL:           strings.TrimSuffix(serverConfig.GetString("url"), "/"),
+					Token:         serverConfig.GetString("token"),
+					ToolVisibility: serverConfig.GetString("tool_visibility"),
 				}
 				config.MCP.RemoteServers = append(config.MCP.RemoteServers, server)
 			}

@@ -39,10 +39,10 @@ type MCPConfig struct {
 }
 
 type MCPRemoteServerConfig struct {
-	Namespace string `json:"namespace"`
-	URL       string `json:"url"`
-	Token     string `json:"token,omitempty"`
-	Hidden    bool   `json:"hidden,omitempty"`
+	Namespace     string `json:"namespace"`
+	URL           string `json:"url"`
+	Token         string `json:"token,omitempty"`
+	ToolVisibility string `json:"tool_visibility,omitempty"`
 }
 
 type ScriptlingConfig struct {

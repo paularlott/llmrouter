@@ -347,25 +347,25 @@ Use execute_code for custom Scriptling/Python code execution.`)
 		return nil, fmt.Errorf("failed to register tools: %w", err)
 	}
 
+	// Set the tool registry on the server for OnDemand tools
+	server.SetToolRegistry(registry)
+
 	// Connect to remote MCP servers
 	for _, remoteServer := range config.MCP.RemoteServers {
+		// Create auth provider if token is provided
+		var auth mcp.AuthProvider
 		if remoteServer.Token != "" {
-			// For now, skip token auth as API might have changed
-			logger.Warn("remote MCP server token auth not implemented yet", "namespace", remoteServer.Namespace, "url", remoteServer.URL)
+			auth = mcp.NewBearerTokenAuth(remoteServer.Token)
 		}
-		// Try to connect with hidden option if configured
-		if remoteServer.Hidden {
-			if err := server.RegisterRemoteServerHidden(remoteServer.URL, remoteServer.Namespace, nil); err != nil {
-				logger.Warn("failed to connect to remote MCP server (hidden)", "namespace", remoteServer.Namespace, "url", remoteServer.URL, "error", err)
-			} else {
-				logger.Info("connected to remote MCP server (hidden)", "namespace", remoteServer.Namespace, "url", remoteServer.URL)
-			}
+
+		// Parse tool visibility
+		visibility := parseToolVisibility(remoteServer.ToolVisibility)
+
+		// Register remote server with visibility
+		if err := server.RegisterRemoteServerWithVisibility(remoteServer.URL, remoteServer.Namespace, auth, visibility); err != nil {
+			logger.Warn("failed to connect to remote MCP server", "namespace", remoteServer.Namespace, "url", remoteServer.URL, "visibility", remoteServer.ToolVisibility, "error", err)
 		} else {
-			if err := server.RegisterRemoteServer(remoteServer.URL, remoteServer.Namespace, nil); err != nil {
-				logger.Warn("failed to connect to remote MCP server", "namespace", remoteServer.Namespace, "url", remoteServer.URL, "error", err)
-			} else {
-				logger.Info("connected to remote MCP server", "namespace", remoteServer.Namespace, "url", remoteServer.URL)
-			}
+			logger.Info("connected to remote MCP server", "namespace", remoteServer.Namespace, "url", remoteServer.URL, "visibility", remoteServer.ToolVisibility)
 		}
 	}
 
@@ -373,6 +373,21 @@ Use execute_code for custom Scriptling/Python code execution.`)
 	registry.Attach(server)
 
 	return mcpServer, nil
+}
+
+// parseToolVisibility converts string visibility to mcp.ToolVisibility
+func parseToolVisibility(visibility string) mcp.ToolVisibility {
+	switch strings.ToLower(visibility) {
+	case "hidden":
+		return mcp.ToolVisibilityHidden
+	case "ondemand":
+		return mcp.ToolVisibilityOnDemand
+	case "visible", "":
+		return mcp.ToolVisibilityVisible
+	default:
+		// Default to visible for unknown values
+		return mcp.ToolVisibilityVisible
+	}
 }
 
 // initializeScriptling sets up the Scriptling environment
