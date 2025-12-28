@@ -550,6 +550,19 @@ func (r *Router) isConnectionError(err error) bool {
 		}
 	}
 
+	// Also detect fatal API errors that indicate a broken provider/model
+	fatalAPIPatterns := []string{
+		"missing tensor",                    // Corrupted GGUF file (Ollama)
+		"llama runner process has terminated", // Model loading failure (Ollama)
+		"model runner has unexpectedly stopped", // Ollama model runtime failure
+	}
+
+	for _, pattern := range fatalAPIPatterns {
+		if strings.Contains(errStr, pattern) {
+			return true
+		}
+	}
+
 	return false
 }
 
