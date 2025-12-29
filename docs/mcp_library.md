@@ -114,7 +114,11 @@ Calls an MCP tool directly by name with the provided arguments.
 - `args` (dict): A dictionary of arguments to pass to the tool
 
 **Returns:**
-- A string containing the tool's response
+- The tool's response, automatically decoded:
+  - **Single text response**: Returns as a string
+  - **JSON in text**: Automatically parsed and returned as objects (dict/list)
+  - **Multiple content blocks**: Returns as a list of decoded blocks
+  - **Image/Resource blocks**: Returns as a dict with `Type`, `Data`, `MimeType`, etc.
 
 **Example:**
 ```python
@@ -127,6 +131,16 @@ result = mcp.call_tool("calculator", {
     "b": 8
 })
 print(result)  # Outputs: 56.0
+
+# JSON responses are automatically parsed
+data = mcp.call_tool("get_data", {"id": 123})
+print(data["status"])  # Access as dict if JSON is returned
+print(data["count"])   # Works with parsed objects
+
+# Multiple content blocks returned as list
+blocks = mcp.call_tool("multi_output", {})
+for block in blocks:
+    print(block)
 ```
 
 ### mcp.tool_search(query, namespace?)
@@ -165,7 +179,11 @@ Executes a tool via the discovery system. This is a helper that wraps the `execu
 - `namespace` (string, optional): If provided, calls the MCP tool `<namespace>/execute_tool` instead of `execute_tool`
 
 **Returns:**
-- A string containing the tool's response
+- The tool's response, automatically decoded:
+  - **Single text response**: Returns as a string
+  - **JSON in text**: Automatically parsed and returned as objects (dict/list)
+  - **Multiple content blocks**: Returns as a list of decoded blocks
+  - **Image/Resource blocks**: Returns as a dict with `Type`, `Data`, `MimeType`, etc.
 
 **Example:**
 ```python
@@ -176,11 +194,15 @@ results = mcp.tool_search("weather")
 if results:
     tool_name = results[0]['name']
     result = mcp.execute_tool(tool_name, {"city": "London"})
+    # result is decoded - could be string, dict, or list
     print(result)
 
 # Execute a tool using a namespaced execute_tool
 result = mcp.execute_tool("calculator", {"expression": "2+2"}, "math")
-print(result)  # Uses "math/execute_tool" to execute "calculator"
+# Uses "math/execute_tool" to execute "calculator"
+# If result is JSON like {"answer": 4}, it's already parsed
+print(result)  # {"answer": 4}
+print(result["answer"])  # 4
 ```
 
 ### mcp.execute_code(code)
@@ -191,7 +213,10 @@ Executes arbitrary Scriptling/Python code. This is a helper that wraps the `exec
 - `code` (string): The code to execute
 
 **Returns:**
-- A string containing the script's output
+- The script's output, automatically decoded:
+  - **Single text response**: Returns as a string
+  - **JSON in text**: Automatically parsed and returned as objects (dict/list)
+  - **Multiple content blocks**: Returns as a list of decoded blocks
 
 **Example:**
 ```python
@@ -212,6 +237,15 @@ print(factorial(5))
 '''
 result = mcp.execute_code(code)
 print(result)  # Outputs: 120
+
+# Code that returns JSON is automatically parsed
+json_code = '''
+import json
+print(json.dumps({"status": "ok", "count": 42}))
+'''
+result = mcp.execute_code(json_code)
+print(result["status"])  # "ok"
+print(result["count"])   # 42
 ```
 
 ## Complete Tool Example
@@ -271,6 +305,61 @@ When parameters are passed to a tool, they are automatically converted to approp
 | `number`  | `float`     |
 | `boolean` | `bool`      |
 | `array`   | `list`      |
+
+## Response Decoding
+
+The MCP library automatically decodes tool responses for easier use in scripts. When you call `mcp.call_tool()`, `mcp.execute_tool()`, or `mcp.execute_code()`, the response is intelligently decoded:
+
+### Single Text Response
+
+Returns as a string:
+```python
+result = mcp.call_tool("some_tool", {})
+print(result)  # "Hello, World!"
+```
+
+### JSON in Text
+
+Automatically parsed as dict or list:
+```python
+# Tool returns: '{"status": "ok", "count": 42}'
+result = mcp.call_tool("status_tool", {})
+print(result["status"])  # "ok"
+print(result["count"])   # 42
+```
+
+### Multiple Content Blocks
+
+Returns as a list of decoded blocks:
+```python
+blocks = mcp.call_tool("multi_tool", {})
+for block in blocks:
+    print(block)  # Each decoded block
+```
+
+### Image/Resource Blocks
+
+Returns as a dict with metadata:
+```python
+image = mcp.call_tool("image_tool", {})
+print(image["Type"])      # "image"
+print(image["MimeType"])  # "image/png"
+print(image["Data"])      # base64 data
+```
+
+### Checking Response Type
+
+You can check the type of response you received:
+```python
+result = mcp.call_tool("some_tool", {})
+
+if isinstance(result, str):
+    print("Got string:", result)
+elif isinstance(result, dict):
+    print("Got dict:", result.keys())
+elif isinstance(result, list):
+    print("Got list with", len(result), "items")
+```
 
 ## Using with AI Library
 

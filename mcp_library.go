@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/paularlott/mcp"
 	"github.com/paularlott/scriptling/object"
 )
 
@@ -80,24 +81,117 @@ func objectToGoMap(dict *object.Dict) map[string]interface{} {
 	return result
 }
 
-// getStringValue safely extracts a string value from a map
-func getStringValue(m map[string]interface{}, key string) string {
-	if val, ok := m[key]; ok {
-		if str, ok := val.(string); ok {
-			return str
-		}
+// decodeToolResponse intelligently decodes a tool response for easier use in scripts
+// - Single text content: returns the text as a string
+// - Text that is valid JSON: returns the parsed JSON as objects
+// - Multiple content blocks: returns the list of decoded blocks
+// - Structured content: returns the decoded structure
+// - Image/Resource blocks: returns the decoded block with Type, Data, etc.
+func decodeToolResponse(response *mcp.ToolResponse) object.Object {
+	// Check for structured content first
+	if response.StructuredContent != nil {
+		return convertToScriptlingObject(response.StructuredContent)
 	}
-	return ""
+
+	// Handle content blocks
+	content := response.Content
+	if len(content) == 0 {
+		return &object.Null{}
+	}
+
+	// Single content block
+	if len(content) == 1 {
+		return decodeToolContent(content[0])
+	}
+
+	// Multiple content blocks - decode each
+	elements := make([]object.Object, len(content))
+	for i, block := range content {
+		elements[i] = decodeToolContent(block)
+	}
+	return &object.List{Elements: elements}
 }
 
-// getFloatValue safely extracts a float64 value from a map
-func getFloatValue(m map[string]interface{}, key string) float64 {
-	if val, ok := m[key]; ok {
-		if flt, ok := val.(float64); ok {
-			return flt
+// decodeToolContent decodes a single content block
+func decodeToolContent(block mcp.ToolContent) object.Object {
+	switch block.Type {
+	case "text":
+		if block.Text != "" {
+			return decodeToolText(block.Text)
 		}
+		return &object.String{Value: ""}
+	case "image":
+		// Return image block with data and mimeType
+		result := &object.Dict{Pairs: map[string]object.DictPair{
+			"Type":     {Key: &object.String{Value: "Type"}, Value: &object.String{Value: "image"}},
+			"Data":     {Key: &object.String{Value: "Data"}, Value: &object.String{Value: block.Data}},
+			"MimeType": {Key: &object.String{Value: "MimeType"}, Value: &object.String{Value: block.MimeType}},
+		}}
+		return result
+	case "resource":
+		// Return resource block
+		return convertToScriptlingObject(block.Resource)
+	default:
+		// Unknown type, return as dict
+		result := &object.Dict{Pairs: map[string]object.DictPair{
+			"Type": {Key: &object.String{Value: "Type"}, Value: &object.String{Value: block.Type}},
+		}}
+		if block.Text != "" {
+			result.Pairs["Text"] = object.DictPair{Key: &object.String{Value: "Text"}, Value: &object.String{Value: block.Text}}
+		}
+		if block.Data != "" {
+			result.Pairs["Data"] = object.DictPair{Key: &object.String{Value: "Data"}, Value: &object.String{Value: block.Data}}
+		}
+		return result
 	}
-	return 0.0
+}
+
+// decodeToolText decodes text content, parsing JSON if valid
+func decodeToolText(text string) object.Object {
+	// Try to parse as JSON
+	var jsonValue interface{}
+	if err := json.Unmarshal([]byte(text), &jsonValue); err == nil {
+		return convertToScriptlingObject(jsonValue)
+	}
+	// Return as plain string
+	return &object.String{Value: text}
+}
+
+// convertToScriptlingObject converts a Go interface{} to a scriptling object
+func convertToScriptlingObject(v interface{}) object.Object {
+	switch val := v.(type) {
+	case nil:
+		return &object.Null{}
+	case bool:
+		return &object.Boolean{Value: val}
+	case float64:
+		if val == float64(int64(val)) {
+			return object.NewInteger(int64(val))
+		}
+		return &object.Float{Value: val}
+	case int:
+		return object.NewInteger(int64(val))
+	case int64:
+		return object.NewInteger(val)
+	case string:
+		return &object.String{Value: val}
+	case []interface{}:
+		elements := make([]object.Object, len(val))
+		for i, elem := range val {
+			elements[i] = convertToScriptlingObject(elem)
+		}
+		return &object.List{Elements: elements}
+	case map[string]interface{}:
+		pairs := make(map[string]object.DictPair)
+		for k, v := range val {
+			key := &object.String{Value: k}
+			value := convertToScriptlingObject(v)
+			pairs[k] = object.DictPair{Key: key, Value: value}
+		}
+		return &object.Dict{Pairs: pairs}
+	default:
+		return &object.String{Value: fmt.Sprintf("%v", val)}
+	}
 }
 
 // GetLibrary returns the scriptling library object for MCP operations
@@ -220,24 +314,20 @@ func (m *MCPLibrary) GetLibrary() *object.Library {
 				}
 
 				if toolName == "" {
-					return &object.String{Value: "Error: tool name is required"}
+					return &object.Error{Message: "tool name is required"}
 				}
 
 				if m.mcpServer == nil || m.mcpServer.server == nil {
-					return &object.String{Value: "Error: MCP server not available"}
+					return &object.Error{Message: "MCP server not available"}
 				}
 
 				// Call the tool directly via MCP server
 				resp, err := m.mcpServer.server.CallTool(ctx, toolName, toolArgs)
 				if err != nil {
-					return &object.String{Value: fmt.Sprintf("Error: %v", err)}
+					return &object.Error{Message: fmt.Sprintf("tool call failed: %v", err)}
 				}
 
-				if len(resp.Content) > 0 {
-					return &object.String{Value: resp.Content[0].Text}
-				}
-
-				return &object.String{Value: ""}
+				return decodeToolResponse(resp)
 			},
 		},
 		"tool_search": {
@@ -270,7 +360,7 @@ func (m *MCPLibrary) GetLibrary() *object.Library {
 				}
 
 				if m.mcpServer == nil || m.mcpServer.server == nil {
-					return &object.List{Elements: []object.Object{}}
+					return &object.Error{Message: "MCP server not available"}
 				}
 
 				// Determine the MCP tool name to call
@@ -291,31 +381,27 @@ func (m *MCPLibrary) GetLibrary() *object.Library {
 
 				resp, err := m.mcpServer.server.CallTool(ctx, toolName, searchArgs)
 				if err != nil {
-					return &object.List{Elements: []object.Object{}}
+					return &object.Error{Message: fmt.Sprintf("tool search failed: %v", err)}
 				}
 
-				// Parse the response (assuming it returns a list of tools)
-				if len(resp.Content) > 0 {
-					// Try to parse as JSON list of tools
-					var tools []map[string]interface{}
-					if err := json.Unmarshal([]byte(resp.Content[0].Text), &tools); err != nil {
-						return &object.List{Elements: []object.Object{}}
-					}
+				// Decode the response - should return a list of tools
+				decoded := decodeToolResponse(resp)
 
-					result := &object.List{Elements: make([]object.Object, len(tools))}
-					for i, tool := range tools {
-						toolDict := &object.Dict{
-							Pairs: map[string]object.DictPair{
-								"name":        {Key: &object.String{Value: "name"}, Value: &object.String{Value: getStringValue(tool, "name")}},
-								"description": {Key: &object.String{Value: "description"}, Value: &object.String{Value: getStringValue(tool, "description")}},
-								"score":       {Key: &object.String{Value: "score"}, Value: &object.Float{Value: getFloatValue(tool, "score")}},
-							},
+				// If already a list, return it
+				if resultList, ok := decoded.(*object.List); ok {
+					return resultList
+				}
+
+				// If it's a dict with results field, extract it
+				if resultDict, ok := decoded.(*object.Dict); ok {
+					if resultsVal, found := resultDict.Pairs["results"]; found {
+						if resultsList, ok := resultsVal.Value.(*object.List); ok {
+							return resultsList
 						}
-						result.Elements[i] = toolDict
 					}
-					return result
 				}
 
+				// Fallback: return empty list
 				return &object.List{Elements: []object.Object{}}
 			},
 		},
@@ -362,11 +448,11 @@ func (m *MCPLibrary) GetLibrary() *object.Library {
 				}
 
 				if toolName == "" {
-					return &object.String{Value: "Error: tool name is required"}
+					return &object.Error{Message: "tool name is required"}
 				}
 
 				if m.mcpServer == nil || m.mcpServer.server == nil {
-					return &object.String{Value: "Error: MCP server not available"}
+					return &object.Error{Message: "MCP server not available"}
 				}
 
 				// Determine the MCP tool name to call
@@ -388,14 +474,10 @@ func (m *MCPLibrary) GetLibrary() *object.Library {
 
 				resp, err := m.mcpServer.server.CallTool(ctx, mcpToolName, executeArgs)
 				if err != nil {
-					return &object.String{Value: fmt.Sprintf("Error: %v", err)}
+					return &object.Error{Message: fmt.Sprintf("tool execution failed: %v", err)}
 				}
 
-				if len(resp.Content) > 0 {
-					return &object.String{Value: resp.Content[0].Text}
-				}
-
-				return &object.String{Value: ""}
+				return decodeToolResponse(resp)
 			},
 		},
 		"execute_code": {
@@ -417,11 +499,11 @@ func (m *MCPLibrary) GetLibrary() *object.Library {
 				}
 
 				if code == "" {
-					return &object.String{Value: "Error: code is required"}
+					return &object.Error{Message: "code is required"}
 				}
 
 				if m.mcpServer == nil || m.mcpServer.server == nil {
-					return &object.String{Value: "Error: MCP server not available"}
+					return &object.Error{Message: "MCP server not available"}
 				}
 
 				// Use the execute_code MCP tool
@@ -429,14 +511,10 @@ func (m *MCPLibrary) GetLibrary() *object.Library {
 					"code": code,
 				})
 				if err != nil {
-					return &object.String{Value: fmt.Sprintf("Error: %v", err)}
+					return &object.Error{Message: fmt.Sprintf("code execution failed: %v", err)}
 				}
 
-				if len(resp.Content) > 0 {
-					return &object.String{Value: resp.Content[0].Text}
-				}
-
-				return &object.String{Value: ""}
+				return decodeToolResponse(resp)
 			},
 		},
 	}
