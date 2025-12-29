@@ -10,9 +10,9 @@ The MCP library provides functions for interacting with the Model Context Protoc
 | `mcp.return_string(text)` | Return a string result from the tool |
 | `mcp.return_object(obj)` | Return an object as JSON from the tool |
 | `mcp.list_tools()` | List all MCP tools |
-| `mcp.call_tool(name, args)` | Call an MCP tool directly |
-| `mcp.tool_search(query)` | Search for tools using discovery |
-| `mcp.execute_tool(name, args)` | Execute a tool via discovery |
+| `mcp.call_tool(name, args)` | Call an MCP tool directly (use `namespace/toolname` for namespaced tools) |
+| `mcp.tool_search(query)` | Search for tools by keyword |
+| `mcp.execute_tool(name, args)` | Execute a discovered tool (use `namespace/toolname` for namespaced tools) |
 | `mcp.execute_code(code)` | Execute arbitrary script code |
 
 ## Importing
@@ -143,40 +143,34 @@ for block in blocks:
     print(block)
 ```
 
-### mcp.tool_search(query, namespace?)
+### mcp.tool_search(query)
 
 Searches for tools by name, description, or keywords using the discovery system. This is a helper that wraps the `tool_search` MCP tool.
 
 **Parameters:**
 - `query` (string): The search query
-- `namespace` (string, optional): If provided, calls the MCP tool `<namespace>/tool_search` instead of `tool_search`
 
 **Returns:**
-- A list of matching tools with `name`, `description`, and `score` keys
+- A list of matching tools with `name`, `description`, and `score` keys. Namespaced tools will have names like `namespace/toolname`.
 
 **Example:**
 ```python
 import mcp
 
-# Search for calculator-related tools using default tool_search
+# Search for calculator-related tools
 results = mcp.tool_search("calculator")
 for tool in results:
     print(f"{tool['name']} (score: {tool['score']})")
-
-# Search using a namespaced tool_search tool
-results = mcp.tool_search("calculator", "math")
-for tool in results:
-    print(f"{tool['name']} (score: {tool['score']})")  # Uses "math/tool_search"
+    # Namespaced tools will appear as "namespace/toolname"
 ```
 
-### mcp.execute_tool(name, args, namespace?)
+### mcp.execute_tool(name, args)
 
 Executes a tool via the discovery system. This is a helper that wraps the `execute_tool` MCP tool.
 
 **Parameters:**
-- `name` (string): The name of the tool to execute
+- `name` (string): The name of the tool to execute. Use `namespace/toolname` format for namespaced tools.
 - `args` (dict): A dictionary of arguments to pass to the tool
-- `namespace` (string, optional): If provided, calls the MCP tool `<namespace>/execute_tool` instead of `execute_tool`
 
 **Returns:**
 - The tool's response, automatically decoded:
@@ -193,13 +187,13 @@ import mcp
 results = mcp.tool_search("weather")
 if results:
     tool_name = results[0]['name']
+    # tool_name may be "namespace/toolname" for namespaced tools
     result = mcp.execute_tool(tool_name, {"city": "London"})
     # result is decoded - could be string, dict, or list
     print(result)
 
-# Execute a tool using a namespaced execute_tool
-result = mcp.execute_tool("calculator", {"expression": "2+2"}, "math")
-# Uses "math/execute_tool" to execute "calculator"
+# Execute a namespaced tool directly
+result = mcp.execute_tool("math/calculator", {"expression": "2+2"})
 # If result is JSON like {"answer": 4}, it's already parsed
 print(result)  # {"answer": 4}
 print(result["answer"])  # 4

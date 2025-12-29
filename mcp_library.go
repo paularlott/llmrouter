@@ -332,147 +332,108 @@ func (m *MCPLibrary) GetLibrary() *object.Library {
 		},
 		"tool_search": {
 			Fn: func(ctx context.Context, kwargs map[string]object.Object, args ...object.Object) object.Object {
-				var query string = ""
-				var namespace string = ""
-
-				// Handle positional arguments: tool_search(query, namespace?)
-				if len(args) > 0 {
-					if q, ok := args[0].(*object.String); ok {
-						query = q.Value
-					}
-				}
-				if len(args) > 1 {
-					if ns, ok := args[1].(*object.String); ok {
-						namespace = ns.Value
-					}
+				if len(args) < 1 {
+					return &object.Error{Message: "tool_search() requires a search query"}
 				}
 
-				// Handle keyword arguments
-				if q, ok := kwargs["query"]; ok {
-					if qStr, ok := q.(*object.String); ok {
-						query = qStr.Value
-					}
-				}
-				if ns, ok := kwargs["namespace"]; ok {
-					if nsStr, ok := ns.(*object.String); ok {
-						namespace = nsStr.Value
-					}
+				// Get search query
+				queryStr, ok := args[0].(*object.String)
+				if !ok {
+					return &object.Error{Message: "tool_search() first argument must be a string (search query)"}
 				}
 
 				if m.mcpServer == nil || m.mcpServer.server == nil {
 					return &object.Error{Message: "MCP server not available"}
 				}
 
-				// Determine the MCP tool name to call
-				toolName := "tool_search"
-				if namespace != "" {
-					// Ensure exactly one slash between namespace and tool name
-					if namespace[len(namespace)-1] != '/' {
-						toolName = namespace + "/" + toolName
-					} else {
-						toolName = namespace + toolName
-					}
-				}
-
-				// Call the MCP tool_search tool
+				// Call the tool_search tool directly
 				searchArgs := map[string]interface{}{
-					"query": query,
+					"query": queryStr.Value,
 				}
 
-				resp, err := m.mcpServer.server.CallTool(ctx, toolName, searchArgs)
+				resp, err := m.mcpServer.server.CallTool(ctx, "tool_search", searchArgs)
 				if err != nil {
 					return &object.Error{Message: fmt.Sprintf("tool search failed: %v", err)}
 				}
 
-				// Decode the response - should return a list of tools
-				decoded := decodeToolResponse(resp)
+				result := decodeToolResponse(resp)
 
-				// If already a list, return it
-				if resultList, ok := decoded.(*object.List); ok {
-					return resultList
+				// The response is a content block (possibly wrapped in a List), extract the tools from the Text field
+				var contentBlock *object.Dict
+				if resultList, ok := result.(*object.List); ok && len(resultList.Elements) > 0 {
+					if firstDict, ok := resultList.Elements[0].(*object.Dict); ok {
+						contentBlock = firstDict
+					}
+				} else if resultDict, ok := result.(*object.Dict); ok {
+					contentBlock = resultDict
 				}
 
-				// If it's a dict with results field, extract it
-				if resultDict, ok := decoded.(*object.Dict); ok {
-					if resultsVal, found := resultDict.Pairs["results"]; found {
-						if resultsList, ok := resultsVal.Value.(*object.List); ok {
-							return resultsList
+				if contentBlock != nil {
+					if textVal, found := contentBlock.Pairs["Text"]; found {
+						if textStr, ok := textVal.Value.(*object.String); ok {
+							// Parse the JSON in the Text field
+							var tools []map[string]interface{}
+							if err := json.Unmarshal([]byte(textStr.Value), &tools); err == nil {
+								// Convert to scriptling objects, same format as list_tools
+								toolList := make([]object.Object, 0, len(tools))
+								for _, tool := range tools {
+									toolDict := &object.Dict{
+										Pairs: map[string]object.DictPair{},
+									}
+									for k, v := range tool {
+										toolDict.Pairs[k] = object.DictPair{
+											Key:   &object.String{Value: k},
+											Value: convertToScriptlingObject(v),
+										}
+									}
+									toolList = append(toolList, toolDict)
+								}
+								return &object.List{Elements: toolList}
+							}
 						}
 					}
 				}
 
-				// Fallback: return empty list
-				return &object.List{Elements: []object.Object{}}
+				return result
 			},
 		},
 		"execute_tool": {
 			Fn: func(ctx context.Context, kwargs map[string]object.Object, args ...object.Object) object.Object {
-				var toolName string
-				var toolArgs map[string]interface{}
-				var namespace string
-
-				// Handle positional arguments: execute_tool(name, args, namespace?)
-				if len(args) >= 1 {
-					if name, ok := args[0].(*object.String); ok {
-						toolName = name.Value
-					}
-				}
-
-				if len(args) >= 2 {
-					if argsObj, ok := args[1].(*object.Dict); ok {
-						toolArgs = objectToGoMap(argsObj)
-					}
-				}
-
-				if len(args) >= 3 {
-					if ns, ok := args[2].(*object.String); ok {
-						namespace = ns.Value
-					}
-				}
-
-				// Handle keyword arguments
-				if name, ok := kwargs["name"]; ok {
-					if nameStr, ok := name.(*object.String); ok {
-						toolName = nameStr.Value
-					}
-				}
-				if args, ok := kwargs["arguments"]; ok {
-					if argsObj, ok := args.(*object.Dict); ok {
-						toolArgs = objectToGoMap(argsObj)
-					}
-				}
-				if ns, ok := kwargs["namespace"]; ok {
-					if nsStr, ok := ns.(*object.String); ok {
-						namespace = nsStr.Value
-					}
-				}
-
-				if toolName == "" {
-					return &object.Error{Message: "tool name is required"}
+				if len(args) < 2 {
+					return &object.Error{Message: "execute_tool() requires tool name and arguments"}
 				}
 
 				if m.mcpServer == nil || m.mcpServer.server == nil {
 					return &object.Error{Message: "MCP server not available"}
 				}
 
-				// Determine the MCP tool name to call
-				mcpToolName := "execute_tool"
-				if namespace != "" {
-					// Ensure exactly one slash between namespace and tool name
-					if namespace[len(namespace)-1] != '/' {
-						mcpToolName = namespace + "/" + mcpToolName
-					} else {
-						mcpToolName = namespace + mcpToolName
-					}
+				// Get tool name (can be namespaced like "namespace/toolname")
+				toolNameStr, ok := args[0].(*object.String)
+				if !ok {
+					return &object.Error{Message: "execute_tool() first argument must be a string (tool name)"}
 				}
 
-				// Use the execute_tool MCP tool (which uses discovery)
+				// Get arguments
+				argsDict, ok := args[1].(*object.Dict)
+				if !ok {
+					return &object.Error{Message: "execute_tool() second argument must be a dict (arguments)"}
+				}
+
+				// Convert arguments to map[string]interface{} for the execute_tool call
+				arguments := make(map[string]interface{})
+				for _, pair := range argsDict.Pairs {
+					key := pair.Key.(*object.String).Value
+					arguments[key] = objectToGo(pair.Value)
+				}
+
+				// Call the execute_tool tool directly
+				// Note: execute_tool expects arguments as a map/object, not as JSON string
 				executeArgs := map[string]interface{}{
-					"name":      toolName,
-					"arguments": toolArgs,
+					"name":      toolNameStr.Value,
+					"arguments": arguments,
 				}
 
-				resp, err := m.mcpServer.server.CallTool(ctx, mcpToolName, executeArgs)
+				resp, err := m.mcpServer.server.CallTool(ctx, "execute_tool", executeArgs)
 				if err != nil {
 					return &object.Error{Message: fmt.Sprintf("tool execution failed: %v", err)}
 				}
