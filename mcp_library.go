@@ -5,9 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/paularlott/mcp"
 	scriptlib "github.com/paularlott/scriptling"
 	"github.com/paularlott/scriptling/object"
+	"github.com/paularlott/scriptling-mcp"
 )
 
 // MCPLibrary provides MCP-related functions for Scriptling
@@ -39,82 +39,6 @@ func (m *MCPLibrary) SetResult(result string) {
 // GetResult returns the result set by the script, or nil if none set
 func (m *MCPLibrary) GetResult() *string {
 	return m.result
-}
-
-// decodeToolResponse intelligently decodes a tool response for easier use in scripts
-// - Single text content: returns the text as a string
-// - Text that is valid JSON: returns the parsed JSON as objects
-// - Multiple content blocks: returns the list of decoded blocks
-// - Structured content: returns the decoded structure
-// - Image/Resource blocks: returns the decoded block with Type, Data, etc.
-func decodeToolResponse(response *mcp.ToolResponse) object.Object {
-	// Check for structured content first
-	if response.StructuredContent != nil {
-		return scriptlib.FromGo(response.StructuredContent)
-	}
-
-	// Handle content blocks
-	content := response.Content
-	if len(content) == 0 {
-		return &object.Null{}
-	}
-
-	// Single content block
-	if len(content) == 1 {
-		return decodeToolContent(content[0])
-	}
-
-	// Multiple content blocks - decode each
-	elements := make([]object.Object, len(content))
-	for i, block := range content {
-		elements[i] = decodeToolContent(block)
-	}
-	return &object.List{Elements: elements}
-}
-
-// decodeToolContent decodes a single content block
-func decodeToolContent(block mcp.ToolContent) object.Object {
-	switch block.Type {
-	case "text":
-		if block.Text != "" {
-			return decodeToolText(block.Text)
-		}
-		return &object.String{Value: ""}
-	case "image":
-		// Return image block with data and mimeType
-		result := &object.Dict{Pairs: map[string]object.DictPair{
-			"Type":     {Key: &object.String{Value: "Type"}, Value: &object.String{Value: "image"}},
-			"Data":     {Key: &object.String{Value: "Data"}, Value: &object.String{Value: block.Data}},
-			"MimeType": {Key: &object.String{Value: "MimeType"}, Value: &object.String{Value: block.MimeType}},
-		}}
-		return result
-	case "resource":
-		// Return resource block
-		return scriptlib.FromGo(block.Resource)
-	default:
-		// Unknown type, return as dict
-		result := &object.Dict{Pairs: map[string]object.DictPair{
-			"Type": {Key: &object.String{Value: "Type"}, Value: &object.String{Value: block.Type}},
-		}}
-		if block.Text != "" {
-			result.Pairs["Text"] = object.DictPair{Key: &object.String{Value: "Text"}, Value: &object.String{Value: block.Text}}
-		}
-		if block.Data != "" {
-			result.Pairs["Data"] = object.DictPair{Key: &object.String{Value: "Data"}, Value: &object.String{Value: block.Data}}
-		}
-		return result
-	}
-}
-
-// decodeToolText decodes text content, parsing JSON if valid
-func decodeToolText(text string) object.Object {
-	// Try to parse as JSON
-	var jsonValue interface{}
-	if err := json.Unmarshal([]byte(text), &jsonValue); err == nil {
-		return scriptlib.FromGo(jsonValue)
-	}
-	// Return as plain string
-	return &object.String{Value: text}
 }
 
 // GetLibrary returns the scriptling library object for MCP operations
@@ -252,7 +176,7 @@ func (m *MCPLibrary) GetLibrary() *object.Library {
 					return &object.Error{Message: fmt.Sprintf("tool call failed: %v", err)}
 				}
 
-				return decodeToolResponse(resp)
+				return scriptlingmcp.DecodeToolResponse(resp)
 			},
 		},
 		"tool_search": {
@@ -281,9 +205,9 @@ func (m *MCPLibrary) GetLibrary() *object.Library {
 					return &object.Error{Message: fmt.Sprintf("tool search failed: %v", err)}
 				}
 
-				result := decodeToolResponse(resp)
+				result := scriptlingmcp.DecodeToolResponse(resp)
 
-				// The response is a content block (possibly wrapped in a List), extract the tools from the Text field
+				// The response is a content block (possibly wrapped in a List), extract the tools from the text field
 				var contentBlock *object.Dict
 				if resultList, ok := result.(*object.List); ok && len(resultList.Elements) > 0 {
 					if firstDict, ok := resultList.Elements[0].(*object.Dict); ok {
@@ -294,27 +218,23 @@ func (m *MCPLibrary) GetLibrary() *object.Library {
 				}
 
 				if contentBlock != nil {
-					if textVal, found := contentBlock.Pairs["Text"]; found {
-						if textStr, ok := textVal.Value.(*object.String); ok {
-							// Parse the JSON in the Text field
-							var tools []map[string]interface{}
-							if err := json.Unmarshal([]byte(textStr.Value), &tools); err == nil {
-								// Convert to scriptling objects, same format as list_tools
-								toolList := make([]object.Object, 0, len(tools))
-								for _, tool := range tools {
-									toolDict := &object.Dict{
-										Pairs: map[string]object.DictPair{},
-									}
-									for k, v := range tool {
-										toolDict.Pairs[k] = object.DictPair{
-											Key:   &object.String{Value: k},
-											Value: scriptlib.FromGo(v),
-										}
-									}
-									toolList = append(toolList, toolDict)
-								}
-								return &object.List{Elements: toolList}
-							}
+					// Try both "text" and "Text" keys (from JSON parsing)
+					var textVal *object.String
+					if val, found := contentBlock.Pairs["text"]; found {
+						if s, ok := val.Value.(*object.String); ok {
+							textVal = s
+						}
+					} else if val, found := contentBlock.Pairs["Text"]; found {
+						if s, ok := val.Value.(*object.String); ok {
+							textVal = s
+						}
+					}
+
+					if textVal != nil {
+						// Parse the JSON text to extract tools using the bridge package
+						tools, err := scriptlingmcp.ParseToolSearchResultsFromText(textVal.Value)
+						if err == nil {
+							return tools
 						}
 					}
 				}
@@ -363,7 +283,7 @@ func (m *MCPLibrary) GetLibrary() *object.Library {
 					return &object.Error{Message: fmt.Sprintf("tool execution failed: %v", err)}
 				}
 
-				return decodeToolResponse(resp)
+				return scriptlingmcp.DecodeToolResponse(resp)
 			},
 		},
 		"execute_code": {
@@ -400,7 +320,7 @@ func (m *MCPLibrary) GetLibrary() *object.Library {
 					return &object.Error{Message: fmt.Sprintf("code execution failed: %v", err)}
 				}
 
-				return decodeToolResponse(resp)
+				return scriptlingmcp.DecodeToolResponse(resp)
 			},
 		},
 	}

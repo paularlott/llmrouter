@@ -10,6 +10,7 @@ require (
 	github.com/paularlott/logger v0.3.0
 	github.com/paularlott/mcp v0.6.12
 	github.com/paularlott/scriptling v0.0.0-20251229161910-b6c8b084141f
+	github.com/paularlott/scriptling-mcp v0.0.0-20251229165723-80ae15f81d9b // indirect
 	golang.org/x/net v0.48.0
 )
 
@@ -38,3 +39,5 @@ require (
 //replace github.com/paularlott/mcp => /Users/paul/Code/Source/mcp
 
 //replace github.com/paularlott/scriptling => /Users/paul/Code/Source/scriptling
+
+//replace github.com/paularlott/scriptling-mcp => /Users/paul/Code/Source/scriptling-mcp
