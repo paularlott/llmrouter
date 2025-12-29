@@ -35,6 +35,8 @@ github.com/paularlott/mcp v0.6.12 h1:MJTcCBnFmeM+9grkeXhswiWndS1OlXdiP7U8KpawFsI
 github.com/paularlott/mcp v0.6.12/go.mod h1:3+zKx8GaNHy5tjI1MBOgbflWTfV1eKGKziNc6Xn0pQI=
 github.com/paularlott/scriptling v0.0.0-20251213112516-e39fc4cc9d10 h1:MBIIh91yfb9aneDAc3Im2/OnUzwniSlD+3ugo4dLv04=
 github.com/paularlott/scriptling v0.0.0-20251213112516-e39fc4cc9d10/go.mod h1:v8t8g31EXKYS1TRBJnNlOONyF7iPwV7iAwzLQz6TTBM=
+github.com/paularlott/scriptling v0.0.0-20251229161910-b6c8b084141f h1:P5yyfI9zJHdt10Zc4MfhAErTYJiW0m3XLcd8/cfhyS0=
+github.com/paularlott/scriptling v0.0.0-20251229161910-b6c8b084141f/go.mod h1:v8t8g31EXKYS1TRBJnNlOONyF7iPwV7iAwzLQz6TTBM=
 github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/stretchr/testify v1.11.1 h1:7s2iGBzp5EwR7/aIZr8ao5+dra3wiQyKjjFuvgVKu7U=

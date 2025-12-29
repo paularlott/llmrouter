@@ -9,7 +9,7 @@ require (
 	github.com/paularlott/cli v0.6.0
 	github.com/paularlott/logger v0.3.0
 	github.com/paularlott/mcp v0.6.12
-	github.com/paularlott/scriptling v0.0.0-20251213112516-e39fc4cc9d10
+	github.com/paularlott/scriptling v0.0.0-20251229161910-b6c8b084141f
 	golang.org/x/net v0.48.0
 )
 

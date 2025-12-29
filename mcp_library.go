@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/paularlott/mcp"
+	scriptlib "github.com/paularlott/scriptling"
 	"github.com/paularlott/scriptling/object"
 )
 
@@ -40,47 +41,6 @@ func (m *MCPLibrary) GetResult() *string {
 	return m.result
 }
 
-// objectToGo converts a scriptling object to a Go value for JSON marshaling
-func objectToGo(obj object.Object) interface{} {
-	switch v := obj.(type) {
-	case *object.String:
-		return v.Value
-	case *object.Integer:
-		return v.Value
-	case *object.Float:
-		return v.Value
-	case *object.Boolean:
-		return v.Value
-	case *object.Null:
-		return nil
-	case *object.List:
-		result := make([]interface{}, len(v.Elements))
-		for i, elem := range v.Elements {
-			result[i] = objectToGo(elem)
-		}
-		return result
-	case *object.Dict:
-		result := make(map[string]interface{})
-		for _, pair := range v.Pairs {
-			if key, ok := pair.Key.(*object.String); ok {
-				result[key.Value] = objectToGo(pair.Value)
-			}
-		}
-		return result
-	default:
-		return fmt.Sprintf("%v", obj)
-	}
-}
-
-// objectToGoMap converts a scriptling Dict to a Go map
-func objectToGoMap(dict *object.Dict) map[string]interface{} {
-	result := make(map[string]interface{})
-	for key, pair := range dict.Pairs {
-		result[key] = objectToGo(pair.Value)
-	}
-	return result
-}
-
 // decodeToolResponse intelligently decodes a tool response for easier use in scripts
 // - Single text content: returns the text as a string
 // - Text that is valid JSON: returns the parsed JSON as objects
@@ -90,7 +50,7 @@ func objectToGoMap(dict *object.Dict) map[string]interface{} {
 func decodeToolResponse(response *mcp.ToolResponse) object.Object {
 	// Check for structured content first
 	if response.StructuredContent != nil {
-		return convertToScriptlingObject(response.StructuredContent)
+		return scriptlib.FromGo(response.StructuredContent)
 	}
 
 	// Handle content blocks
@@ -130,7 +90,7 @@ func decodeToolContent(block mcp.ToolContent) object.Object {
 		return result
 	case "resource":
 		// Return resource block
-		return convertToScriptlingObject(block.Resource)
+		return scriptlib.FromGo(block.Resource)
 	default:
 		// Unknown type, return as dict
 		result := &object.Dict{Pairs: map[string]object.DictPair{
@@ -151,47 +111,10 @@ func decodeToolText(text string) object.Object {
 	// Try to parse as JSON
 	var jsonValue interface{}
 	if err := json.Unmarshal([]byte(text), &jsonValue); err == nil {
-		return convertToScriptlingObject(jsonValue)
+		return scriptlib.FromGo(jsonValue)
 	}
 	// Return as plain string
 	return &object.String{Value: text}
-}
-
-// convertToScriptlingObject converts a Go interface{} to a scriptling object
-func convertToScriptlingObject(v interface{}) object.Object {
-	switch val := v.(type) {
-	case nil:
-		return &object.Null{}
-	case bool:
-		return &object.Boolean{Value: val}
-	case float64:
-		if val == float64(int64(val)) {
-			return object.NewInteger(int64(val))
-		}
-		return &object.Float{Value: val}
-	case int:
-		return object.NewInteger(int64(val))
-	case int64:
-		return object.NewInteger(val)
-	case string:
-		return &object.String{Value: val}
-	case []interface{}:
-		elements := make([]object.Object, len(val))
-		for i, elem := range val {
-			elements[i] = convertToScriptlingObject(elem)
-		}
-		return &object.List{Elements: elements}
-	case map[string]interface{}:
-		pairs := make(map[string]object.DictPair)
-		for k, v := range val {
-			key := &object.String{Value: k}
-			value := convertToScriptlingObject(v)
-			pairs[k] = object.DictPair{Key: key, Value: value}
-		}
-		return &object.Dict{Pairs: pairs}
-	default:
-		return &object.String{Value: fmt.Sprintf("%v", val)}
-	}
 }
 
 // GetLibrary returns the scriptling library object for MCP operations
@@ -262,7 +185,7 @@ func (m *MCPLibrary) GetLibrary() *object.Library {
 
 				// Convert the object to JSON for return
 				var result string
-				goValue := objectToGo(args[0])
+				goValue := scriptlib.ToGo(args[0])
 				jsonBytes, err := json.Marshal(goValue)
 				if err != nil {
 					result = fmt.Sprintf("%v", args[0])
@@ -309,7 +232,9 @@ func (m *MCPLibrary) GetLibrary() *object.Library {
 
 				if len(args) >= 2 {
 					if argsObj, ok := args[1].(*object.Dict); ok {
-						toolArgs = objectToGoMap(argsObj)
+						if result := scriptlib.ToGo(argsObj); result != nil {
+							toolArgs = result.(map[string]interface{})
+						}
 					}
 				}
 
@@ -383,7 +308,7 @@ func (m *MCPLibrary) GetLibrary() *object.Library {
 									for k, v := range tool {
 										toolDict.Pairs[k] = object.DictPair{
 											Key:   &object.String{Value: k},
-											Value: convertToScriptlingObject(v),
+											Value: scriptlib.FromGo(v),
 										}
 									}
 									toolList = append(toolList, toolDict)
@@ -423,7 +348,7 @@ func (m *MCPLibrary) GetLibrary() *object.Library {
 				arguments := make(map[string]interface{})
 				for _, pair := range argsDict.Pairs {
 					key := pair.Key.(*object.String).Value
-					arguments[key] = objectToGo(pair.Value)
+					arguments[key] = scriptlib.ToGo(pair.Value)
 				}
 
 				// Call the execute_tool tool directly
