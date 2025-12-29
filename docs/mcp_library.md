@@ -11,7 +11,7 @@ The MCP library provides functions for interacting with the Model Context Protoc
 | `mcp.return_object(obj)` | Return an object as JSON from the tool |
 | `mcp.list_tools()` | List all MCP tools |
 | `mcp.call_tool(name, args)` | Call an MCP tool directly |
-| `mcp.search_tools(query)` | Search for tools using discovery |
+| `mcp.tool_search(query)` | Search for tools using discovery |
 | `mcp.execute_tool(name, args)` | Execute a tool via discovery |
 | `mcp.execute_code(code)` | Execute arbitrary script code |
 
@@ -129,7 +129,7 @@ result = mcp.call_tool("calculator", {
 print(result)  # Outputs: 56.0
 ```
 
-### mcp.search_tools(query, namespace?)
+### mcp.tool_search(query, namespace?)
 
 Searches for tools by name, description, or keywords using the discovery system. This is a helper that wraps the `tool_search` MCP tool.
 
@@ -145,12 +145,12 @@ Searches for tools by name, description, or keywords using the discovery system.
 import mcp
 
 # Search for calculator-related tools using default tool_search
-results = mcp.search_tools("calculator")
+results = mcp.tool_search("calculator")
 for tool in results:
     print(f"{tool['name']} (score: {tool['score']})")
 
 # Search using a namespaced tool_search tool
-results = mcp.search_tools("calculator", "math")
+results = mcp.tool_search("calculator", "math")
 for tool in results:
     print(f"{tool['name']} (score: {tool['score']})")  # Uses "math/tool_search"
 ```
@@ -172,7 +172,7 @@ Executes a tool via the discovery system. This is a helper that wraps the `execu
 import mcp
 
 # Search for a tool, then execute it
-results = mcp.search_tools("weather")
+results = mcp.tool_search("weather")
 if results:
     tool_name = results[0]['name']
     result = mcp.execute_tool(tool_name, {"city": "London"})
@@ -299,7 +299,7 @@ mcp.return_string(response)
 
 | MCP Tool | Library Helper | Use Case |
 |----------|---------------|----------|
-| `tool_search` | `mcp.search_tools(query)` | Find tools by keyword |
+| `tool_search` | `mcp.tool_search(query)` | Find tools by keyword |
 | `execute_tool` | `mcp.execute_tool(name, args)` | Execute discovered tools |
 | `execute_code` | `mcp.execute_code(code)` | Run arbitrary code |
 | (direct) | `mcp.call_tool(name, args)` | Call any MCP tool directly |

@@ -3,7 +3,7 @@ MCP Demo Tool - Demonstrates MCP library functions
 
 This tool shows how to use:
 - mcp.list_tools() - List all available MCP tools
-- mcp.search_tools(query) - Search for tools by keyword
+- mcp.tool_search(query) - Search for tools by keyword
 - mcp.execute_tool(name, args) - Execute a discovered tool
 - mcp.execute_script(code) - Execute arbitrary code
 - mcp.call_tool(name, args) - Call any MCP tool directly
@@ -37,14 +37,14 @@ if action == "list":
     result.append("\nTotal: " + str(len(tools)) + " tools available")
 
 elif action == "search":
-    # Demonstrate mcp.search_tools()
-    result.append("=== MCP Search Tools Demo ===\n")
-    result.append("Using mcp.search_tools(\"" + query + "\") to find matching tools:\n\n")
+    # Demonstrate mcp.tool_search()
+    result.append("=== MCP Tool Search Demo ===\n")
+    result.append("Using mcp.tool_search(\"" + query + "\") to find matching tools:\n\n")
 
     if not query:
         result.append("Error: Please provide a 'query' parameter for search")
     else:
-        matches = mcp.search_tools(query)
+        matches = mcp.tool_search(query)
         if matches:
             for tool in matches:
                 score = tool.get('score', 0)
@@ -124,8 +124,8 @@ elif action == "full_demo":
         result.append("   ... and " + str(len(tools) - 5) + " more\n")
 
     # 2. Search for calculator
-    result.append("\n2. Searching for 'calculator' with mcp.search_tools():\n")
-    matches = mcp.search_tools("calculator")
+    result.append("\n2. Searching for 'calculator' with mcp.tool_search():\n")
+    matches = mcp.tool_search("calculator")
     for tool in matches:
         score = tool.get('score', 0)
         result.append("   • " + tool['name'] + " (score: " + str(score) + ")\n")

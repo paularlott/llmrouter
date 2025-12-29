@@ -240,12 +240,12 @@ func (m *MCPLibrary) GetLibrary() *object.Library {
 				return &object.String{Value: ""}
 			},
 		},
-		"search_tools": {
+		"tool_search": {
 			Fn: func(ctx context.Context, kwargs map[string]object.Object, args ...object.Object) object.Object {
 				var query string = ""
 				var namespace string = ""
 
-				// Handle positional arguments: search_tools(query, namespace?)
+				// Handle positional arguments: tool_search(query, namespace?)
 				if len(args) > 0 {
 					if q, ok := args[0].(*object.String); ok {
 						query = q.Value
