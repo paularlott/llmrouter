@@ -251,6 +251,7 @@ func setupScriptlingEnvironment(env *scriptling.Scriptling) {
 	extlibs.RegisterThreadsLibrary(env)
 	extlibs.RegisterOSLibrary(env, []string{})
 	extlibs.RegisterPathlibLibrary(env, []string{})
+	extlibs.RegisterWaitForLibrary(env)
 
 	// Enable output capture
 	env.EnableOutputCapture()
