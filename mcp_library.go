@@ -5,9 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/paularlott/mcp/toon"
 	scriptlib "github.com/paularlott/scriptling"
+	scriptlingmcp "github.com/paularlott/scriptling-mcp"
 	"github.com/paularlott/scriptling/object"
-	"github.com/paularlott/scriptling-mcp"
 )
 
 // MCPLibrary provides MCP-related functions for Scriptling
@@ -118,6 +119,22 @@ func (m *MCPLibrary) GetLibrary() *object.Library {
 				}
 				m.SetResult(result)
 				return &object.String{Value: result}
+			},
+		},
+		"return_toon": {
+			Fn: func(ctx context.Context, kwargs map[string]object.Object, args ...object.Object) object.Object {
+				if len(args) < 1 {
+					return &object.String{Value: "Error: return_toon requires 1 argument"}
+				}
+
+				// Convert the object to toon encoded string
+				goValue := scriptlib.ToGo(args[0])
+				encoded, err := toon.Encode(goValue)
+				if err != nil {
+					return &object.String{Value: fmt.Sprintf("Error encoding to toon: %v", err)}
+				}
+				m.SetResult(encoded)
+				return &object.String{Value: encoded}
 			},
 		},
 		"list_tools": {
@@ -321,6 +338,54 @@ func (m *MCPLibrary) GetLibrary() *object.Library {
 				}
 
 				return scriptlingmcp.DecodeToolResponse(resp)
+			},
+		},
+		"toon_encode": {
+			Fn: func(ctx context.Context, kwargs map[string]object.Object, args ...object.Object) object.Object {
+				if len(args) < 1 {
+					return &object.String{Value: "Error: toon_encode requires 1 argument"}
+				}
+
+				goValue := scriptlib.ToGo(args[0])
+				encoded, err := toon.Encode(goValue)
+				if err != nil {
+					return &object.String{Value: fmt.Sprintf("Error encoding to toon: %v", err)}
+				}
+
+				return &object.String{Value: encoded}
+			},
+		},
+		"toon_decode": {
+			Fn: func(ctx context.Context, kwargs map[string]object.Object, args ...object.Object) object.Object {
+				if len(args) < 1 {
+					return &object.String{Value: "Error: toon_decode requires 1 argument"}
+				}
+
+				str, ok := args[0].(*object.String)
+				if !ok {
+					return &object.String{Value: "Error: toon_decode argument must be a string"}
+				}
+
+				decoded, err := toon.Decode(str.Value)
+				if err != nil {
+					return &object.String{Value: fmt.Sprintf("Error decoding from toon: %v", err)}
+				}
+
+				// Convert back to scriptling object
+				switch v := decoded.(type) {
+				case string:
+					return &object.String{Value: v}
+				case int:
+					return &object.Integer{Value: int64(v)}
+				case int64:
+					return &object.Integer{Value: v}
+				case float64:
+					return &object.Float{Value: v}
+				case bool:
+					return &object.Boolean{Value: v}
+				default:
+					return &object.String{Value: fmt.Sprintf("%v", v)}
+				}
 			},
 		},
 	}

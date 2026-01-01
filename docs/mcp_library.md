@@ -9,11 +9,14 @@ The MCP library provides functions for interacting with the Model Context Protoc
 | `mcp.get(param_name, default=None)` | Get a parameter value passed to the tool |
 | `mcp.return_string(text)` | Return a string result from the tool |
 | `mcp.return_object(obj)` | Return an object as JSON from the tool |
+| `mcp.return_toon(obj)` | Return an object as toon encoded string from the tool |
 | `mcp.list_tools()` | List all MCP tools |
 | `mcp.call_tool(name, args)` | Call an MCP tool directly (use `namespace/toolname` for namespaced tools) |
 | `mcp.tool_search(query)` | Search for tools by keyword |
 | `mcp.execute_tool(name, args)` | Execute a discovered tool (use `namespace/toolname` for namespaced tools) |
 | `mcp.execute_code(code)` | Execute arbitrary script code |
+| `mcp.toon_encode(obj)` | Encode an object to toon string |
+| `mcp.toon_decode(str)` | Decode a toon string to object |
 
 ## Importing
 
@@ -85,6 +88,65 @@ import mcp
 data = {"status": "success", "count": 42, "items": [1, 2, 3]}
 mcp.return_object(data)
 # Returns: {"count":42,"items":[1,2,3],"status":"success"}
+```
+
+### mcp.return_toon(obj)
+
+Sets the return value for the tool execution as any object, converted to toon encoded string.
+
+**Parameters:**
+- `obj` (any): The object to return (will be toon serialized)
+
+**Returns:**
+- Toon string representation of the object
+
+**Example:**
+```python
+import mcp
+
+data = {"status": "success", "count": 42, "items": [1, 2, 3]}
+mcp.return_toon(data)
+# Returns: toon encoded string
+```
+
+## Toon Functions
+
+### mcp.toon_encode(obj)
+
+Encodes an object to a toon string.
+
+**Parameters:**
+- `obj` (any): The object to encode
+
+**Returns:**
+- Toon encoded string representation of the object
+
+**Example:**
+```python
+import mcp
+
+data = {"status": "success", "count": 42}
+encoded = mcp.toon_encode(data)
+print(encoded)  # toon encoded string
+```
+
+### mcp.toon_decode(str)
+
+Decodes a toon string back to an object.
+
+**Parameters:**
+- `str` (string): The toon encoded string to decode
+
+**Returns:**
+- The decoded object (dict, list, string, number, etc.)
+
+**Example:**
+```python
+import mcp
+
+encoded = "toon encoded string"
+decoded = mcp.toon_decode(encoded)
+print(decoded)  # {"status": "success", "count": 42}
 ```
 
 ## Tool Functions
@@ -390,13 +452,13 @@ mcp.return_string(response)
 
 ## Return Value Behavior
 
-- If `mcp.return_string()` or `mcp.return_object()` is called, that value is used as the tool's response
-- If neither is called, the script's captured output (via `print()`) and/or final expression result is used
+- If `mcp.return_string()`, `mcp.return_object()`, or `mcp.return_toon()` is called, that value is used as the tool's response
+- If none are called, the script's captured output (via `print()`) and/or final expression result is used
 - Always prefer using `mcp.return_string()` for explicit, predictable results
 
 ## Best Practices
 
-1. **Always call mcp.return_string()**: Explicitly return results for predictable behavior
+1. **Always call a return function**: Explicitly return results using `mcp.return_string()`, `mcp.return_object()`, or `mcp.return_toon()` for predictable behavior
 2. **Provide defaults for optional parameters**: Use `mcp.get("param", default)` pattern
 3. **Validate required parameters**: Check if required parameters exist before using them
 4. **Use appropriate types**: Match parameter types to your tool's needs

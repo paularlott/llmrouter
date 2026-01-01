@@ -33,10 +33,14 @@ github.com/paularlott/logger v0.3.0 h1:QwVUoxmlEFkfHI25y5dn56OJvK4Bpe3OvoJu4GZM7
 github.com/paularlott/logger v0.3.0/go.mod h1:vjAOY1vUvYigmJxxQ0eMclryIjDS6VWNK6FprtTMce0=
 github.com/paularlott/mcp v0.6.12 h1:MJTcCBnFmeM+9grkeXhswiWndS1OlXdiP7U8KpawFsI=
 github.com/paularlott/mcp v0.6.12/go.mod h1:3+zKx8GaNHy5tjI1MBOgbflWTfV1eKGKziNc6Xn0pQI=
+github.com/paularlott/mcp v0.7.0 h1:O0fRAPUpP3KKJyhZBUQd+COzlCNfu3wHXNJ2EtakeBc=
+github.com/paularlott/mcp v0.7.0/go.mod h1:3+zKx8GaNHy5tjI1MBOgbflWTfV1eKGKziNc6Xn0pQI=
 github.com/paularlott/scriptling v0.0.0-20251229161910-b6c8b084141f h1:P5yyfI9zJHdt10Zc4MfhAErTYJiW0m3XLcd8/cfhyS0=
 github.com/paularlott/scriptling v0.0.0-20251229161910-b6c8b084141f/go.mod h1:v8t8g31EXKYS1TRBJnNlOONyF7iPwV7iAwzLQz6TTBM=
 github.com/paularlott/scriptling-mcp v0.0.0-20251229165723-80ae15f81d9b h1:tpK9PLiIyhXQV8pTzRGFDmTxgRM10MNL8jlbcXnbPyI=
 github.com/paularlott/scriptling-mcp v0.0.0-20251229165723-80ae15f81d9b/go.mod h1:4l1YDhWoreJGo1Br1by7LA9oEjVsjUvaj/8LCGQlD64=
+github.com/paularlott/scriptling-mcp v0.0.0-20251229171701-e8bb9d1f8b0a h1:qM3p5RA3bojXQMrztOxM17Pxh8qCTurSd8FTFMo0fYw=
+github.com/paularlott/scriptling-mcp v0.0.0-20251229171701-e8bb9d1f8b0a/go.mod h1:4l1YDhWoreJGo1Br1by7LA9oEjVsjUvaj/8LCGQlD64=
 github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/stretchr/testify v1.11.1 h1:7s2iGBzp5EwR7/aIZr8ao5+dra3wiQyKjjFuvgVKu7U=
