@@ -6,11 +6,10 @@ require (
 	github.com/BurntSushi/toml v1.6.0
 	github.com/dgraph-io/badger/v4 v4.9.0
 	github.com/google/uuid v1.6.0
-	github.com/paularlott/cli v0.6.0
+	github.com/paularlott/cli v0.7.1
 	github.com/paularlott/logger v0.3.0
-	github.com/paularlott/mcp v0.7.1
-	github.com/paularlott/scriptling v0.0.0-20260101150100-5947ebef7af7
-	github.com/paularlott/scriptling-mcp v0.0.0-20251229171701-e8bb9d1f8b0a
+	github.com/paularlott/mcp v0.7.2
+	github.com/paularlott/scriptling v0.0.0-20260107094248-9fbf5bdc7b67
 	golang.org/x/net v0.48.0
 )
 
@@ -47,5 +46,3 @@ require (
 //replace github.com/paularlott/mcp => /Users/paul/Code/Source/mcp
 
 //replace github.com/paularlott/scriptling => /Users/paul/Code/Source/scriptling
-
-//replace github.com/paularlott/scriptling-mcp => /Users/paul/Code/Source/scriptling-mcp
