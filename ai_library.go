@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 
 	"github.com/paularlott/mcp/openai"
-	"github.com/paularlott/scriptling"
 	"github.com/paularlott/scriptling/errors"
 	"github.com/paularlott/scriptling/object"
 )
@@ -34,9 +33,9 @@ func (ai *AILibrary) GetLibrary() *object.Library {
 		"completion": {
 			Fn: func(ctx context.Context, kwargs object.Kwargs, args ...object.Object) object.Object {
 				// Parse arguments: completion(model, messages)
-				model, err := scriptling.GetString(args, 0, "model")
-				if err != nil {
-					return err
+				model, err := kwargs.GetString("model", "")
+				if err != nil || model == "" {
+					return errors.NewError("model parameter is required")
 				}
 
 				// Build messages from second positional argument
@@ -94,9 +93,9 @@ func (ai *AILibrary) GetLibrary() *object.Library {
 		"embedding": {
 			Fn: func(ctx context.Context, kwargs object.Kwargs, args ...object.Object) object.Object {
 				// Parse arguments: embedding(model, input)
-				model, err := scriptling.GetString(args, 0, "model")
-				if err != nil {
-					return err
+				model, err := kwargs.GetString("model", "")
+				if err != nil || model == "" {
+					return errors.NewError("model parameter is required")
 				}
 
 				var input interface{}
