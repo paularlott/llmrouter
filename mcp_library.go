@@ -46,33 +46,16 @@ func (m *MCPLibrary) GetResult() *string {
 func (m *MCPLibrary) GetLibrary() *object.Library {
 	functions := map[string]*object.Builtin{
 		"get": {
-			Fn: func(ctx context.Context, kwargs map[string]object.Object, args ...object.Object) object.Object {
-				if len(args) < 1 {
-					return &object.String{Value: "Error: get requires parameter name"}
-				}
-
-				paramName, ok := args[0].(*object.String)
-				if !ok {
-					return &object.String{Value: "Error: parameter name must be a string"}
+			Fn: func(ctx context.Context, kwargs object.Kwargs, args ...object.Object) object.Object {
+				paramName, err := scriptlib.GetString(args, 0, "parameter name")
+				if err != nil {
+					return err
 				}
 
 				// Get the parameter from stored args
-				if value, exists := m.args[paramName.Value]; exists {
+				if value, exists := m.args[paramName]; exists {
 					// Convert the value to appropriate scriptling object
-					switch v := value.(type) {
-					case string:
-						return &object.String{Value: v}
-					case int:
-						return &object.Integer{Value: int64(v)}
-					case int64:
-						return &object.Integer{Value: v}
-					case float64:
-						return &object.Float{Value: v}
-					case bool:
-						return &object.Boolean{Value: v}
-					default:
-						return &object.String{Value: fmt.Sprintf("%v", v)}
-					}
+					return scriptlib.FromGo(value)
 				}
 
 				// If a default value was provided as second argument, return it
@@ -85,25 +68,18 @@ func (m *MCPLibrary) GetLibrary() *object.Library {
 			},
 		},
 		"return_string": {
-			Fn: func(ctx context.Context, kwargs map[string]object.Object, args ...object.Object) object.Object {
+			Fn: func(ctx context.Context, kwargs object.Kwargs, args ...object.Object) object.Object {
 				if len(args) < 1 {
 					return &object.String{Value: "Error: return_string requires 1 argument"}
 				}
 
-				var result string
-				switch v := args[0].(type) {
-				case *object.String:
-					result = v.Value
-				default:
-					result = fmt.Sprintf("%v", args[0])
-				}
-
+				result := fmt.Sprintf("%v", scriptlib.ToGo(args[0]))
 				m.SetResult(result)
 				return &object.String{Value: result}
 			},
 		},
 		"return_object": {
-			Fn: func(ctx context.Context, kwargs map[string]object.Object, args ...object.Object) object.Object {
+			Fn: func(ctx context.Context, kwargs object.Kwargs, args ...object.Object) object.Object {
 				if len(args) < 1 {
 					return &object.String{Value: "Error: return_object requires 1 argument"}
 				}
@@ -122,7 +98,7 @@ func (m *MCPLibrary) GetLibrary() *object.Library {
 			},
 		},
 		"return_toon": {
-			Fn: func(ctx context.Context, kwargs map[string]object.Object, args ...object.Object) object.Object {
+			Fn: func(ctx context.Context, kwargs object.Kwargs, args ...object.Object) object.Object {
 				if len(args) < 1 {
 					return &object.String{Value: "Error: return_toon requires 1 argument"}
 				}
@@ -138,7 +114,7 @@ func (m *MCPLibrary) GetLibrary() *object.Library {
 			},
 		},
 		"list_tools": {
-			Fn: func(ctx context.Context, kwargs map[string]object.Object, args ...object.Object) object.Object {
+			Fn: func(ctx context.Context, kwargs object.Kwargs, args ...object.Object) object.Object {
 				if m.mcpServer == nil || m.mcpServer.server == nil {
 					return &object.List{Elements: []object.Object{}}
 				}
@@ -160,7 +136,7 @@ func (m *MCPLibrary) GetLibrary() *object.Library {
 			},
 		},
 		"call_tool": {
-			Fn: func(ctx context.Context, kwargs map[string]object.Object, args ...object.Object) object.Object {
+			Fn: func(ctx context.Context, kwargs object.Kwargs, args ...object.Object) object.Object {
 				var toolName string
 				var toolArgs map[string]interface{}
 
@@ -197,7 +173,7 @@ func (m *MCPLibrary) GetLibrary() *object.Library {
 			},
 		},
 		"tool_search": {
-			Fn: func(ctx context.Context, kwargs map[string]object.Object, args ...object.Object) object.Object {
+			Fn: func(ctx context.Context, kwargs object.Kwargs, args ...object.Object) object.Object {
 				if len(args) < 1 {
 					return &object.Error{Message: "tool_search() requires a search query"}
 				}
@@ -260,7 +236,7 @@ func (m *MCPLibrary) GetLibrary() *object.Library {
 			},
 		},
 		"execute_tool": {
-			Fn: func(ctx context.Context, kwargs map[string]object.Object, args ...object.Object) object.Object {
+			Fn: func(ctx context.Context, kwargs object.Kwargs, args ...object.Object) object.Object {
 				if len(args) < 2 {
 					return &object.Error{Message: "execute_tool() requires tool name and arguments"}
 				}
@@ -304,7 +280,7 @@ func (m *MCPLibrary) GetLibrary() *object.Library {
 			},
 		},
 		"execute_code": {
-			Fn: func(ctx context.Context, kwargs map[string]object.Object, args ...object.Object) object.Object {
+			Fn: func(ctx context.Context, kwargs object.Kwargs, args ...object.Object) object.Object {
 				var code string
 
 				// Handle positional arguments: execute_code(code)
@@ -315,8 +291,8 @@ func (m *MCPLibrary) GetLibrary() *object.Library {
 				}
 
 				// Handle keyword arguments
-				if c, ok := kwargs["code"]; ok {
-					if cStr, ok := c.(*object.String); ok {
+				if kwargs.Has("code") {
+					if cStr, ok := kwargs.Get("code").(*object.String); ok {
 						code = cStr.Value
 					}
 				}
@@ -341,7 +317,7 @@ func (m *MCPLibrary) GetLibrary() *object.Library {
 			},
 		},
 		"toon_encode": {
-			Fn: func(ctx context.Context, kwargs map[string]object.Object, args ...object.Object) object.Object {
+			Fn: func(ctx context.Context, kwargs object.Kwargs, args ...object.Object) object.Object {
 				if len(args) < 1 {
 					return &object.String{Value: "Error: toon_encode requires 1 argument"}
 				}
@@ -356,7 +332,7 @@ func (m *MCPLibrary) GetLibrary() *object.Library {
 			},
 		},
 		"toon_decode": {
-			Fn: func(ctx context.Context, kwargs map[string]object.Object, args ...object.Object) object.Object {
+			Fn: func(ctx context.Context, kwargs object.Kwargs, args ...object.Object) object.Object {
 				if len(args) < 1 {
 					return &object.String{Value: "Error: toon_decode requires 1 argument"}
 				}

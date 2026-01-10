@@ -471,39 +471,9 @@ func (m *MCPServer) executeScriptTool(scriptContent string, req *mcp.ToolRequest
 	// Set the arguments on the MCP library
 	mcpLib.SetArgs(args)
 
-	// Prepend arguments as Python variables at the top of the script
-	if len(args) > 0 {
-		var argsPrepended strings.Builder
-		for k, v := range args {
-			// Convert value to appropriate Python literal
-			switch val := v.(type) {
-			case string:
-				// Use Python-style string escaping with triple quotes to handle special characters
-				escaped := strings.ReplaceAll(val, "\\", "\\\\")
-				escaped = strings.ReplaceAll(escaped, "\"", "\\\"")
-				escaped = strings.ReplaceAll(escaped, "\n", "\\n")
-				escaped = strings.ReplaceAll(escaped, "\r", "\\r")
-				escaped = strings.ReplaceAll(escaped, "\t", "\\t")
-				argsPrepended.WriteString(fmt.Sprintf("%s = \"%s\"\n", k, escaped))
-			case int, int64:
-				argsPrepended.WriteString(fmt.Sprintf("%s = %d\n", k, val))
-			case float64:
-				argsPrepended.WriteString(fmt.Sprintf("%s = %f\n", k, val))
-			case bool:
-				argsPrepended.WriteString(fmt.Sprintf("%s = %t\n", k, val))
-			default:
-				// Convert to string and escape
-				strVal := fmt.Sprintf("%v", val)
-				escaped := strings.ReplaceAll(strVal, "\\", "\\\\")
-				escaped = strings.ReplaceAll(escaped, "\"", "\\\"")
-				escaped = strings.ReplaceAll(escaped, "\n", "\\n")
-				escaped = strings.ReplaceAll(escaped, "\r", "\\r")
-				escaped = strings.ReplaceAll(escaped, "\t", "\\t")
-				argsPrepended.WriteString(fmt.Sprintf("%s = \"%s\"\n", k, escaped))
-			}
-		}
-		argsPrepended.WriteString("\n")
-		scriptContent = argsPrepended.String() + scriptContent
+	// Set arguments as variables in the Scriptling environment
+	for k, v := range args {
+		env.SetVar(k, scriptling.FromGo(v))
 	}
 
 	// Execute the script

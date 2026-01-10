@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 
 	"github.com/paularlott/mcp/openai"
+	"github.com/paularlott/scriptling"
 	"github.com/paularlott/scriptling/errors"
 	"github.com/paularlott/scriptling/object"
 )
@@ -31,16 +32,11 @@ func NewAILibrary(router *Router) *AILibrary {
 func (ai *AILibrary) GetLibrary() *object.Library {
 	functions := map[string]*object.Builtin{
 		"completion": {
-			Fn: func(ctx context.Context, kwargs map[string]object.Object, args ...object.Object) object.Object {
+			Fn: func(ctx context.Context, kwargs object.Kwargs, args ...object.Object) object.Object {
 				// Parse arguments: completion(model, messages)
-				var model string
-
-				// Handle positional arguments: completion(model, messages)
-				if len(args) > 0 {
-					// First arg should be model (string)
-					if m, ok := args[0].(*object.String); ok {
-						model = m.Value
-					}
+				model, err := scriptling.GetString(args, 0, "model")
+				if err != nil {
+					return err
 				}
 
 				// Build messages from second positional argument
@@ -79,9 +75,9 @@ func (ai *AILibrary) GetLibrary() *object.Library {
 				}
 
 				// Get completion with automatic tool calling
-				resp, err := ai.CreateChatCompletionWithTools(ctx, req)
-				if err != nil {
-					return errors.NewError("AI completion failed: %v", err)
+				resp, completionErr := ai.CreateChatCompletionWithTools(ctx, req)
+				if completionErr != nil {
+					return errors.NewError("AI completion failed: %v", completionErr)
 				}
 
 				// Return the response as a string
@@ -96,16 +92,14 @@ func (ai *AILibrary) GetLibrary() *object.Library {
 			},
 		},
 		"embedding": {
-			Fn: func(ctx context.Context, kwargs map[string]object.Object, args ...object.Object) object.Object {
+			Fn: func(ctx context.Context, kwargs object.Kwargs, args ...object.Object) object.Object {
 				// Parse arguments: embedding(model, input)
-				var model string
-				var input interface{}
-
-				if len(args) > 0 {
-					if m, ok := args[0].(*object.String); ok {
-						model = m.Value
-					}
+				model, err := scriptling.GetString(args, 0, "model")
+				if err != nil {
+					return err
 				}
+
+				var input interface{}
 
 				if len(args) > 1 {
 					if s, ok := args[1].(*object.String); ok {
@@ -126,9 +120,9 @@ func (ai *AILibrary) GetLibrary() *object.Library {
 					Input: input,
 				}
 
-				resp, err := ai.router.CreateEmbedding(ctx, req)
-				if err != nil {
-					return errors.NewError("Embedding failed: %v", err)
+				resp, embeddingErr := ai.router.CreateEmbedding(ctx, req)
+				if embeddingErr != nil {
+					return errors.NewError("Embedding failed: %v", embeddingErr)
 				}
 
 				// Convert embeddings to scriptling list
@@ -145,7 +139,7 @@ func (ai *AILibrary) GetLibrary() *object.Library {
 			},
 		},
 		"response_create": {
-			Fn: func(ctx context.Context, kwargs map[string]object.Object, args ...object.Object) object.Object {
+			Fn: func(ctx context.Context, kwargs object.Kwargs, args ...object.Object) object.Object {
 				// Parse arguments: response_create(model, input, instructions=None, previous_response_id=None)
 				if len(args) < 2 {
 					return errors.NewError("response_create() requires at least 2 arguments (model, input)")
@@ -177,14 +171,14 @@ func (ai *AILibrary) GetLibrary() *object.Library {
 				}
 
 				// Optional kwargs
-				if instructionsObj, ok := kwargs["instructions"]; ok {
-					if s, ok := instructionsObj.(*object.String); ok {
+				if kwargs.Has("instructions") {
+					if s, ok := kwargs.Get("instructions").(*object.String); ok {
 						instructions = s.Value
 					}
 				}
 
-				if prevRespObj, ok := kwargs["previous_response_id"]; ok {
-					if s, ok := prevRespObj.(*object.String); ok {
+				if kwargs.Has("previous_response_id") {
+					if s, ok := kwargs.Get("previous_response_id").(*object.String); ok {
 						previousResponseID = s.Value
 					}
 				}
@@ -201,16 +195,16 @@ func (ai *AILibrary) GetLibrary() *object.Library {
 					Modalities:         []string{"text"}, // Default to text
 				}
 
-				resp, err := ai.router.responsesService.CreateResponse(ctx, req, ai.CreateChatCompletionWithTools) // Use AI library's tool-enabled completion
-				if err != nil {
-					return errors.NewError("Response creation failed: %v", err)
+				resp, createErr := ai.router.responsesService.CreateResponse(ctx, req, ai.CreateChatCompletionWithTools) // Use AI library's tool-enabled completion
+				if createErr != nil {
+					return errors.NewError("Response creation failed: %v", createErr)
 				}
 
 				return &object.String{Value: resp.ID}
 			},
 		},
 		"response_get": {
-			Fn: func(ctx context.Context, kwargs map[string]object.Object, args ...object.Object) object.Object {
+			Fn: func(ctx context.Context, kwargs object.Kwargs, args ...object.Object) object.Object {
 				// Parse arguments: response_get(id)
 				var id string
 
@@ -224,9 +218,9 @@ func (ai *AILibrary) GetLibrary() *object.Library {
 					return errors.NewError("Responses service not available")
 				}
 
-				resp, err := ai.router.responsesService.GetResponse(ctx, id)
-				if err != nil {
-					return errors.NewError("Failed to get response: %v", err)
+				resp, getErr := ai.router.responsesService.GetResponse(ctx, id)
+				if getErr != nil {
+					return errors.NewError("Failed to get response: %v", getErr)
 				}
 
 				// Convert response to dict
@@ -271,7 +265,7 @@ func (ai *AILibrary) GetLibrary() *object.Library {
 			},
 		},
 		"response_delete": {
-			Fn: func(ctx context.Context, kwargs map[string]object.Object, args ...object.Object) object.Object {
+			Fn: func(ctx context.Context, kwargs object.Kwargs, args ...object.Object) object.Object {
 				// Parse arguments: response_delete(id)
 				var id string
 
@@ -294,7 +288,7 @@ func (ai *AILibrary) GetLibrary() *object.Library {
 			},
 		},
 		"response_cancel": {
-			Fn: func(ctx context.Context, kwargs map[string]object.Object, args ...object.Object) object.Object {
+			Fn: func(ctx context.Context, kwargs object.Kwargs, args ...object.Object) object.Object {
 				// Parse arguments: response_cancel(id)
 				var id string
 
@@ -308,9 +302,9 @@ func (ai *AILibrary) GetLibrary() *object.Library {
 					return errors.NewError("Responses service not available")
 				}
 
-				resp, err := ai.router.responsesService.CancelResponse(ctx, id)
-				if err != nil {
-					return errors.NewError("Failed to cancel response: %v", err)
+				resp, cancelErr := ai.router.responsesService.CancelResponse(ctx, id)
+				if cancelErr != nil {
+					return errors.NewError("Failed to cancel response: %v", cancelErr)
 				}
 
 				return &object.String{Value: resp.Status}
