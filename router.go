@@ -581,7 +581,9 @@ func (r *Router) decrementActiveCompletions(providerName string) {
 // HTTP Handlers
 func (r *Router) HandleModels(w http.ResponseWriter, req *http.Request) {
 	// Update the models list and return it
-	r.RefreshModels(req.Context())
+	if err := r.RefreshModels(req.Context()); err != nil {
+		r.logger.WithError(err).Error("failed to refresh models")
+	}
 	models := r.ListModels()
 
 	w.Header().Set("Content-Type", "application/json")
@@ -767,7 +769,9 @@ func (r *Router) HandleHealth(w http.ResponseWriter, req *http.Request) {
 	health["provider_status"] = providerStatus
 
 	w.Header().Set("Content-Type", "application/json")
-	writeJSON(w, health)
+	if err := writeJSON(w, health); err != nil {
+		r.logger.WithError(err).Error("failed to write health response")
+	}
 }
 
 // Helper functions for JSON handling
@@ -924,7 +928,9 @@ func (r *Router) HandleCreateResponse(w http.ResponseWriter, req *http.Request) 
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	writeJSON(w, resp)
+	if err := writeJSON(w, resp); err != nil {
+		r.logger.WithError(err).Error("failed to write response")
+	}
 }
 
 func (r *Router) HandleGetResponse(w http.ResponseWriter, req *http.Request) {
@@ -953,7 +959,9 @@ func (r *Router) HandleGetResponse(w http.ResponseWriter, req *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	writeJSON(w, resp)
+	if err := writeJSON(w, resp); err != nil {
+		r.logger.WithError(err).Error("failed to write response")
+	}
 }
 
 func (r *Router) HandleDeleteResponse(w http.ResponseWriter, req *http.Request) {
@@ -1008,7 +1016,9 @@ func (r *Router) HandleListResponses(w http.ResponseWriter, req *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	writeJSON(w, resp)
+	if err := writeJSON(w, resp); err != nil {
+		r.logger.WithError(err).Error("failed to write response")
+	}
 }
 
 func (r *Router) HandleCancelResponse(w http.ResponseWriter, req *http.Request) {
@@ -1035,7 +1045,9 @@ func (r *Router) HandleCancelResponse(w http.ResponseWriter, req *http.Request) 
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	writeJSON(w, resp)
+	if err := writeJSON(w, resp); err != nil {
+		r.logger.WithError(err).Error("failed to write response")
+	}
 }
 
 func (r *Router) HandleCompactResponses(w http.ResponseWriter, req *http.Request) {
@@ -1051,7 +1063,9 @@ func (r *Router) HandleCompactResponses(w http.ResponseWriter, req *http.Request
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	writeJSON(w, map[string]string{"status": "completed"})
+	if err := writeJSON(w, map[string]string{"status": "completed"}); err != nil {
+		r.logger.WithError(err).Error("failed to write response")
+	}
 }
 
 func (r *Router) HandleUnsupported(w http.ResponseWriter, req *http.Request) {
@@ -1102,7 +1116,9 @@ func (r *Router) HandleCreateConversation(w http.ResponseWriter, req *http.Reque
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	writeJSON(w, conversation)
+	if err := writeJSON(w, conversation); err != nil {
+		r.logger.WithError(err).Error("failed to write response")
+	}
 }
 
 func (r *Router) HandleGetConversation(w http.ResponseWriter, req *http.Request) {
@@ -1129,7 +1145,9 @@ func (r *Router) HandleGetConversation(w http.ResponseWriter, req *http.Request)
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	writeJSON(w, conversation)
+	if err := writeJSON(w, conversation); err != nil {
+		r.logger.WithError(err).Error("failed to write response")
+	}
 }
 
 func (r *Router) HandleUpdateConversation(w http.ResponseWriter, req *http.Request) {
@@ -1163,7 +1181,9 @@ func (r *Router) HandleUpdateConversation(w http.ResponseWriter, req *http.Reque
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	writeJSON(w, conversation)
+	if err := writeJSON(w, conversation); err != nil {
+		r.logger.WithError(err).Error("failed to write response")
+	}
 }
 
 func (r *Router) HandleDeleteConversation(w http.ResponseWriter, req *http.Request) {
@@ -1190,7 +1210,9 @@ func (r *Router) HandleDeleteConversation(w http.ResponseWriter, req *http.Reque
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	writeJSON(w, deleteResp)
+	if err := writeJSON(w, deleteResp); err != nil {
+		r.logger.WithError(err).Error("failed to write response")
+	}
 }
 
 func (r *Router) HandleListItems(w http.ResponseWriter, req *http.Request) {
@@ -1231,7 +1253,9 @@ func (r *Router) HandleListItems(w http.ResponseWriter, req *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	writeJSON(w, items)
+	if err := writeJSON(w, items); err != nil {
+		r.logger.WithError(err).Error("failed to write response")
+	}
 }
 
 func (r *Router) HandleCreateItems(w http.ResponseWriter, req *http.Request) {
@@ -1268,7 +1292,9 @@ func (r *Router) HandleCreateItems(w http.ResponseWriter, req *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	writeJSON(w, items)
+	if err := writeJSON(w, items); err != nil {
+		r.logger.WithError(err).Error("failed to write response")
+	}
 }
 
 func (r *Router) HandleGetItem(w http.ResponseWriter, req *http.Request) {
@@ -1298,7 +1324,9 @@ func (r *Router) HandleGetItem(w http.ResponseWriter, req *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	writeJSON(w, item)
+	if err := writeJSON(w, item); err != nil {
+		r.logger.WithError(err).Error("failed to write response")
+	}
 }
 
 func (r *Router) HandleDeleteItem(w http.ResponseWriter, req *http.Request) {
@@ -1326,5 +1354,7 @@ func (r *Router) HandleDeleteItem(w http.ResponseWriter, req *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	writeJSON(w, conversation)
+	if err := writeJSON(w, conversation); err != nil {
+		r.logger.WithError(err).Error("failed to write response")
+	}
 }

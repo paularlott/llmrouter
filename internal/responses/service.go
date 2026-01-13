@@ -8,6 +8,7 @@ import (
 
 	"github.com/paularlott/llmrouter/internal/storage"
 	"github.com/paularlott/llmrouter/internal/types"
+	"github.com/paularlott/llmrouter/log"
 	"github.com/paularlott/mcp/openai"
 )
 
@@ -365,10 +366,14 @@ func (s *Service) processResponse(ctx context.Context, responseID string, req *o
 			stored.Response = map[string]interface{}{
 				"error": err.Error(),
 			}
-			s.storage.Store(ctx, stored)
+			if storeErr := s.storage.Store(ctx, stored); storeErr != nil {
+				log.Error("failed to store error response", "error", storeErr)
+			}
 		} else {
 			// Fallback to just updating status
-			s.storage.UpdateStatus(ctx, responseID, storage.StatusError)
+			if updateErr := s.storage.UpdateStatus(ctx, responseID, storage.StatusError); updateErr != nil {
+				log.Error("failed to update response status to error", "error", updateErr)
+			}
 		}
 		return
 	}
@@ -387,7 +392,9 @@ func (s *Service) processResponse(ctx context.Context, responseID string, req *o
 	}
 	stored.Metadata.UpdatedAt = stored.UpdatedAt
 
-	s.storage.Store(ctx, stored)
+	if storeErr := s.storage.Store(ctx, stored); storeErr != nil {
+		log.Error("failed to store completed response", "error", storeErr)
+	}
 }
 
 // convertChatCompletionToOutput converts a ChatCompletionResponse to Response API output format

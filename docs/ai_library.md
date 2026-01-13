@@ -4,14 +4,14 @@ The AI library provides LLM completion capabilities within Scriptling scripts. I
 
 ## Quick Reference
 
-| Function | Description |
-|----------|-------------|
-| `ai.completion(model, messages)` | Create a chat completion with automatic tool calling |
-| `ai.embedding(model, input)` | Generate embeddings for text or list of texts |
-| `ai.response_create(model, input, instructions=None, previous_response_id=None)` | Create a new response object for async processing with automatic tool calling |
-| `ai.response_get(id)` | Retrieve a response by ID |
-| `ai.response_delete(id)` | Delete a response by ID |
-| `ai.response_cancel(id)` | Cancel an in-progress response |
+| Function                                              | Description                                          |
+| ----------------------------------------------------- | ---------------------------------------------------- |
+| `ai.completion(model, messages)`                      | Create a chat completion with automatic tool calling |
+| `ai.embedding(model, input)`                          | Generate embeddings for text or list of texts        |
+| `ai.response_create(model, input, instructions=None)` | Create a response for async processing               |
+| `ai.response_get(id)`                                 | Get a response by ID                                 |
+| `ai.response_delete(id)`                              | Delete a response by ID                              |
+| `ai.response_cancel(id)`                              | Cancel an in-progress response                       |
 
 ## Importing
 
@@ -26,13 +26,16 @@ import ai
 Creates a chat completion with the specified model. When `tools=True` (default), automatically handles tool calls from the LLM, executing them via the MCP server and returning the final response.
 
 **Parameters:**
+
 - `model` (string): The name of the model to use (must be available via one of the configured providers)
 - `messages` (list): A list of message dictionaries with `role` and `content` keys
 
 **Returns:**
+
 - A string containing the model's response
 
 **Example:**
+
 ```python
 import ai
 
@@ -65,13 +68,16 @@ print(response)
 Generates embeddings for the given input using the specified embedding model.
 
 **Parameters:**
+
 - `model` (string): The name of the embedding model to use
 - `input` (string or list): Text string or list of text strings to embed
 
 **Returns:**
+
 - A list of embedding vectors (each vector is a list of floats)
 
 **Example:**
+
 ```python
 import ai
 
@@ -85,66 +91,62 @@ embeddings = ai.embedding("text-embedding-ada-002", texts)
 print(f"Generated {len(embeddings)} embeddings")
 ```
 
-### ai.response_create(model, input, instructions=None, previous_response_id=None)
+### ai.response_create(model, input, instructions=None)
 
-Creates a new response object for asynchronous processing. This follows the OpenAI Responses API pattern.
+Creates a response for asynchronous processing. The response is processed in the background, converting the input and instructions into a chat completion request.
 
 **Parameters:**
+
 - `model` (string): The model to use for processing
-- `input` (string or list): Input text or list of input texts to process
+- `input` (string or list): Input text or list of input items
 - `instructions` (string, optional): System instructions for the model
-- `previous_response_id` (string, optional): ID of previous response to continue conversation
 
 **Returns:**
+
 - A string containing the response ID
 
 **Example:**
+
 ```python
 import ai
 
 # Create a response with simple input
-response_id = ai.response_create("gpt-4", "Hello, how are you?")
+response_id = ai.response_create("gpt-4", "What is 2+2?")
 print(f"Created response: {response_id}")
 
 # Create a response with instructions
 response_id = ai.response_create(
     "gpt-4",
-    "What is 2+2?",
-    "You are a helpful math assistant."
+    "Analyze this data",
+    "You are a data analysis expert"
 )
 print(f"Created response: {response_id}")
-
-# Chain conversations using previous_response_id
-first_response = ai.response_create("gpt-4", "Tell me a joke")
-# Wait for completion, then continue
-second_response = ai.response_create(
-    "gpt-4",
-    "Tell me another one",
-    None,
-    first_response  # Continue the conversation
-)
-print(f"Chained response: {second_response}")
 ```
 
 ### ai.response_get(id)
 
-Retrieves a response object by its ID.
+Retrieves a response by its ID.
 
 **Parameters:**
-- `id` (string): The response ID to retrieve
+
+- `id` (string): The response ID
 
 **Returns:**
-- A dictionary containing response details (id, status, model, content if completed)
+
+- A dictionary containing response details (id, status, model, output if completed, usage, error if failed)
 
 **Example:**
+
 ```python
 import ai
 
 # Get response details
 response = ai.response_get("resp_abc123")
 print(f"Status: {response['status']}")
-if 'content' in response:
-    print(f"Content: {response['content']}")
+if 'output' in response:
+    print(f"Output: {response['output']}")
+if 'error' in response:
+    print(f"Error: {response['error']}")
 ```
 
 ### ai.response_delete(id)
@@ -152,18 +154,21 @@ if 'content' in response:
 Deletes a response by its ID.
 
 **Parameters:**
+
 - `id` (string): The response ID to delete
 
 **Returns:**
-- Boolean indicating success
+
+- None (raises error if deletion fails)
 
 **Example:**
+
 ```python
 import ai
 
 # Delete a response
-success = ai.response_delete("resp_abc123")
-print(f"Deleted: {success}")
+ai.response_delete("resp_abc123")
+print("Response deleted")
 ```
 
 ### ai.response_cancel(id)
@@ -171,12 +176,15 @@ print(f"Deleted: {success}")
 Cancels an in-progress response.
 
 **Parameters:**
+
 - `id` (string): The response ID to cancel
 
 **Returns:**
-- String containing the new status
+
+- A string containing the new status (typically "cancelled")
 
 **Example:**
+
 ```python
 import ai
 
@@ -249,6 +257,7 @@ The AI library will raise an error if:
 - Network or provider errors occur
 
 **Example with error handling:**
+
 ```python
 import ai
 import mcp

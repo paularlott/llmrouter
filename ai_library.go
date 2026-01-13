@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/paularlott/mcp"
 	"github.com/paularlott/mcp/openai"
@@ -79,6 +80,102 @@ func (ai *AILibrary) GetLibrary() *object.Library {
 
 			return embeddings, nil
 		}, "embedding(model, input) - Create embeddings for text input").
+		FunctionWithHelp("response_create", func(model string, input interface{}, instructions ...string) (string, error) {
+			// Check if responses service is available
+			if ai.router.responsesService == nil {
+				return "", fmt.Errorf("responses service not available")
+			}
+
+			// Build the request
+			req := &openai.CreateResponseRequest{
+				Model: model,
+			}
+
+			// Convert input to []any
+			switch v := input.(type) {
+			case string:
+				req.Input = []any{v}
+			case []any:
+				req.Input = v
+			default:
+				req.Input = []any{fmt.Sprintf("%v", input)}
+			}
+
+			// Add instructions if provided
+			if len(instructions) > 0 {
+				req.Instructions = instructions[0]
+			}
+
+			// Create the response
+			resp, err := ai.router.responsesService.CreateResponse(context.Background(), req, nil)
+			if err != nil {
+				return "", err
+			}
+
+			return resp.ID, nil
+		}, "response_create(model, input, instructions=None) - Create a response for async processing").
+		FunctionWithHelp("response_get", func(id string) (map[string]interface{}, error) {
+			// Check if responses service is available
+			if ai.router.responsesService == nil {
+				return nil, fmt.Errorf("responses service not available")
+			}
+
+			resp, err := ai.router.responsesService.GetResponse(context.Background(), id)
+			if err != nil {
+				return nil, err
+			}
+
+			// Convert to map for scriptling
+			result := map[string]interface{}{
+				"id":         resp.ID,
+				"object":     resp.Object,
+				"created_at": resp.CreatedAt,
+				"model":      resp.Model,
+				"status":     resp.Status,
+			}
+
+			// Add output if available
+			if len(resp.Output) > 0 {
+				result["output"] = resp.Output
+			}
+
+			// Add usage if available
+			if resp.Usage != nil {
+				result["usage"] = map[string]interface{}{
+					"prompt_tokens":     resp.Usage.PromptTokens,
+					"completion_tokens": resp.Usage.CompletionTokens,
+					"total_tokens":      resp.Usage.TotalTokens,
+				}
+			}
+
+			// Add error if available
+			if resp.Error != nil {
+				result["error"] = resp.Error.Message
+			}
+
+			return result, nil
+		}, "response_get(id) - Get a response by ID").
+		FunctionWithHelp("response_delete", func(id string) error {
+			// Check if responses service is available
+			if ai.router.responsesService == nil {
+				return fmt.Errorf("responses service not available")
+			}
+
+			return ai.router.responsesService.DeleteResponse(context.Background(), id)
+		}, "response_delete(id) - Delete a response by ID").
+		FunctionWithHelp("response_cancel", func(id string) (string, error) {
+			// Check if responses service is available
+			if ai.router.responsesService == nil {
+				return "", fmt.Errorf("responses service not available")
+			}
+
+			resp, err := ai.router.responsesService.CancelResponse(context.Background(), id)
+			if err != nil {
+				return "", err
+			}
+
+			return resp.Status, nil
+		}, "response_cancel(id) - Cancel an in-progress response").
 		Build()
 }
 

@@ -7,9 +7,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 
 	"github.com/BurntSushi/toml"
+	"github.com/paularlott/llmrouter/log"
 	"github.com/paularlott/mcp"
 	"github.com/paularlott/mcp/discovery"
 	"github.com/paularlott/scriptling"
@@ -22,7 +22,6 @@ import (
 // This allows tools to be added/removed/edited without restarting the server
 type ScriptToolProvider struct {
 	mcpServer *MCPServer
-	mu        sync.RWMutex
 }
 
 // toolConfig holds parsed tool.toml configuration
@@ -189,7 +188,7 @@ func (p *ScriptToolProvider) CallTool(ctx context.Context, name string, args map
 
 	// Find the script path
 	var scriptPath string
-	err = filepath.Walk(p.mcpServer.toolsPath, func(path string, info os.FileInfo, err error) error {
+	if err := filepath.Walk(p.mcpServer.toolsPath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return nil
 		}
@@ -215,7 +214,9 @@ func (p *ScriptToolProvider) CallTool(ctx context.Context, name string, args map
 			return filepath.SkipAll
 		}
 		return nil
-	})
+	}); err != nil && err != filepath.SkipAll {
+		return nil, err
+	}
 
 	if scriptPath == "" {
 		return nil, discovery.ErrToolNotFound
@@ -474,7 +475,9 @@ func (m *MCPServer) executeScriptTool(scriptContent string, req *mcp.ToolRequest
 
 	// Set arguments as variables in the Scriptling environment
 	for k, v := range args {
-		env.SetVar(k, scriptling.FromGo(v))
+		if setErr := env.SetVar(k, scriptling.FromGo(v)); setErr != nil {
+			log.Error("failed to set variable in scriptling environment", "key", k, "error", setErr)
+		}
 	}
 
 	// Execute the script
