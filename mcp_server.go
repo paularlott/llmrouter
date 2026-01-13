@@ -363,7 +363,8 @@ Use execute_code for custom Scriptling/Python code execution.`)
 		visibility := parseToolVisibility(remoteServer.ToolVisibility)
 
 		// Register remote server with visibility
-		if err := server.RegisterRemoteServerWithVisibility(remoteServer.URL, remoteServer.Namespace, auth, visibility); err != nil {
+		client := mcp.NewClient(remoteServer.URL, auth, remoteServer.Namespace)
+		if err := server.RegisterRemoteServerWithVisibility(client, visibility); err != nil {
 			logger.Warn("failed to connect to remote MCP server", "namespace", remoteServer.Namespace, "url", remoteServer.URL, "visibility", remoteServer.ToolVisibility, "error", err)
 		} else {
 			logger.Info("connected to remote MCP server", "namespace", remoteServer.Namespace, "url", remoteServer.URL, "visibility", remoteServer.ToolVisibility)

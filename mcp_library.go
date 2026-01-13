@@ -44,327 +44,145 @@ func (m *MCPLibrary) GetResult() *string {
 
 // GetLibrary returns the scriptling library object for MCP operations
 func (m *MCPLibrary) GetLibrary() *object.Library {
-	functions := map[string]*object.Builtin{
-		"get": {
-			Fn: func(ctx context.Context, kwargs object.Kwargs, args ...object.Object) object.Object {
-				paramName, err := scriptlib.GetString(args, 0, "parameter name")
-				if err != nil {
-					return err
-				}
+	return object.NewLibraryBuilder("mcp", "MCP library for tool interaction").
+		FunctionWithHelp("get", func(paramName string, defaultValue ...interface{}) interface{} {
+			// Get the parameter from stored args
+			if value, exists := m.args[paramName]; exists {
+				return value
+			}
 
-				// Get the parameter from stored args
-				if value, exists := m.args[paramName]; exists {
-					// Convert the value to appropriate scriptling object
-					return scriptlib.FromGo(value)
-				}
+			// Return default value if provided
+			if len(defaultValue) > 0 {
+				return defaultValue[0]
+			}
 
-				// If a default value was provided as second argument, return it
-				if len(args) >= 2 {
-					return args[1]
-				}
-
-				// No default value and parameter not found - return Null
-				return &object.Null{}
-			},
-		},
-		"return_string": {
-			Fn: func(ctx context.Context, kwargs object.Kwargs, args ...object.Object) object.Object {
-				if len(args) < 1 {
-					return &object.String{Value: "Error: return_string requires 1 argument"}
-				}
-
-				result := fmt.Sprintf("%v", scriptlib.ToGo(args[0]))
+			// No default value and parameter not found - return nil
+			return nil
+		}, "get(param_name, default=None) - Get a parameter value from tool arguments").
+		FunctionWithHelp("return_string", func(value interface{}) string {
+			result := fmt.Sprintf("%v", value)
+			m.SetResult(result)
+			return result
+		}, "return_string(value) - Return a string result from the tool").
+		FunctionWithHelp("return_object", func(value interface{}) (string, error) {
+			// Convert the object to JSON for return
+			jsonBytes, err := json.Marshal(value)
+			if err != nil {
+				result := fmt.Sprintf("%v", value)
 				m.SetResult(result)
-				return &object.String{Value: result}
-			},
-		},
-		"return_object": {
-			Fn: func(ctx context.Context, kwargs object.Kwargs, args ...object.Object) object.Object {
-				if len(args) < 1 {
-					return &object.String{Value: "Error: return_object requires 1 argument"}
+				return result, nil
+			}
+			result := string(jsonBytes)
+			m.SetResult(result)
+			return result, nil
+		}, "return_object(value) - Return an object result from the tool as JSON").
+		FunctionWithHelp("return_toon", func(value interface{}) (string, error) {
+			// Convert the object to toon encoded string
+			encoded, err := toon.Encode(value)
+			if err != nil {
+				return "", fmt.Errorf("error encoding to toon: %v", err)
+			}
+			m.SetResult(encoded)
+			return encoded, nil
+		}, "return_toon(value) - Return an object result from the tool as TOON encoded string").
+		FunctionWithHelp("list_tools", func() []map[string]string {
+			if m.mcpServer == nil || m.mcpServer.server == nil {
+				return []map[string]string{}
+			}
+
+			tools := m.mcpServer.server.ListTools()
+			result := make([]map[string]string, len(tools))
+
+			for i, tool := range tools {
+				result[i] = map[string]string{
+					"name":        tool.Name,
+					"description": tool.Description,
 				}
+			}
 
-				// Convert the object to JSON for return
-				var result string
-				goValue := scriptlib.ToGo(args[0])
-				jsonBytes, err := json.Marshal(goValue)
-				if err != nil {
-					result = fmt.Sprintf("%v", args[0])
-				} else {
-					result = string(jsonBytes)
-				}
-				m.SetResult(result)
-				return &object.String{Value: result}
-			},
-		},
-		"return_toon": {
-			Fn: func(ctx context.Context, kwargs object.Kwargs, args ...object.Object) object.Object {
-				if len(args) < 1 {
-					return &object.String{Value: "Error: return_toon requires 1 argument"}
-				}
+			return result
+		}, "list_tools() - List all available MCP tools").
+		FunctionWithHelp("call_tool", func(toolName string, toolArgs map[string]interface{}) (interface{}, error) {
+			if m.mcpServer == nil || m.mcpServer.server == nil {
+				return nil, fmt.Errorf("MCP server not available")
+			}
 
-				// Convert the object to toon encoded string
-				goValue := scriptlib.ToGo(args[0])
-				encoded, err := toon.Encode(goValue)
-				if err != nil {
-					return &object.String{Value: fmt.Sprintf("Error encoding to toon: %v", err)}
-				}
-				m.SetResult(encoded)
-				return &object.String{Value: encoded}
-			},
-		},
-		"list_tools": {
-			Fn: func(ctx context.Context, kwargs object.Kwargs, args ...object.Object) object.Object {
-				if m.mcpServer == nil || m.mcpServer.server == nil {
-					return &object.List{Elements: []object.Object{}}
-				}
+			// Call the tool directly via MCP server
+			resp, err := m.mcpServer.server.CallTool(context.Background(), toolName, toolArgs)
+			if err != nil {
+				return nil, fmt.Errorf("tool call failed: %v", err)
+			}
 
-				tools := m.mcpServer.server.ListTools()
-				result := &object.List{Elements: make([]object.Object, len(tools))}
+			// Convert response to Go value
+			result := scriptlingmcp.DecodeToolResponse(resp)
+			return scriptlib.ToGo(result), nil
+		}, "call_tool(name, args) - Call an MCP tool directly").
+		FunctionWithHelp("tool_search", func(query string) (interface{}, error) {
+			if m.mcpServer == nil || m.mcpServer.server == nil {
+				return nil, fmt.Errorf("MCP server not available")
+			}
 
-				for i, tool := range tools {
-					toolDict := &object.Dict{
-						Pairs: map[string]object.DictPair{
-							"name":        {Key: &object.String{Value: "name"}, Value: &object.String{Value: tool.Name}},
-							"description": {Key: &object.String{Value: "description"}, Value: &object.String{Value: tool.Description}},
-						},
-					}
-					result.Elements[i] = toolDict
-				}
+			// Call the tool_search tool directly
+			searchArgs := map[string]interface{}{
+				"query": query,
+			}
 
-				return result
-			},
-		},
-		"call_tool": {
-			Fn: func(ctx context.Context, kwargs object.Kwargs, args ...object.Object) object.Object {
-				var toolName string
-				var toolArgs map[string]interface{}
+			resp, err := m.mcpServer.server.CallTool(context.Background(), "tool_search", searchArgs)
+			if err != nil {
+				return nil, fmt.Errorf("tool search failed: %v", err)
+			}
 
-				// Handle positional arguments: call_tool(name, args)
-				if len(args) >= 1 {
-					if name, ok := args[0].(*object.String); ok {
-						toolName = name.Value
-					}
-				}
+			result := scriptlingmcp.DecodeToolResponse(resp)
+			return scriptlib.ToGo(result), nil
+		}, "tool_search(query) - Search for available tools by keyword").
+		FunctionWithHelp("execute_tool", func(toolName string, arguments map[string]interface{}) (interface{}, error) {
+			if m.mcpServer == nil || m.mcpServer.server == nil {
+				return nil, fmt.Errorf("MCP server not available")
+			}
 
-				if len(args) >= 2 {
-					if argsObj, ok := args[1].(*object.Dict); ok {
-						if result := scriptlib.ToGo(argsObj); result != nil {
-							toolArgs = result.(map[string]interface{})
-						}
-					}
-				}
+			// Call the execute_tool tool directly
+			executeArgs := map[string]interface{}{
+				"name":      toolName,
+				"arguments": arguments,
+			}
 
-				if toolName == "" {
-					return &object.Error{Message: "tool name is required"}
-				}
+			resp, err := m.mcpServer.server.CallTool(context.Background(), "execute_tool", executeArgs)
+			if err != nil {
+				return nil, fmt.Errorf("tool execution failed: %v", err)
+			}
 
-				if m.mcpServer == nil || m.mcpServer.server == nil {
-					return &object.Error{Message: "MCP server not available"}
-				}
+			result := scriptlingmcp.DecodeToolResponse(resp)
+			return scriptlib.ToGo(result), nil
+		}, "execute_tool(name, args) - Execute a discovered tool with arguments").
+		FunctionWithHelp("execute_code", func(code string) (interface{}, error) {
+			if m.mcpServer == nil || m.mcpServer.server == nil {
+				return nil, fmt.Errorf("MCP server not available")
+			}
 
-				// Call the tool directly via MCP server
-				resp, err := m.mcpServer.server.CallTool(ctx, toolName, toolArgs)
-				if err != nil {
-					return &object.Error{Message: fmt.Sprintf("tool call failed: %v", err)}
-				}
+			// Use the execute_code MCP tool
+			resp, err := m.mcpServer.server.CallTool(context.Background(), "execute_code", map[string]interface{}{
+				"code": code,
+			})
+			if err != nil {
+				return nil, fmt.Errorf("code execution failed: %v", err)
+			}
 
-				return scriptlingmcp.DecodeToolResponse(resp)
-			},
-		},
-		"tool_search": {
-			Fn: func(ctx context.Context, kwargs object.Kwargs, args ...object.Object) object.Object {
-				if len(args) < 1 {
-					return &object.Error{Message: "tool_search() requires a search query"}
-				}
-
-				// Get search query
-				queryStr, ok := args[0].(*object.String)
-				if !ok {
-					return &object.Error{Message: "tool_search() first argument must be a string (search query)"}
-				}
-
-				if m.mcpServer == nil || m.mcpServer.server == nil {
-					return &object.Error{Message: "MCP server not available"}
-				}
-
-				// Call the tool_search tool directly
-				searchArgs := map[string]interface{}{
-					"query": queryStr.Value,
-				}
-
-				resp, err := m.mcpServer.server.CallTool(ctx, "tool_search", searchArgs)
-				if err != nil {
-					return &object.Error{Message: fmt.Sprintf("tool search failed: %v", err)}
-				}
-
-				result := scriptlingmcp.DecodeToolResponse(resp)
-
-				// The response is a content block (possibly wrapped in a List), extract the tools from the text field
-				var contentBlock *object.Dict
-				if resultList, ok := result.(*object.List); ok && len(resultList.Elements) > 0 {
-					if firstDict, ok := resultList.Elements[0].(*object.Dict); ok {
-						contentBlock = firstDict
-					}
-				} else if resultDict, ok := result.(*object.Dict); ok {
-					contentBlock = resultDict
-				}
-
-				if contentBlock != nil {
-					// Try both "text" and "Text" keys (from JSON parsing)
-					var textVal *object.String
-					if val, found := contentBlock.Pairs["text"]; found {
-						if s, ok := val.Value.(*object.String); ok {
-							textVal = s
-						}
-					} else if val, found := contentBlock.Pairs["Text"]; found {
-						if s, ok := val.Value.(*object.String); ok {
-							textVal = s
-						}
-					}
-
-					if textVal != nil {
-						// Parse the JSON text to extract tools using the bridge package
-						tools, err := scriptlingmcp.ParseToolSearchResultsFromText(textVal.Value)
-						if err == nil {
-							return tools
-						}
-					}
-				}
-
-				return result
-			},
-		},
-		"execute_tool": {
-			Fn: func(ctx context.Context, kwargs object.Kwargs, args ...object.Object) object.Object {
-				if len(args) < 2 {
-					return &object.Error{Message: "execute_tool() requires tool name and arguments"}
-				}
-
-				if m.mcpServer == nil || m.mcpServer.server == nil {
-					return &object.Error{Message: "MCP server not available"}
-				}
-
-				// Get tool name (can be namespaced like "namespace/toolname")
-				toolNameStr, ok := args[0].(*object.String)
-				if !ok {
-					return &object.Error{Message: "execute_tool() first argument must be a string (tool name)"}
-				}
-
-				// Get arguments
-				argsDict, ok := args[1].(*object.Dict)
-				if !ok {
-					return &object.Error{Message: "execute_tool() second argument must be a dict (arguments)"}
-				}
-
-				// Convert arguments to map[string]interface{} for the execute_tool call
-				arguments := make(map[string]interface{})
-				for _, pair := range argsDict.Pairs {
-					key := pair.Key.(*object.String).Value
-					arguments[key] = scriptlib.ToGo(pair.Value)
-				}
-
-				// Call the execute_tool tool directly
-				// Note: execute_tool expects arguments as a map/object, not as JSON string
-				executeArgs := map[string]interface{}{
-					"name":      toolNameStr.Value,
-					"arguments": arguments,
-				}
-
-				resp, err := m.mcpServer.server.CallTool(ctx, "execute_tool", executeArgs)
-				if err != nil {
-					return &object.Error{Message: fmt.Sprintf("tool execution failed: %v", err)}
-				}
-
-				return scriptlingmcp.DecodeToolResponse(resp)
-			},
-		},
-		"execute_code": {
-			Fn: func(ctx context.Context, kwargs object.Kwargs, args ...object.Object) object.Object {
-				var code string
-
-				// Handle positional arguments: execute_code(code)
-				if len(args) >= 1 {
-					if c, ok := args[0].(*object.String); ok {
-						code = c.Value
-					}
-				}
-
-				// Handle keyword arguments
-				if kwargs.Has("code") {
-					if cStr, ok := kwargs.Get("code").(*object.String); ok {
-						code = cStr.Value
-					}
-				}
-
-				if code == "" {
-					return &object.Error{Message: "code is required"}
-				}
-
-				if m.mcpServer == nil || m.mcpServer.server == nil {
-					return &object.Error{Message: "MCP server not available"}
-				}
-
-				// Use the execute_code MCP tool
-				resp, err := m.mcpServer.server.CallTool(ctx, "execute_code", map[string]interface{}{
-					"code": code,
-				})
-				if err != nil {
-					return &object.Error{Message: fmt.Sprintf("code execution failed: %v", err)}
-				}
-
-				return scriptlingmcp.DecodeToolResponse(resp)
-			},
-		},
-		"toon_encode": {
-			Fn: func(ctx context.Context, kwargs object.Kwargs, args ...object.Object) object.Object {
-				if len(args) < 1 {
-					return &object.String{Value: "Error: toon_encode requires 1 argument"}
-				}
-
-				goValue := scriptlib.ToGo(args[0])
-				encoded, err := toon.Encode(goValue)
-				if err != nil {
-					return &object.String{Value: fmt.Sprintf("Error encoding to toon: %v", err)}
-				}
-
-				return &object.String{Value: encoded}
-			},
-		},
-		"toon_decode": {
-			Fn: func(ctx context.Context, kwargs object.Kwargs, args ...object.Object) object.Object {
-				if len(args) < 1 {
-					return &object.String{Value: "Error: toon_decode requires 1 argument"}
-				}
-
-				str, ok := args[0].(*object.String)
-				if !ok {
-					return &object.String{Value: "Error: toon_decode argument must be a string"}
-				}
-
-				decoded, err := toon.Decode(str.Value)
-				if err != nil {
-					return &object.String{Value: fmt.Sprintf("Error decoding from toon: %v", err)}
-				}
-
-				// Convert back to scriptling object
-				switch v := decoded.(type) {
-				case string:
-					return &object.String{Value: v}
-				case int:
-					return &object.Integer{Value: int64(v)}
-				case int64:
-					return &object.Integer{Value: v}
-				case float64:
-					return &object.Float{Value: v}
-				case bool:
-					return &object.Boolean{Value: v}
-				default:
-					return &object.String{Value: fmt.Sprintf("%v", v)}
-				}
-			},
-		},
-	}
-
-	return object.NewLibrary(functions, map[string]object.Object{}, "MCP library for tool interaction")
+			result := scriptlingmcp.DecodeToolResponse(resp)
+			return scriptlib.ToGo(result), nil
+		}, "execute_code(code) - Execute arbitrary Python/Scriptling code").
+		FunctionWithHelp("toon_encode", func(value interface{}) (string, error) {
+			encoded, err := toon.Encode(value)
+			if err != nil {
+				return "", fmt.Errorf("error encoding to toon: %v", err)
+			}
+			return encoded, nil
+		}, "toon_encode(value) - Encode an object to TOON format").
+		FunctionWithHelp("toon_decode", func(encoded string) (interface{}, error) {
+			decoded, err := toon.Decode(encoded)
+			if err != nil {
+				return nil, fmt.Errorf("error decoding from toon: %v", err)
+			}
+			return decoded, nil
+		}, "toon_decode(encoded) - Decode a TOON formatted string to an object").
+		Build()
 }

@@ -43,6 +43,6 @@ require (
 // Use local versions for development
 //replace github.com/paularlott/cli => /Users/paul/Code/Source/cli
 
-//replace github.com/paularlott/mcp => /Users/paul/Code/Source/mcp
+replace github.com/paularlott/mcp => /Users/paul/Code/Source/mcp
 
-//replace github.com/paularlott/scriptling => /Users/paul/Code/Source/scriptling
+replace github.com/paularlott/scriptling => /Users/paul/Code/Source/scriptling
