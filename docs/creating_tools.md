@@ -79,22 +79,22 @@ required = false
 
 ## Tool Script
 
-Tool scripts are written in Python/Scriptling and use the `mcp` and `ai` libraries.
+Tool scripts are written in Python/Scriptling and use the `llmr.mcp` and `llmr.ai` libraries.
 
 ### Basic Tool Example
 
 ```python
-import mcp
+import llmr.mcp
 
 def main():
     # Get parameters
-    name = mcp.get("name")
-    count = mcp.get("count", 1)  # Default value of 1
-    uppercase = mcp.get("uppercase", False)
+    name = llmr.mcp.get("name")
+    count = llmr.mcp.get("count", 1)  # Default value of 1
+    uppercase = llmr.mcp.get("uppercase", False)
 
     # Validate required parameter
     if not name:
-        mcp.return_string("Error: name parameter is required")
+        llmr.mcp.return_string("Error: name parameter is required")
         return
 
     # Build result
@@ -105,7 +105,7 @@ def main():
     result = "\n".join([greeting] * int(count))
 
     # Return result
-    mcp.return_string(result)
+    llmr.mcp.return_string(result)
 
 main()
 ```
@@ -115,15 +115,15 @@ main()
 Tools can use the AI library to interact with LLMs:
 
 ```python
-import mcp
-import ai
+import llmr.mcp
+import llmr.ai
 
 def main():
-    question = mcp.get("question")
-    model = mcp.get("model", "mistralai/devstral-small-2-2512")
+    question = llmr.mcp.get("question")
+    model = llmr.mcp.get("model", "mistralai/devstral-small-2-2512")
 
     if not question:
-        mcp.return_string("Error: question parameter is required")
+        llmr.mcp.return_string("Error: question parameter is required")
         return
 
     # Create messages for the AI
@@ -133,9 +133,9 @@ def main():
     ]
 
     # Get AI completion (automatic tool calling is handled internally)
-    response = ai.completion(model, messages)
+    response = llmr.ai.completion(model, messages)
 
-    mcp.return_string(response)
+    llmr.mcp.return_string(response)
 
 main()
 ```
@@ -145,13 +145,13 @@ main()
 Tools can import custom libraries from the `libraries_path` directory:
 
 ```python
-import mcp
+import llmr.mcp
 import string_utils  # Loaded from libraries_path/string_utils.py
 
 def main():
-    text = mcp.get("text")
+    text = llmr.mcp.get("text")
     result = string_utils.to_uppercase(text)
-    mcp.return_string(result)
+    llmr.mcp.return_string(result)
 
 main()
 ```
@@ -190,13 +190,13 @@ Custom libraries are loaded on-demand:
 
 ## Best Practices
 
-### 1. Always Use mcp.return_string()
+### 1. Always Use llmr.mcp.return_string()
 
 Explicitly return results for predictable behavior:
 
 ```python
 # Good
-mcp.return_string(f"Result: {value}")
+llmr.mcp.return_string(f"Result: {value}")
 
 # Avoid relying on implicit returns
 print("This might work but is unpredictable")
@@ -206,33 +206,33 @@ print("This might work but is unpredictable")
 
 ```python
 # Good
-units = mcp.get("units", "celsius")
-count = mcp.get("count", 10)
+units = llmr.mcp.get("units", "celsius")
+count = llmr.mcp.get("count", 10)
 
 # Avoid
-units = mcp.get("units")  # Returns None if not provided
+units = llmr.mcp.get("units")  # Returns None if not provided
 ```
 
 ### 3. Validate Required Parameters
 
 ```python
-name = mcp.get("name")
+name = llmr.mcp.get("name")
 if not name:
-    mcp.return_string("Error: name parameter is required")
+    llmr.mcp.return_string("Error: name parameter is required")
     return
 ```
 
 ### 4. Handle Errors Gracefully
 
 ```python
-import mcp
+import llmr.mcp
 
 try:
     # Perform operation
     result = risky_operation()
-    mcp.return_string(f"Success: {result}")
+    llmr.mcp.return_string(f"Success: {result}")
 except Exception as e:
-    mcp.return_string(f"Error: {str(e)}")
+    llmr.mcp.return_string(f"Error: {str(e)}")
 ```
 
 ### 5. Use Descriptive Keywords
@@ -282,7 +282,7 @@ required = true
 ### calculator.py
 
 ```python
-import mcp
+import llmr.mcp
 
 def calculate(operation, a, b):
     """Perform the specified operation on two numbers."""
@@ -303,25 +303,25 @@ def calculate(operation, a, b):
 
 def main():
     # Get parameters
-    operation = mcp.get("operation")
-    a = mcp.get("a")
-    b = mcp.get("b")
+    operation = llmr.mcp.get("operation")
+    a = llmr.mcp.get("a")
+    b = llmr.mcp.get("b")
 
     # Validate required parameters
     if not operation:
-        mcp.return_string("Error: operation is required")
+        llmr.mcp.return_string("Error: operation is required")
         return
     if a is None or b is None:
-        mcp.return_string("Error: both a and b parameters are required")
+        llmr.mcp.return_string("Error: both a and b parameters are required")
         return
 
     # Perform calculation
     result, error = calculate(operation, a, b)
 
     if error:
-        mcp.return_string(f"Error: {error}")
+        llmr.mcp.return_string(f"Error: {error}")
     else:
-        mcp.return_string(str(result))
+        llmr.mcp.return_string(str(result))
 
 main()
 ```
@@ -377,5 +377,5 @@ curl -X POST http://localhost:12345/mcp \
 
 ## Related Documentation
 
-- [MCP Library Reference](mcp_library.md) - Full documentation for the `mcp` library
-- [AI Library Reference](ai_library.md) - Full documentation for the `ai` library
+- [MCP Library Reference](mcp_library.md) - Full documentation for the `llmr.mcp` library
+- [AI Library Reference](ai_library.md) - Full documentation for the `llmr.ai` library

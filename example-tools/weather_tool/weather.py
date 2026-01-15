@@ -1,5 +1,5 @@
 # Import MCP library for proper result handling
-import mcp
+import llmr.mcp
 
 def check_weather(location, units="celsius"):
     """Mock weather checking function"""
@@ -11,11 +11,11 @@ def check_weather(location, units="celsius"):
 
     return f"Weather in {location}: {temperature} degrees {units}"
 
-# Use mcp.get() to access parameters with default value
-location = mcp.get("location")
-units = mcp.get("units", "celsius")
+# Use llmr.mcp.get() to access parameters with default value
+location = llmr.mcp.get("location")
+units = llmr.mcp.get("units", "celsius")
 
 result = check_weather(location, units)
 
 # Return the result using MCP library
-mcp.return_string(result)
+llmr.mcp.return_string(result)

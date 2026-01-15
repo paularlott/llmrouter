@@ -1,9 +1,9 @@
-import ai
-import mcp
+import llmr.ai
+import llmr.mcp
 
 # Get the question from parameters
-question = mcp.get("question")
-model = mcp.get("model", "mistralai/devstral-small-2-2512")
+question = llmr.mcp.get("question")
+model = llmr.mcp.get("model", "mistralai/devstral-small-2-2512")
 
 print("Question: " + str(question))
 print("Model: " + str(model))
@@ -15,6 +15,6 @@ Use tool_search to find tools, and execute_tool to run them."""},
     {"role": "user", "content": question}
 ]
 
-response = ai.completion(model, messages)
+response = llmr.ai.completion(model, messages)
 
-mcp.return_string("AI Response: " + str(response))
+llmr.mcp.return_string("AI Response: " + str(response))

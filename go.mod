@@ -6,11 +6,11 @@ require (
 	github.com/BurntSushi/toml v1.6.0
 	github.com/dgraph-io/badger/v4 v4.9.0
 	github.com/google/uuid v1.6.0
-	github.com/paularlott/cli v0.7.1
+	github.com/paularlott/cli v0.7.2
 	github.com/paularlott/logger v0.3.0
-	github.com/paularlott/mcp v0.7.2
-	github.com/paularlott/scriptling v0.0.0-20260110052118-2a121dd4ad8f
-	golang.org/x/net v0.48.0
+	github.com/paularlott/mcp v0.8.0
+	github.com/paularlott/scriptling v0.0.0-20260115003857-4fb41232f9ad
+	golang.org/x/net v0.49.0
 )
 
 require (
@@ -39,10 +39,3 @@ require (
 	golang.org/x/text v0.33.0 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
 )
-
-// Use local versions for development
-//replace github.com/paularlott/cli => /Users/paul/Code/Source/cli
-
-replace github.com/paularlott/mcp => /Users/paul/Code/Source/mcp
-
-replace github.com/paularlott/scriptling => /Users/paul/Code/Source/scriptling

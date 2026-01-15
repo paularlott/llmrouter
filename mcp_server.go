@@ -13,7 +13,9 @@ import (
 	"github.com/paularlott/mcp"
 	"github.com/paularlott/mcp/discovery"
 	"github.com/paularlott/scriptling"
+	scriptlingai "github.com/paularlott/scriptling/ai"
 	"github.com/paularlott/scriptling/extlibs"
+	scriptlingmcp "github.com/paularlott/scriptling/mcp"
 	"github.com/paularlott/scriptling/object"
 	"github.com/paularlott/scriptling/stdlib"
 )
@@ -253,6 +255,12 @@ func setupScriptlingEnvironment(env *scriptling.Scriptling) {
 	extlibs.RegisterOSLibrary(env, []string{})
 	extlibs.RegisterPathlibLibrary(env, []string{})
 	extlibs.RegisterWaitForLibrary(env)
+	extlibs.RegisterGlobLibrary(env, []string{}) // sl.glob
+
+	// Register scriptling libraries (sl.ai, sl.mcp, sl.toon)
+	scriptlingai.Register(env)
+	scriptlingmcp.Register(env)
+	scriptlingmcp.RegisterToon(env)
 
 	// Enable output capture
 	env.EnableOutputCapture()
@@ -265,12 +273,12 @@ func setupScriptlingEnvironmentWithAI(env *scriptling.Scriptling, router *Router
 
 	// Create and register AI library
 	aiLib := NewAILibrary(router)
-	env.RegisterLibrary("ai", aiLib.GetLibrary())
+	env.RegisterLibrary("llmr.ai", aiLib.GetLibrary())
 
 	// Create and register MCP library if mcpServer is provided
 	if mcpServer != nil {
 		mcpLib := NewMCPLibrary(mcpServer)
-		env.RegisterLibrary("mcp", mcpLib.GetLibrary())
+		env.RegisterLibrary("llmr.mcp", mcpLib.GetLibrary())
 	}
 }
 
@@ -281,11 +289,11 @@ func setupScriptlingEnvironmentWithAIAndResult(env *scriptling.Scriptling, route
 
 	// Create and register AI library
 	aiLib := NewAILibrary(router)
-	env.RegisterLibrary("ai", aiLib.GetLibrary())
+	env.RegisterLibrary("llmr.ai", aiLib.GetLibrary())
 
 	// Register the provided MCP library instance
 	if mcpLib != nil {
-		env.RegisterLibrary("mcp", mcpLib.GetLibrary())
+		env.RegisterLibrary("llmr.mcp", mcpLib.GetLibrary())
 	}
 }
 

@@ -6,22 +6,22 @@ The AI library provides LLM completion capabilities within Scriptling scripts. I
 
 | Function                                              | Description                                          |
 | ----------------------------------------------------- | ---------------------------------------------------- |
-| `ai.completion(model, messages)`                      | Create a chat completion with automatic tool calling |
-| `ai.embedding(model, input)`                          | Generate embeddings for text or list of texts        |
-| `ai.response_create(model, input, instructions=None)` | Create a response for async processing               |
-| `ai.response_get(id)`                                 | Get a response by ID                                 |
-| `ai.response_delete(id)`                              | Delete a response by ID                              |
-| `ai.response_cancel(id)`                              | Cancel an in-progress response                       |
+| `llmr.ai.completion(model, messages)`                      | Create a chat completion with automatic tool calling |
+| `llmr.ai.embedding(model, input)`                          | Generate embeddings for text or list of texts        |
+| `llmr.ai.response_create(model, input, instructions=None)` | Create a response for async processing               |
+| `llmr.ai.response_get(id)`                                 | Get a response by ID                                 |
+| `llmr.ai.response_delete(id)`                              | Delete a response by ID                              |
+| `llmr.ai.response_cancel(id)`                              | Cancel an in-progress response                       |
 
 ## Importing
 
 ```python
-import ai
+import llmr.ai
 ```
 
 ## Functions
 
-### ai.completion(model, messages, tools=True)
+### llmr.ai.completion(model, messages, tools=True)
 
 Creates a chat completion with the specified model. When `tools=True` (default), automatically handles tool calls from the LLM, executing them via the MCP server and returning the final response.
 
@@ -37,13 +37,13 @@ Creates a chat completion with the specified model. When `tools=True` (default),
 **Example:**
 
 ```python
-import ai
+import llmr.ai
 
 # Simple completion without tools (faster, no tool loop risk)
 messages = [
     {"role": "user", "content": "What is the capital of France?"}
 ]
-response = ai.completion("gemini-2.0-flash-lite", messages, tools=False)
+response = llmr.ai.completion("gemini-2.0-flash-lite", messages, tools=False)
 print(response)
 
 # Completion with tool calling enabled (default)
@@ -51,7 +51,7 @@ messages = [
     {"role": "system", "content": "You have access to tools. Use tool_search to find tools."},
     {"role": "user", "content": "Calculate 15 * 23 using the calculator tool"}
 ]
-response = ai.completion("mistralai/devstral-small-2-2512", messages, tools=True)
+response = llmr.ai.completion("mistralai/devstral-small-2-2512", messages, tools=True)
 print(response)
 
 # With system message, no tools
@@ -59,11 +59,11 @@ messages = [
     {"role": "system", "content": "You are a helpful math assistant."},
     {"role": "user", "content": "Calculate 15% of 200"}
 ]
-response = ai.completion("mistralai/devstral-small-2-2512", messages, tools=False)
+response = llmr.ai.completion("mistralai/devstral-small-2-2512", messages, tools=False)
 print(response)
 ```
 
-### ai.embedding(model, input)
+### llmr.ai.embedding(model, input)
 
 Generates embeddings for the given input using the specified embedding model.
 
@@ -79,19 +79,19 @@ Generates embeddings for the given input using the specified embedding model.
 **Example:**
 
 ```python
-import ai
+import llmr.ai
 
 # Single text embedding
-embedding = ai.embedding("text-embedding-ada-002", "Hello world")
+embedding = llmr.ai.embedding("text-embedding-ada-002", "Hello world")
 print(f"Embedding dimensions: {len(embedding[0])}")
 
 # Multiple texts
 texts = ["Hello world", "Goodbye world"]
-embeddings = ai.embedding("text-embedding-ada-002", texts)
+embeddings = llmr.ai.embedding("text-embedding-ada-002", texts)
 print(f"Generated {len(embeddings)} embeddings")
 ```
 
-### ai.response_create(model, input, instructions=None)
+### llmr.ai.response_create(model, input, instructions=None)
 
 Creates a response for asynchronous processing. The response is processed in the background, converting the input and instructions into a chat completion request.
 
@@ -108,14 +108,14 @@ Creates a response for asynchronous processing. The response is processed in the
 **Example:**
 
 ```python
-import ai
+import llmr.ai
 
 # Create a response with simple input
-response_id = ai.response_create("gpt-4", "What is 2+2?")
+response_id = llmr.ai.response_create("gpt-4", "What is 2+2?")
 print(f"Created response: {response_id}")
 
 # Create a response with instructions
-response_id = ai.response_create(
+response_id = llmr.ai.response_create(
     "gpt-4",
     "Analyze this data",
     "You are a data analysis expert"
@@ -123,7 +123,7 @@ response_id = ai.response_create(
 print(f"Created response: {response_id}")
 ```
 
-### ai.response_get(id)
+### llmr.ai.response_get(id)
 
 Retrieves a response by its ID.
 
@@ -138,10 +138,10 @@ Retrieves a response by its ID.
 **Example:**
 
 ```python
-import ai
+import llmr.ai
 
 # Get response details
-response = ai.response_get("resp_abc123")
+response = llmr.ai.response_get("resp_abc123")
 print(f"Status: {response['status']}")
 if 'output' in response:
     print(f"Output: {response['output']}")
@@ -149,7 +149,7 @@ if 'error' in response:
     print(f"Error: {response['error']}")
 ```
 
-### ai.response_delete(id)
+### llmr.ai.response_delete(id)
 
 Deletes a response by its ID.
 
@@ -164,14 +164,14 @@ Deletes a response by its ID.
 **Example:**
 
 ```python
-import ai
+import llmr.ai
 
 # Delete a response
-ai.response_delete("resp_abc123")
+llmr.ai.response_delete("resp_abc123")
 print("Response deleted")
 ```
 
-### ai.response_cancel(id)
+### llmr.ai.response_cancel(id)
 
 Cancels an in-progress response.
 
@@ -186,16 +186,16 @@ Cancels an in-progress response.
 **Example:**
 
 ```python
-import ai
+import llmr.ai
 
 # Cancel a response
-status = ai.response_cancel("resp_abc123")
+status = llmr.ai.response_cancel("resp_abc123")
 print(f"New status: {status}")
 ```
 
 ## Automatic Tool Calling
 
-When using `ai.completion()`, the AI library automatically:
+When using `llmr.ai.completion()`, the AI library automatically:
 
 1. Provides `tool_search` and `execute_tool` functions to the LLM
 2. Executes any tool calls the LLM requests
@@ -206,7 +206,7 @@ This process is limited to a maximum of 10 iterations to prevent infinite loops.
 
 ### How It Works
 
-1. The script calls `ai.completion()` with a model and messages
+1. The script calls `llmr.ai.completion()` with a model and messages
 2. The LLM may respond with a tool call (e.g., `tool_search` to find relevant tools)
 3. The AI library executes the tool and adds the result to the conversation
 4. The LLM processes the tool result and may make additional tool calls
@@ -216,8 +216,8 @@ This process is limited to a maximum of 10 iterations to prevent infinite loops.
 ### Example with Tool Usage
 
 ```python
-import ai
-import mcp
+import llmr.ai
+import llmr.mcp
 
 def ask_question(question):
     """Ask a question that may require tool usage"""
@@ -228,7 +228,7 @@ Answer questions by using the appropriate tools when needed."""},
         {"role": "user", "content": question}
     ]
 
-    response = ai.completion("mistralai/devstral-small-2-2512", messages)
+    response = llmr.ai.completion("mistralai/devstral-small-2-2512", messages)
     return response
 
 # Ask a question that requires calculation
@@ -236,7 +236,7 @@ result = ask_question("What is 15 multiplied by 23?")
 print(result)
 
 # Return the result
-mcp.return_string(result)
+llmr.mcp.return_string(result)
 ```
 
 ## Available Models
@@ -259,17 +259,17 @@ The AI library will raise an error if:
 **Example with error handling:**
 
 ```python
-import ai
-import mcp
+import llmr.ai
+import llmr.mcp
 
 try:
-    response = ai.completion(
+    response = llmr.ai.completion(
         "invalid-model-name",
         [{"role": "user", "content": "Hello!"}]
     )
-    mcp.return_string(response)
+    llmr.mcp.return_string(response)
 except Exception as e:
-    mcp.return_string(f"Error: {str(e)}")
+    llmr.mcp.return_string(f"Error: {str(e)}")
 ```
 
 ## Best Practices
@@ -278,8 +278,8 @@ except Exception as e:
 2. **Handle errors gracefully**: Wrap AI calls in try-except blocks
 3. **Choose the right model**: Consider cost, speed, and capability when selecting models
 4. **Keep conversations focused**: Clear, specific prompts lead to better results
-5. **Use mcp.return_string()**: Always return results properly using the MCP library
+5. **Use llmr.mcp.return_string()**: Always return results properly using the MCP library
 
 ## See Also
 
-- [MCP Library Reference](mcp_library.md) - For tool operations (`mcp.call_tool`, `mcp.tool_search`, etc.)
+- [MCP Library Reference](mcp_library.md) - For tool operations (`llmr.mcp.call_tool`, `llmr.mcp.tool_search`, etc.)

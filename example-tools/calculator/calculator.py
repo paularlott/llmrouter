@@ -1,5 +1,5 @@
 # Import MCP library for proper result handling
-import mcp
+import llmr.mcp
 
 def calculate(operation, a, b):
     """Perform the calculation with proper error handling"""
@@ -19,11 +19,11 @@ def calculate(operation, a, b):
     else:
         return "Error: Unknown operation"
 
-# Use mcp.get() to access required parameters
-operation = mcp.get("operation")
-a = mcp.get("a")
-b = mcp.get("b")
+# Use llmr.mcp.get() to access required parameters
+operation = llmr.mcp.get("operation")
+a = llmr.mcp.get("a")
+b = llmr.mcp.get("b")
 result = calculate(operation, a, b)
 
 # Return the result using MCP library
-mcp.return_string(str(result))
+llmr.mcp.return_string(str(result))

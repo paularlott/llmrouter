@@ -1,5 +1,5 @@
 # Import MCP library for proper result handling
-import mcp
+import llmr.mcp
 
 # Import our string utilities library - dynamically loaded from libraries_path
 import string_utils
@@ -29,11 +29,11 @@ def process_text(operation, text):
     else:
         return f"Error: Unknown operation '{operation}'. Available operations: reverse, uppercase, lowercase, capitalize, count_words, remove_spaces, is_palindrome"
 
-# Get parameters using mcp.get()
-operation = mcp.get("operation")
-text = mcp.get("text")
+# Get parameters using llmr.mcp.get()
+operation = llmr.mcp.get("operation")
+text = llmr.mcp.get("text")
 
 result = process_text(operation, text)
 
 # Return the result using MCP library
-mcp.return_string(str(result))
+llmr.mcp.return_string(str(result))

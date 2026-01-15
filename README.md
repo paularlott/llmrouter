@@ -262,7 +262,7 @@ curl -X POST http://localhost:12345/mcp \
     "jsonrpc":"2.0","id":1,"method":"tools/call",
     "params":{
       "name":"execute_code",
-      "arguments":{"code":"import mcp\nmcp.return_string(str(2+2))"}
+      "arguments":{"code":"import llmr.mcp\nllmr.mcp.return_string(str(2+2))"}
     }
   }'
 ```
@@ -407,8 +407,8 @@ make help         # Show all targets
 ## Documentation
 
 - [Creating Custom Tools](docs/creating_tools.md) - Guide to creating MCP tools
-- [MCP Library Reference](docs/mcp_library.md) - `mcp` library functions for tools
-- [AI Library Reference](docs/ai_library.md) - `ai` library for LLM integration
+- [MCP Library Reference](docs/mcp_library.md) - `llmr.mcp` library functions for tools
+- [AI Library Reference](docs/ai_library.md) - `llmr.ai` library for LLM integration
 
 ## Architecture
 
