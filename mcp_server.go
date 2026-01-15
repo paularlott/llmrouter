@@ -7,13 +7,15 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 
 	"github.com/BurntSushi/toml"
+	"github.com/paularlott/llmrouter/log"
 	"github.com/paularlott/mcp"
 	"github.com/paularlott/mcp/discovery"
 	"github.com/paularlott/scriptling"
 	"github.com/paularlott/scriptling/extlibs"
+	scriptlingai "github.com/paularlott/scriptling/extlibs/ai"
+	scriptlingmcp "github.com/paularlott/scriptling/extlibs/mcp"
 	"github.com/paularlott/scriptling/object"
 	"github.com/paularlott/scriptling/stdlib"
 )
@@ -22,7 +24,6 @@ import (
 // This allows tools to be added/removed/edited without restarting the server
 type ScriptToolProvider struct {
 	mcpServer *MCPServer
-	mu        sync.RWMutex
 }
 
 // toolConfig holds parsed tool.toml configuration
@@ -189,7 +190,7 @@ func (p *ScriptToolProvider) CallTool(ctx context.Context, name string, args map
 
 	// Find the script path
 	var scriptPath string
-	err = filepath.Walk(p.mcpServer.toolsPath, func(path string, info os.FileInfo, err error) error {
+	if err := filepath.Walk(p.mcpServer.toolsPath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return nil
 		}
@@ -215,7 +216,9 @@ func (p *ScriptToolProvider) CallTool(ctx context.Context, name string, args map
 			return filepath.SkipAll
 		}
 		return nil
-	})
+	}); err != nil && err != filepath.SkipAll {
+		return nil, err
+	}
 
 	if scriptPath == "" {
 		return nil, discovery.ErrToolNotFound
@@ -252,6 +255,12 @@ func setupScriptlingEnvironment(env *scriptling.Scriptling) {
 	extlibs.RegisterOSLibrary(env, []string{})
 	extlibs.RegisterPathlibLibrary(env, []string{})
 	extlibs.RegisterWaitForLibrary(env)
+	extlibs.RegisterGlobLibrary(env, []string{}) // sl.glob
+
+	// Register scriptling libraries (sl.ai, sl.mcp, sl.toon)
+	scriptlingai.Register(env)
+	scriptlingmcp.Register(env)
+	scriptlingmcp.RegisterToon(env)
 
 	// Enable output capture
 	env.EnableOutputCapture()
@@ -264,12 +273,12 @@ func setupScriptlingEnvironmentWithAI(env *scriptling.Scriptling, router *Router
 
 	// Create and register AI library
 	aiLib := NewAILibrary(router)
-	env.RegisterLibrary("ai", aiLib.GetLibrary())
+	env.RegisterLibrary("llmr.ai", aiLib.GetLibrary())
 
 	// Create and register MCP library if mcpServer is provided
 	if mcpServer != nil {
 		mcpLib := NewMCPLibrary(mcpServer)
-		env.RegisterLibrary("mcp", mcpLib.GetLibrary())
+		env.RegisterLibrary("llmr.mcp", mcpLib.GetLibrary())
 	}
 }
 
@@ -280,11 +289,11 @@ func setupScriptlingEnvironmentWithAIAndResult(env *scriptling.Scriptling, route
 
 	// Create and register AI library
 	aiLib := NewAILibrary(router)
-	env.RegisterLibrary("ai", aiLib.GetLibrary())
+	env.RegisterLibrary("llmr.ai", aiLib.GetLibrary())
 
 	// Register the provided MCP library instance
 	if mcpLib != nil {
-		env.RegisterLibrary("mcp", mcpLib.GetLibrary())
+		env.RegisterLibrary("llmr.mcp", mcpLib.GetLibrary())
 	}
 }
 
@@ -363,7 +372,8 @@ Use execute_code for custom Scriptling/Python code execution.`)
 		visibility := parseToolVisibility(remoteServer.ToolVisibility)
 
 		// Register remote server with visibility
-		if err := server.RegisterRemoteServerWithVisibility(remoteServer.URL, remoteServer.Namespace, auth, visibility); err != nil {
+		client := mcp.NewClient(remoteServer.URL, auth, remoteServer.Namespace)
+		if err := server.RegisterRemoteServerWithVisibility(client, visibility); err != nil {
 			logger.Warn("failed to connect to remote MCP server", "namespace", remoteServer.Namespace, "url", remoteServer.URL, "visibility", remoteServer.ToolVisibility, "error", err)
 		} else {
 			logger.Info("connected to remote MCP server", "namespace", remoteServer.Namespace, "url", remoteServer.URL, "visibility", remoteServer.ToolVisibility)
@@ -473,7 +483,9 @@ func (m *MCPServer) executeScriptTool(scriptContent string, req *mcp.ToolRequest
 
 	// Set arguments as variables in the Scriptling environment
 	for k, v := range args {
-		env.SetVar(k, scriptling.FromGo(v))
+		if setErr := env.SetVar(k, scriptling.FromGo(v)); setErr != nil {
+			log.Error("failed to set variable in scriptling environment", "key", k, "error", setErr)
+		}
 	}
 
 	// Execute the script

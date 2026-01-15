@@ -6,27 +6,27 @@ The MCP library provides functions for interacting with the Model Context Protoc
 
 | Function | Description |
 |----------|-------------|
-| `mcp.get(param_name, default=None)` | Get a parameter value passed to the tool |
-| `mcp.return_string(text)` | Return a string result from the tool |
-| `mcp.return_object(obj)` | Return an object as JSON from the tool |
-| `mcp.return_toon(obj)` | Return an object as toon encoded string from the tool |
-| `mcp.list_tools()` | List all MCP tools |
-| `mcp.call_tool(name, args)` | Call an MCP tool directly (use `namespace/toolname` for namespaced tools) |
-| `mcp.tool_search(query)` | Search for tools by keyword |
-| `mcp.execute_tool(name, args)` | Execute a discovered tool (use `namespace/toolname` for namespaced tools) |
-| `mcp.execute_code(code)` | Execute arbitrary script code |
-| `mcp.toon_encode(obj)` | Encode an object to toon string |
-| `mcp.toon_decode(str)` | Decode a toon string to object |
+| `llmr.mcp.get(param_name, default=None)` | Get a parameter value passed to the tool |
+| `llmr.mcp.return_string(text)` | Return a string result from the tool |
+| `llmr.mcp.return_object(obj)` | Return an object as JSON from the tool |
+| `llmr.mcp.return_toon(obj)` | Return an object as toon encoded string from the tool |
+| `llmr.mcp.list_tools()` | List all MCP tools |
+| `llmr.mcp.call_tool(name, args)` | Call an MCP tool directly (use `namespace/toolname` for namespaced tools) |
+| `llmr.mcp.tool_search(query)` | Search for tools by keyword |
+| `llmr.mcp.execute_tool(name, args)` | Execute a discovered tool (use `namespace/toolname` for namespaced tools) |
+| `llmr.mcp.execute_code(code)` | Execute arbitrary script code |
+| `llmr.mcp.toon_encode(obj)` | Encode an object to toon string |
+| `llmr.mcp.toon_decode(str)` | Decode a toon string to object |
 
 ## Importing
 
 ```python
-import mcp
+import llmr.mcp
 ```
 
 ## Parameter Functions
 
-### mcp.get(param_name, default=None)
+### llmr.mcp.get(param_name, default=None)
 
 Gets a parameter value that was passed to the tool.
 
@@ -39,21 +39,21 @@ Gets a parameter value that was passed to the tool.
 
 **Example:**
 ```python
-import mcp
+import llmr.mcp
 
 # Get a required parameter
-name = mcp.get("name")
+name = llmr.mcp.get("name")
 
 # Get an optional parameter with default
-units = mcp.get("units", "celsius")
+units = llmr.mcp.get("units", "celsius")
 
 # Get a numeric parameter
-count = mcp.get("count", 10)
+count = llmr.mcp.get("count", 10)
 ```
 
 ## Return Functions
 
-### mcp.return_string(text)
+### llmr.mcp.return_string(text)
 
 Sets the return value for the tool execution as a string. This should be called before the script ends to properly return the result to the MCP caller.
 
@@ -65,13 +65,13 @@ Sets the return value for the tool execution as a string. This should be called 
 
 **Example:**
 ```python
-import mcp
+import llmr.mcp
 
 result = "Hello, World!"
-mcp.return_string(result)
+llmr.mcp.return_string(result)
 ```
 
-### mcp.return_object(obj)
+### llmr.mcp.return_object(obj)
 
 Sets the return value for the tool execution as any object, converted to JSON.
 
@@ -83,14 +83,14 @@ Sets the return value for the tool execution as any object, converted to JSON.
 
 **Example:**
 ```python
-import mcp
+import llmr.mcp
 
 data = {"status": "success", "count": 42, "items": [1, 2, 3]}
-mcp.return_object(data)
+llmr.mcp.return_object(data)
 # Returns: {"count":42,"items":[1,2,3],"status":"success"}
 ```
 
-### mcp.return_toon(obj)
+### llmr.mcp.return_toon(obj)
 
 Sets the return value for the tool execution as any object, converted to toon encoded string.
 
@@ -102,16 +102,16 @@ Sets the return value for the tool execution as any object, converted to toon en
 
 **Example:**
 ```python
-import mcp
+import llmr.mcp
 
 data = {"status": "success", "count": 42, "items": [1, 2, 3]}
-mcp.return_toon(data)
+llmr.mcp.return_toon(data)
 # Returns: toon encoded string
 ```
 
 ## Toon Functions
 
-### mcp.toon_encode(obj)
+### llmr.mcp.toon_encode(obj)
 
 Encodes an object to a toon string.
 
@@ -123,14 +123,14 @@ Encodes an object to a toon string.
 
 **Example:**
 ```python
-import mcp
+import llmr.mcp
 
 data = {"status": "success", "count": 42}
-encoded = mcp.toon_encode(data)
+encoded = llmr.mcp.toon_encode(data)
 print(encoded)  # toon encoded string
 ```
 
-### mcp.toon_decode(str)
+### llmr.mcp.toon_decode(str)
 
 Decodes a toon string back to an object.
 
@@ -142,16 +142,16 @@ Decodes a toon string back to an object.
 
 **Example:**
 ```python
-import mcp
+import llmr.mcp
 
 encoded = "toon encoded string"
-decoded = mcp.toon_decode(encoded)
+decoded = llmr.mcp.toon_decode(encoded)
 print(decoded)  # {"status": "success", "count": 42}
 ```
 
 ## Tool Functions
 
-### mcp.list_tools()
+### llmr.mcp.list_tools()
 
 Returns a list of all available tools registered with the MCP server.
 
@@ -160,14 +160,14 @@ Returns a list of all available tools registered with the MCP server.
 
 **Example:**
 ```python
-import mcp
+import llmr.mcp
 
-tools = mcp.list_tools()
+tools = llmr.mcp.list_tools()
 for tool in tools:
     print(f"{tool['name']}: {tool['description']}")
 ```
 
-### mcp.call_tool(name, args)
+### llmr.mcp.call_tool(name, args)
 
 Calls an MCP tool directly by name with the provided arguments.
 
@@ -184,10 +184,10 @@ Calls an MCP tool directly by name with the provided arguments.
 
 **Example:**
 ```python
-import mcp
+import llmr.mcp
 
 # Call the calculator tool directly
-result = mcp.call_tool("calculator", {
+result = llmr.mcp.call_tool("calculator", {
     "operation": "multiply",
     "a": 7,
     "b": 8
@@ -195,17 +195,17 @@ result = mcp.call_tool("calculator", {
 print(result)  # Outputs: 56.0
 
 # JSON responses are automatically parsed
-data = mcp.call_tool("get_data", {"id": 123})
+data = llmr.mcp.call_tool("get_data", {"id": 123})
 print(data["status"])  # Access as dict if JSON is returned
 print(data["count"])   # Works with parsed objects
 
 # Multiple content blocks returned as list
-blocks = mcp.call_tool("multi_output", {})
+blocks = llmr.mcp.call_tool("multi_output", {})
 for block in blocks:
     print(block)
 ```
 
-### mcp.tool_search(query)
+### llmr.mcp.tool_search(query)
 
 Searches for tools by name, description, or keywords using the discovery system. This is a helper that wraps the `tool_search` MCP tool.
 
@@ -217,16 +217,16 @@ Searches for tools by name, description, or keywords using the discovery system.
 
 **Example:**
 ```python
-import mcp
+import llmr.mcp
 
 # Search for calculator-related tools
-results = mcp.tool_search("calculator")
+results = llmr.mcp.tool_search("calculator")
 for tool in results:
     print(f"{tool['name']} (score: {tool['score']})")
     # Namespaced tools will appear as "namespace/toolname"
 ```
 
-### mcp.execute_tool(name, args)
+### llmr.mcp.execute_tool(name, args)
 
 Executes a tool via the discovery system. This is a helper that wraps the `execute_tool` MCP tool.
 
@@ -243,25 +243,25 @@ Executes a tool via the discovery system. This is a helper that wraps the `execu
 
 **Example:**
 ```python
-import mcp
+import llmr.mcp
 
 # Search for a tool, then execute it
-results = mcp.tool_search("weather")
+results = llmr.mcp.tool_search("weather")
 if results:
     tool_name = results[0]['name']
     # tool_name may be "namespace/toolname" for namespaced tools
-    result = mcp.execute_tool(tool_name, {"city": "London"})
+    result = llmr.mcp.execute_tool(tool_name, {"city": "London"})
     # result is decoded - could be string, dict, or list
     print(result)
 
 # Execute a namespaced tool directly
-result = mcp.execute_tool("math/calculator", {"expression": "2+2"})
+result = llmr.mcp.execute_tool("math/calculator", {"expression": "2+2"})
 # If result is JSON like {"answer": 4}, it's already parsed
 print(result)  # {"answer": 4}
 print(result["answer"])  # 4
 ```
 
-### mcp.execute_code(code)
+### llmr.mcp.execute_code(code)
 
 Executes arbitrary Scriptling/Python code. This is a helper that wraps the `execute_code` MCP tool.
 
@@ -276,10 +276,10 @@ Executes arbitrary Scriptling/Python code. This is a helper that wraps the `exec
 
 **Example:**
 ```python
-import mcp
+import llmr.mcp
 
 # Execute a simple calculation
-result = mcp.execute_code("print(2 + 2)")
+result = llmr.mcp.execute_code("print(2 + 2)")
 print(result)  # Outputs: 4
 
 # Execute more complex code
@@ -291,7 +291,7 @@ def factorial(n):
 
 print(factorial(5))
 '''
-result = mcp.execute_code(code)
+result = llmr.mcp.execute_code(code)
 print(result)  # Outputs: 120
 
 # Code that returns JSON is automatically parsed
@@ -299,7 +299,7 @@ json_code = '''
 import json
 print(json.dumps({"status": "ok", "count": 42}))
 '''
-result = mcp.execute_code(json_code)
+result = llmr.mcp.execute_code(json_code)
 print(result["status"])  # "ok"
 print(result["count"])   # 42
 ```
@@ -328,7 +328,7 @@ required = false
 
 ### greet.py
 ```python
-import mcp
+import llmr.mcp
 
 def get_greeting(name, style):
     """Generate a greeting based on style"""
@@ -340,15 +340,15 @@ def get_greeting(name, style):
         return f"Hi {name}, nice to meet you!"
 
 # Get parameters
-name = mcp.get("name")
-style = mcp.get("style", "casual")
+name = llmr.mcp.get("name")
+style = llmr.mcp.get("style", "casual")
 
 # Validate required parameter
 if not name:
-    mcp.return_string("Error: name parameter is required")
+    llmr.mcp.return_string("Error: name parameter is required")
 else:
     result = get_greeting(name, style)
-    mcp.return_string(result)
+    llmr.mcp.return_string(result)
 ```
 
 ## Parameter Types
@@ -364,13 +364,13 @@ When parameters are passed to a tool, they are automatically converted to approp
 
 ## Response Decoding
 
-The MCP library automatically decodes tool responses for easier use in scripts. When you call `mcp.call_tool()`, `mcp.execute_tool()`, or `mcp.execute_code()`, the response is intelligently decoded:
+The MCP library automatically decodes tool responses for easier use in scripts. When you call `llmr.mcp.call_tool()`, `llmr.mcp.execute_tool()`, or `llmr.mcp.execute_code()`, the response is intelligently decoded:
 
 ### Single Text Response
 
 Returns as a string:
 ```python
-result = mcp.call_tool("some_tool", {})
+result = llmr.mcp.call_tool("some_tool", {})
 print(result)  # "Hello, World!"
 ```
 
@@ -379,7 +379,7 @@ print(result)  # "Hello, World!"
 Automatically parsed as dict or list:
 ```python
 # Tool returns: '{"status": "ok", "count": 42}'
-result = mcp.call_tool("status_tool", {})
+result = llmr.mcp.call_tool("status_tool", {})
 print(result["status"])  # "ok"
 print(result["count"])   # 42
 ```
@@ -388,7 +388,7 @@ print(result["count"])   # 42
 
 Returns as a list of decoded blocks:
 ```python
-blocks = mcp.call_tool("multi_tool", {})
+blocks = llmr.mcp.call_tool("multi_tool", {})
 for block in blocks:
     print(block)  # Each decoded block
 ```
@@ -397,7 +397,7 @@ for block in blocks:
 
 Returns as a dict with metadata:
 ```python
-image = mcp.call_tool("image_tool", {})
+image = llmr.mcp.call_tool("image_tool", {})
 print(image["Type"])      # "image"
 print(image["MimeType"])  # "image/png"
 print(image["Data"])      # base64 data
@@ -407,7 +407,7 @@ print(image["Data"])      # base64 data
 
 You can check the type of response you received:
 ```python
-result = mcp.call_tool("some_tool", {})
+result = llmr.mcp.call_tool("some_tool", {})
 
 if isinstance(result, str):
     print("Got string:", result)
@@ -422,11 +422,11 @@ elif isinstance(result, list):
 The MCP and AI libraries work together seamlessly:
 
 ```python
-import mcp
-import ai
+import llmr.mcp
+import llmr.ai
 
 # Get the question from parameters
-question = mcp.get("question")
+question = llmr.mcp.get("question")
 
 # Use AI to answer
 messages = [
@@ -434,53 +434,53 @@ messages = [
     {"role": "user", "content": question}
 ]
 
-response = ai.completion("mistralai/devstral-small-2-2512", messages)
+response = llmr.ai.completion("mistralai/devstral-small-2-2512", messages)
 
 # Return the AI response
-mcp.return_string(response)
+llmr.mcp.return_string(response)
 ```
 
 ## Function Comparison
 
 | MCP Tool | Library Helper | Use Case |
 |----------|---------------|----------|
-| `tool_search` | `mcp.tool_search(query)` | Find tools by keyword |
-| `execute_tool` | `mcp.execute_tool(name, args)` | Execute discovered tools |
-| `execute_code` | `mcp.execute_code(code)` | Run arbitrary code |
-| (direct) | `mcp.call_tool(name, args)` | Call any MCP tool directly |
-| (direct) | `mcp.list_tools()` | List all available tools |
+| `tool_search` | `llmr.mcp.tool_search(query)` | Find tools by keyword |
+| `execute_tool` | `llmr.mcp.execute_tool(name, args)` | Execute discovered tools |
+| `execute_code` | `llmr.mcp.execute_code(code)` | Run arbitrary code |
+| (direct) | `llmr.mcp.call_tool(name, args)` | Call any MCP tool directly |
+| (direct) | `llmr.mcp.list_tools()` | List all available tools |
 
 ## Return Value Behavior
 
-- If `mcp.return_string()`, `mcp.return_object()`, or `mcp.return_toon()` is called, that value is used as the tool's response
+- If `llmr.mcp.return_string()`, `llmr.mcp.return_object()`, or `llmr.mcp.return_toon()` is called, that value is used as the tool's response
 - If none are called, the script's captured output (via `print()`) and/or final expression result is used
-- Always prefer using `mcp.return_string()` for explicit, predictable results
+- Always prefer using `llmr.mcp.return_string()` for explicit, predictable results
 
 ## Best Practices
 
-1. **Always call a return function**: Explicitly return results using `mcp.return_string()`, `mcp.return_object()`, or `mcp.return_toon()` for predictable behavior
-2. **Provide defaults for optional parameters**: Use `mcp.get("param", default)` pattern
+1. **Always call a return function**: Explicitly return results using `llmr.mcp.return_string()`, `llmr.mcp.return_object()`, or `llmr.mcp.return_toon()` for predictable behavior
+2. **Provide defaults for optional parameters**: Use `llmr.mcp.get("param", default)` pattern
 3. **Validate required parameters**: Check if required parameters exist before using them
 4. **Use appropriate types**: Match parameter types to your tool's needs
-5. **Handle errors gracefully**: Return error messages via mcp.return_string() rather than raising exceptions
+5. **Handle errors gracefully**: Return error messages via llmr.mcp.return_string() rather than raising exceptions
 
 ## Error Handling Example
 
 ```python
-import mcp
+import llmr.mcp
 
 try:
     # Get and validate parameters
-    value = mcp.get("value")
+    value = llmr.mcp.get("value")
     if value is None:
         raise ValueError("value parameter is required")
 
     # Perform operation
     result = process_value(value)
-    mcp.return_string(f"Success: {result}")
+    llmr.mcp.return_string(f"Success: {result}")
 
 except Exception as e:
-    mcp.return_string(f"Error: {str(e)}")
+    llmr.mcp.return_string(f"Error: {str(e)}")
 ```
 
 ## Using Dynamic Libraries
@@ -488,12 +488,12 @@ except Exception as e:
 Tools can import custom libraries from the `libraries_path` directory:
 
 ```python
-import mcp
+import llmr.mcp
 import string_utils  # Loaded from libraries_path/string_utils.py
 
-text = mcp.get("text")
+text = llmr.mcp.get("text")
 result = string_utils.to_uppercase(text)
-mcp.return_string(result)
+llmr.mcp.return_string(result)
 ```
 
 Libraries are loaded on-demand when first imported. Simply create a `.py` file in the configured libraries directory.

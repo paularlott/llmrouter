@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"golang.org/x/net/http2"
+	"github.com/paularlott/mcp/pool"
 )
 
 type OpenAIClientImpl struct {
@@ -21,32 +21,11 @@ type OpenAIClientImpl struct {
 }
 
 func NewOpenAIClient(baseURL, token string, logger Logger) *OpenAIClientImpl {
-	// Configure HTTP transport with HTTP/2 support and connection pooling
-	transport := &http.Transport{
-		// Connection pooling settings
-		MaxIdleConns:        100,
-		MaxIdleConnsPerHost: 10,
-		IdleConnTimeout:     90 * time.Second,
-
-		// Enable HTTP/2
-		ForceAttemptHTTP2: true,
-	}
-
-	// Set up HTTP/2 configuration
-	err := http2.ConfigureTransport(transport)
-	if err != nil {
-		// If HTTP/2 configuration fails, we'll still use the transport with HTTP/1.1
-		logger.Warn("failed to configure HTTP/2 transport", "error", err)
-	}
-
 	return &OpenAIClientImpl{
 		BaseURL: baseURL,
 		Token:   token,
-		Client: &http.Client{
-			Transport: transport,
-			Timeout:   30 * time.Second,
-		},
-		logger: logger,
+		Client:  pool.GetPool().GetHTTPClient(),
+		logger:  logger,
 	}
 }
 
