@@ -13,9 +13,9 @@ import (
 	"github.com/paularlott/mcp"
 	"github.com/paularlott/mcp/discovery"
 	"github.com/paularlott/scriptling"
-	scriptlingai "github.com/paularlott/scriptling/ai"
 	"github.com/paularlott/scriptling/extlibs"
-	scriptlingmcp "github.com/paularlott/scriptling/mcp"
+	scriptlingai "github.com/paularlott/scriptling/extlibs/ai"
+	scriptlingmcp "github.com/paularlott/scriptling/extlibs/mcp"
 	"github.com/paularlott/scriptling/object"
 	"github.com/paularlott/scriptling/stdlib"
 )

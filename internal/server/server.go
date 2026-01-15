@@ -8,10 +8,12 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/paularlott/cli"
 	"github.com/paularlott/llmrouter/internal/types"
 	"github.com/paularlott/llmrouter/log"
+	"github.com/paularlott/mcp/pool"
 )
 
 // RunServer runs the LLM router server with the given configuration
@@ -45,6 +47,17 @@ func RunServer(ctx context.Context, cmd *cli.Command) error {
 	log.Configure(config.Logging.Level, config.Logging.Format)
 	logger := log.GetLogger()
 	logger.Info("starting LLM router", "version", "1.0.0")
+
+	// Configure the HTTP pool for all AI/MCP requests
+	// This must be done before any HTTP clients are created
+	pool.SetPoolConfig(&pool.PoolConfig{
+		MaxIdleConns:        100,
+		MaxIdleConnsPerHost: 10,
+		IdleConnTimeout:     90 * time.Second,
+		Timeout:             30 * time.Second,
+		InsecureSkipVerify:  false,
+	})
+	logger.Debug("configured HTTP pool")
 
 	// Load providers from config file if available
 	if cmd.ConfigFile != nil {

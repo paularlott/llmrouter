@@ -9,8 +9,7 @@ require (
 	github.com/paularlott/cli v0.7.2
 	github.com/paularlott/logger v0.3.0
 	github.com/paularlott/mcp v0.8.0
-	github.com/paularlott/scriptling v0.0.0-20260115003857-4fb41232f9ad
-	golang.org/x/net v0.49.0
+	github.com/paularlott/scriptling v0.0.0-20260115081247-b64c0a285865
 )
 
 require (
@@ -34,6 +33,7 @@ require (
 	go.opentelemetry.io/otel v1.39.0 // indirect
 	go.opentelemetry.io/otel/metric v1.39.0 // indirect
 	go.opentelemetry.io/otel/trace v1.39.0 // indirect
+	golang.org/x/net v0.49.0 // indirect
 	golang.org/x/oauth2 v0.34.0 // indirect
 	golang.org/x/sys v0.40.0 // indirect
 	golang.org/x/text v0.33.0 // indirect
