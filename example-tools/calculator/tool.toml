@@ -2,6 +2,7 @@ name = "calculator"
 description = "A simple calculator that performs basic arithmetic operations"
 keywords = ["calculator", "math", "arithmetic", "add", "subtract", "multiply", "divide"]
 script = "calculator.py"
+#visibility = "ondemand"
 
 [parameters.operation]
 type = "string"

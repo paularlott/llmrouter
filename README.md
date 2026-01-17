@@ -86,11 +86,12 @@ denylist = ["text-davinci-003"]
 
 [mcp]
 # Remote MCP servers (optional)
+# Configure external MCP servers with tool visibility control
 # [[mcp.remote_servers]]
-#   namespace = "ai"
-#   url = "https://ai.example.com/mcp"
-#   token = "your-bearer-token"
-#   tool_visibility = "visible"  # visible | hidden | ondemand
+#   namespace = "ai"                    # Namespace prefix for tools
+#   url = "https://ai.example.com/mcp"  # MCP server URL
+#   token = "your-bearer-token"         # Optional authentication
+#   tool_visibility = "native"          # "native" (default) or "ondemand"
 
 [scriptling]
 tools_path = "./example-tools"
@@ -103,15 +104,15 @@ ttl_days = 30
 
 ### Provider Configuration
 
-| Field | Description |
-|-------|-------------|
-| `name` | Unique identifier for the provider |
-| `base_url` | OpenAI-compatible API base URL |
-| `token` | API token/key (optional for local servers) |
-| `enabled` | Enable/disable the provider |
-| `models` | Static model list (skips API model fetching) |
-| `allowlist` | Only expose these models |
-| `denylist` | Exclude these models |
+| Field       | Description                                  |
+| ----------- | -------------------------------------------- |
+| `name`      | Unique identifier for the provider           |
+| `base_url`  | OpenAI-compatible API base URL               |
+| `token`     | API token/key (optional for local servers)   |
+| `enabled`   | Enable/disable the provider                  |
+| `models`    | Static model list (skips API model fetching) |
+| `allowlist` | Only expose these models                     |
+| `denylist`  | Exclude these models                         |
 
 ### Model Filtering Rules
 
@@ -138,33 +139,32 @@ If no token is configured, the server runs without authentication.
 
 ### MCP Configuration
 
-| Field | Description |
-|-------|-------------|
-| `namespace` | Namespace for the remote MCP server (prevents tool name conflicts) |
-| `url` | URL of the remote MCP server |
-| `token` | Optional bearer token for authentication |
-| `tool_visibility` | How tools are exposed: `visible` (default), `hidden`, or `ondemand` |
+| Field             | Description                                                        |
+| ----------------- | ------------------------------------------------------------------ |
+| `mode`            | Global mode: `native` (default) or `ondemand`                      |
+| `namespace`       | Namespace for the remote MCP server (prevents tool name conflicts) |
+| `url`             | URL of the remote MCP server                                       |
+| `token`           | Optional bearer token for authentication                           |
+| `tool_visibility` | Tool visibility mode: `native` (default) or `ondemand`             |
 
-#### Tool Visibility Modes
+#### Global Mode
 
-| Mode | In ListTools | In tool_search | Callable Via |
-|------|--------------|----------------|-------------|
-| `visible` | ✓ | ✗ | Direct name only |
-| `hidden` | ✗ | ✗ | Direct name only |
-| `ondemand` | ✗ | ✓ | `execute_tool` only |
+**`native`** (default): All tools (local, remote, and script-based) appear directly in tools/list. The LLM can call them directly by name.
 
-**`visible`** (default): Tools appear in the tools/list manifest. LLM can call them directly by name. NOT in `tool_search` (use the manifest instead).
+**`ondemand`**: Only `tool_search` and `execute_tool` appear in tools/list. All other tools must be discovered via `tool_search` and called via `execute_tool`. Reduces initial context.
 
-**`hidden`**: Tools are not accessible through any discovery mechanism (not in tools/list, not in tool_search). Can still be called directly by name if you know it. Useful for internal tools that should only be called from scripts with explicit names.
+#### Tool Visibility Modes (Per Remote Server)
 
-**`ondemand`**: Tools don't appear in the tools/list manifest (reducing initial context sent to LLMs) but are discoverable via `tool_search`. Can ONLY be called via `execute_tool` wrapper. This is useful for servers with many tools where you want the LLM to discover them as needed rather than receiving all tool definitions upfront.
+**`native`** (default): Remote server tools appear directly in the tools/list manifest. The LLM can call them directly by name (e.g., `namespace/tool-name`).
+
+**`ondemand`**: Remote server tools are hidden from tools/list but searchable via `tool_search` and callable via `execute_tool`.
 
 ### Responses Configuration
 
-| Field | Description |
-|-------|-------------|
+| Field          | Description                                                    |
+| -------------- | -------------------------------------------------------------- |
 | `storage_path` | Path to BadgerDB storage directory (default: "./responses.db") |
-| `ttl_days` | Time-to-live for stored responses in days (default: 30) |
+| `ttl_days`     | Time-to-live for stored responses in days (default: 30)        |
 
 ## API Endpoints
 
@@ -228,7 +228,7 @@ curl -X POST http://localhost:12345/v1/embeddings \
 
 ### POST /mcp
 
-Model Context Protocol endpoint for tool discovery and execution.
+Model Context Protocol endpoint for tool discovery and execution in native mode. Native tools appear in `tools/list` and can be called directly.
 
 ```bash
 # List available tools
@@ -264,6 +264,25 @@ curl -X POST http://localhost:12345/mcp \
       "name":"execute_code",
       "arguments":{"code":"import llmr.mcp\nllmr.mcp.return_string(str(2+2))"}
     }
+  }'
+```
+
+### POST /mcp/discovery
+
+Model Context Protocol endpoint in force ondemand mode. All tools are hidden from `tools/list` but remain searchable via `tool_search`. Useful for AI clients that work better with fewer initial tools.
+
+```bash
+# Only tool_search and execute_tool are visible in tools/list
+curl -X POST http://localhost:12345/mcp/discovery \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
+
+# All tools are searchable
+curl -X POST http://localhost:12345/mcp/discovery \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc":"2.0","id":1,"method":"tools/call",
+    "params":{"name":"tool_search","arguments":{"query":"calculator"}}
   }'
 ```
 
@@ -422,9 +441,9 @@ make help         # Show all targets
 
 The MCP server provides three built-in tools:
 
-| Tool | Description |
-|------|-------------|
-| `tool_search` | Search for available tools by keyword |
+| Tool           | Description                              |
+| -------------- | ---------------------------------------- |
+| `tool_search`  | Search for available tools by keyword    |
 | `execute_tool` | Execute a discovered tool with arguments |
 | `execute_code` | Execute arbitrary Python/Scriptling code |
 

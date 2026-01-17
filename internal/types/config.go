@@ -35,14 +35,14 @@ type ProviderConfig struct {
 }
 
 type MCPConfig struct {
-	RemoteServers []MCPRemoteServerConfig `json:"remote_servers,omitempty"`
+	RemoteServers []MCPRemoteServerConfig `json:"remote_servers,omitempty"` // Remote MCP server connections
 }
 
 type MCPRemoteServerConfig struct {
-	Namespace     string `json:"namespace"`
-	URL           string `json:"url"`
-	Token         string `json:"token,omitempty"`
-	ToolVisibility string `json:"tool_visibility,omitempty"`
+	Namespace      string `json:"namespace"`
+	URL            string `json:"url"`
+	Token          string `json:"token,omitempty"`
+	ToolVisibility string `json:"tool_visibility,omitempty"` // "native" (default) or "ondemand"
 }
 
 type ScriptlingConfig struct {

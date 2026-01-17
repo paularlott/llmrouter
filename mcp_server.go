@@ -11,7 +11,6 @@ import (
 	"github.com/BurntSushi/toml"
 	"github.com/paularlott/llmrouter/log"
 	"github.com/paularlott/mcp"
-	"github.com/paularlott/mcp/discovery"
 	"github.com/paularlott/scriptling"
 	"github.com/paularlott/scriptling/extlibs"
 	scriptlingai "github.com/paularlott/scriptling/extlibs/ai"
@@ -20,10 +19,11 @@ import (
 	"github.com/paularlott/scriptling/stdlib"
 )
 
-// ScriptToolProvider implements discovery.ToolProvider for dynamic script tool discovery
-// This allows tools to be added/removed/edited without restarting the server
+// ScriptToolProvider implements mcp.ToolProvider for dynamic script tools
+// It filters tools based on the visibility parameter (native or ondemand)
 type ScriptToolProvider struct {
-	mcpServer *MCPServer
+	mcpServer  *MCPServer
+	visibility string // "native" or "ondemand"
 }
 
 // toolConfig holds parsed tool.toml configuration
@@ -32,14 +32,36 @@ type toolConfig struct {
 	Description string                   `toml:"description"`
 	Keywords    []string                 `toml:"keywords"`
 	Script      string                   `toml:"script"`
+	Visibility  string                   `toml:"visibility"` // "native" (default) or "ondemand"
 	Parameters  map[string]toolParameter `toml:"parameters"`
 }
 
-// NewScriptToolProvider creates a new script tool provider
-func NewScriptToolProvider(mcpServer *MCPServer) *ScriptToolProvider {
+// toolParameter defines a tool parameter from tool.toml
+type toolParameter struct {
+	Type        string `toml:"type"`
+	Description string `toml:"description"`
+	Required    bool   `toml:"required"`
+}
+
+// NewNativeScriptToolProvider creates a provider that returns only native-visibility tools
+func NewNativeScriptToolProvider(mcpServer *MCPServer) *ScriptToolProvider {
 	return &ScriptToolProvider{
-		mcpServer: mcpServer,
+		mcpServer:  mcpServer,
+		visibility: "native",
 	}
+}
+
+// NewOnDemandScriptToolProvider creates a provider that returns only ondemand-visibility tools
+func NewOnDemandScriptToolProvider(mcpServer *MCPServer) *ScriptToolProvider {
+	return &ScriptToolProvider{
+		mcpServer:  mcpServer,
+		visibility: "ondemand",
+	}
+}
+
+// NewScriptToolProvider creates a provider for native tools (backwards compatible)
+func NewScriptToolProvider(mcpServer *MCPServer) *ScriptToolProvider {
+	return NewNativeScriptToolProvider(mcpServer)
 }
 
 // scanTools scans the tools directory and returns all valid tool configurations
@@ -50,15 +72,13 @@ func (p *ScriptToolProvider) scanTools() (map[string]*toolConfig, error) {
 		return tools, nil
 	}
 
-	// Ensure tools directory exists
 	if _, err := os.Stat(p.mcpServer.toolsPath); os.IsNotExist(err) {
 		return tools, nil
 	}
 
-	// Walk through tools directory looking for tool.toml files
 	err := filepath.Walk(p.mcpServer.toolsPath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
-			return nil // Continue on error
+			return nil
 		}
 
 		if info.IsDir() || !strings.HasSuffix(info.Name(), "tool.toml") {
@@ -68,28 +88,22 @@ func (p *ScriptToolProvider) scanTools() (map[string]*toolConfig, error) {
 		toolDir := filepath.Dir(path)
 		toolName := filepath.Base(toolDir)
 
-		// Parse tool.toml
 		var cfg toolConfig
 		if _, err := toml.DecodeFile(path, &cfg); err != nil {
 			p.mcpServer.logger.Warn("failed to parse tool.toml", "path", path, "error", err)
-			return nil // Continue processing other tools
+			return nil
 		}
 
-		// Use directory name if name not specified
 		if cfg.Name == "" {
 			cfg.Name = toolName
 		}
 
-		// Validate required fields
 		if cfg.Script == "" {
 			p.mcpServer.logger.Warn("tool missing script field", "tool", cfg.Name)
 			return nil
 		}
 
-		// Build script path
 		scriptPath := filepath.Join(toolDir, cfg.Script)
-
-		// Verify script exists
 		if _, err := os.Stat(scriptPath); os.IsNotExist(err) {
 			p.mcpServer.logger.Warn("tool script not found", "tool", cfg.Name, "script", scriptPath)
 			return nil
@@ -102,27 +116,43 @@ func (p *ScriptToolProvider) scanTools() (map[string]*toolConfig, error) {
 	return tools, err
 }
 
-// ListToolMetadata returns metadata for all tools from the filesystem
-func (p *ScriptToolProvider) ListToolMetadata(ctx context.Context) ([]discovery.ToolMetadata, error) {
+// GetTools returns script tools filtered by the provider's visibility setting.
+// Native provider returns tools with visibility="native" or no visibility set (default).
+// OnDemand provider returns tools with visibility="ondemand".
+func (p *ScriptToolProvider) GetTools(ctx context.Context) ([]mcp.MCPTool, error) {
 	tools, err := p.scanTools()
 	if err != nil {
 		return nil, err
 	}
 
-	var metadata []discovery.ToolMetadata
+	var mcpTools []mcp.MCPTool
 	for _, cfg := range tools {
-		metadata = append(metadata, discovery.ToolMetadata{
+		// Filter based on provider's visibility setting
+		toolVisibility := cfg.Visibility
+		if toolVisibility == "" {
+			toolVisibility = "native" // Default to native
+		}
+		if toolVisibility != p.visibility {
+			continue // Skip tools that don't match our visibility filter
+		}
+
+		params := buildParameters(cfg.Parameters)
+		toolBuilder := mcp.NewTool(cfg.Name, cfg.Description, params...)
+		schema := toolBuilder.BuildSchema()
+
+		mcpTools = append(mcpTools, mcp.MCPTool{
 			Name:        cfg.Name,
 			Description: cfg.Description,
+			InputSchema: schema,
 			Keywords:    cfg.Keywords,
 		})
 	}
 
-	return metadata, nil
+	return mcpTools, nil
 }
 
-// GetTool returns the full tool definition for a specific tool
-func (p *ScriptToolProvider) GetTool(ctx context.Context, name string) (*mcp.MCPTool, error) {
+// ExecuteTool executes a tool by name (handles both native and ondemand tools)
+func (p *ScriptToolProvider) ExecuteTool(ctx context.Context, name string, params map[string]interface{}) (interface{}, error) {
 	tools, err := p.scanTools()
 	if err != nil {
 		return nil, err
@@ -130,78 +160,28 @@ func (p *ScriptToolProvider) GetTool(ctx context.Context, name string) (*mcp.MCP
 
 	cfg, exists := tools[name]
 	if !exists {
-		return nil, nil // Tool not found
+		return nil, mcp.ErrUnknownTool
 	}
 
-	// Build parameters list
-	var params []mcp.Parameter
-	for paramName, param := range cfg.Parameters {
-		switch param.Type {
-		case "string":
-			if param.Required {
-				params = append(params, mcp.String(paramName, param.Description, mcp.Required()))
-			} else {
-				params = append(params, mcp.String(paramName, param.Description))
-			}
-		case "number":
-			if param.Required {
-				params = append(params, mcp.Number(paramName, param.Description, mcp.Required()))
-			} else {
-				params = append(params, mcp.Number(paramName, param.Description))
-			}
-		case "boolean":
-			if param.Required {
-				params = append(params, mcp.Boolean(paramName, param.Description, mcp.Required()))
-			} else {
-				params = append(params, mcp.Boolean(paramName, param.Description))
-			}
-		default:
-			if param.Required {
-				params = append(params, mcp.String(paramName, param.Description, mcp.Required()))
-			} else {
-				params = append(params, mcp.String(paramName, param.Description))
-			}
-		}
+	// Check if this tool matches our visibility filter
+	toolVisibility := cfg.Visibility
+	if toolVisibility == "" {
+		toolVisibility = "native"
+	}
+	if toolVisibility != p.visibility {
+		return nil, mcp.ErrUnknownTool // Not handled by this provider
 	}
 
-	// Build MCP tool with input schema
-	toolBuilder := mcp.NewTool(cfg.Name, cfg.Description, params...)
-
-	// Build the schema
-	schema := toolBuilder.BuildSchema()
-	return &mcp.MCPTool{
-		Name:        cfg.Name,
-		Description: cfg.Description,
-		InputSchema: schema,
-	}, nil
-}
-
-// CallTool executes a tool by name
-func (p *ScriptToolProvider) CallTool(ctx context.Context, name string, args map[string]interface{}) (*mcp.ToolResponse, error) {
-	tools, err := p.scanTools()
-	if err != nil {
-		return nil, err
-	}
-
-	cfg, exists := tools[name]
-	if !exists {
-		return nil, discovery.ErrToolNotFound
-	}
-
-	// Find the script path
+	// Find script path
 	var scriptPath string
-	if err := filepath.Walk(p.mcpServer.toolsPath, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return nil
-		}
-		if info.IsDir() || !strings.HasSuffix(info.Name(), "tool.toml") {
+	filepath.Walk(p.mcpServer.toolsPath, func(path string, info os.FileInfo, err error) error {
+		if err != nil || info.IsDir() || !strings.HasSuffix(info.Name(), "tool.toml") {
 			return nil
 		}
 
 		toolDir := filepath.Dir(path)
 		toolName := filepath.Base(toolDir)
 
-		// Check if this is our tool
 		var testCfg struct {
 			Name string `toml:"name"`
 		}
@@ -216,24 +196,24 @@ func (p *ScriptToolProvider) CallTool(ctx context.Context, name string, args map
 			return filepath.SkipAll
 		}
 		return nil
-	}); err != nil && err != filepath.SkipAll {
-		return nil, err
-	}
+	})
 
 	if scriptPath == "" {
-		return nil, discovery.ErrToolNotFound
+		return nil, mcp.ErrUnknownTool
 	}
 
-	return p.mcpServer.executeScriptToolFromPath(scriptPath, mcp.NewToolRequest(args))
+	response, err := p.mcpServer.executeScriptToolFromPath(scriptPath, mcp.NewToolRequest(params))
+	if err != nil {
+		return nil, err
+	}
+	return response.Content, nil
 }
 
-// Ensure ScriptToolProvider implements ToolProvider
-var _ discovery.ToolProvider = (*ScriptToolProvider)(nil)
+var _ mcp.ToolProvider = (*ScriptToolProvider)(nil)
 
 // MCPServer wraps the MCP server functionality
 type MCPServer struct {
 	server        *mcp.Server
-	registry      *discovery.ToolRegistry
 	scriptling    *scriptling.Scriptling
 	config        *Config
 	logger        Logger
@@ -242,9 +222,42 @@ type MCPServer struct {
 	librariesPath string
 }
 
+// buildParameters converts tool parameters to mcp.Parameter slice
+func buildParameters(params map[string]toolParameter) []mcp.Parameter {
+	var result []mcp.Parameter
+	for paramName, param := range params {
+		switch param.Type {
+		case "string":
+			if param.Required {
+				result = append(result, mcp.String(paramName, param.Description, mcp.Required()))
+			} else {
+				result = append(result, mcp.String(paramName, param.Description))
+			}
+		case "number":
+			if param.Required {
+				result = append(result, mcp.Number(paramName, param.Description, mcp.Required()))
+			} else {
+				result = append(result, mcp.Number(paramName, param.Description))
+			}
+		case "boolean":
+			if param.Required {
+				result = append(result, mcp.Boolean(paramName, param.Description, mcp.Required()))
+			} else {
+				result = append(result, mcp.Boolean(paramName, param.Description))
+			}
+		default:
+			if param.Required {
+				result = append(result, mcp.String(paramName, param.Description, mcp.Required()))
+			} else {
+				result = append(result, mcp.String(paramName, param.Description))
+			}
+		}
+	}
+	return result
+}
+
 // setupScriptlingEnvironment configures a Scriptling environment with all standard libraries
 func setupScriptlingEnvironment(env *scriptling.Scriptling) {
-	// Register core libraries
 	stdlib.RegisterAll(env)
 	extlibs.RegisterRequestsLibrary(env)
 	extlibs.RegisterSysLibrary(env, []string{})
@@ -255,27 +268,18 @@ func setupScriptlingEnvironment(env *scriptling.Scriptling) {
 	extlibs.RegisterOSLibrary(env, []string{})
 	extlibs.RegisterPathlibLibrary(env, []string{})
 	extlibs.RegisterWaitForLibrary(env)
-	extlibs.RegisterGlobLibrary(env, []string{}) // sl.glob
-
-	// Register scriptling libraries (sl.ai, sl.mcp, sl.toon)
+	extlibs.RegisterGlobLibrary(env, []string{})
 	scriptlingai.Register(env)
 	scriptlingmcp.Register(env)
 	scriptlingmcp.RegisterToon(env)
-
-	// Enable output capture
 	env.EnableOutputCapture()
 }
 
-// setupScriptlingEnvironmentWithAI configures a Scriptling environment with all standard libraries plus AI and MCP libraries
+// setupScriptlingEnvironmentWithAI configures a Scriptling environment with AI and MCP libraries
 func setupScriptlingEnvironmentWithAI(env *scriptling.Scriptling, router *Router, mcpServer *MCPServer) {
-	// Setup standard environment
 	setupScriptlingEnvironment(env)
-
-	// Create and register AI library
 	aiLib := NewAILibrary(router)
 	env.RegisterLibrary("llmr.ai", aiLib.GetLibrary())
-
-	// Create and register MCP library if mcpServer is provided
 	if mcpServer != nil {
 		mcpLib := NewMCPLibrary(mcpServer)
 		env.RegisterLibrary("llmr.mcp", mcpLib.GetLibrary())
@@ -284,14 +288,9 @@ func setupScriptlingEnvironmentWithAI(env *scriptling.Scriptling, router *Router
 
 // setupScriptlingEnvironmentWithAIAndResult configures a Scriptling environment with result tracking
 func setupScriptlingEnvironmentWithAIAndResult(env *scriptling.Scriptling, router *Router, mcpServer *MCPServer, mcpLib *MCPLibrary) {
-	// Setup standard environment
 	setupScriptlingEnvironment(env)
-
-	// Create and register AI library
 	aiLib := NewAILibrary(router)
 	env.RegisterLibrary("llmr.ai", aiLib.GetLibrary())
-
-	// Register the provided MCP library instance
 	if mcpLib != nil {
 		env.RegisterLibrary("llmr.mcp", mcpLib.GetLibrary())
 	}
@@ -307,7 +306,6 @@ func (m *MCPServer) setupOnDemandLibraryLoading(scriptlingInstance *scriptling.S
 		filename := filepath.Join(m.librariesPath, libName+".py")
 		content, err := os.ReadFile(filename)
 		if err != nil {
-			// Try in the current directory as fallback
 			filename = libName + ".py"
 			content, err = os.ReadFile(filename)
 			if err != nil {
@@ -327,19 +325,12 @@ func (m *MCPServer) setupOnDemandLibraryLoading(scriptlingInstance *scriptling.S
 
 // NewMCPServer creates a new MCP server instance
 func NewMCPServer(config *Config, logger Logger, router *Router) (*MCPServer, error) {
-	// Create MCP server
 	server := mcp.NewServer("llmrouter", "1.0.0")
 	server.SetInstructions(`This server provides AI completion with tool calling support and Scriptling execution capabilities.
-Use tool_search to discover available tools.
-Use execute_tool to run discovered tools.
 Use execute_code for custom Scriptling/Python code execution.`)
-
-	// Create discovery registry
-	registry := discovery.NewToolRegistry()
 
 	mcpServer := &MCPServer{
 		server:        server,
-		registry:      registry,
 		config:        config,
 		logger:        logger,
 		router:        router,
@@ -347,76 +338,51 @@ Use execute_code for custom Scriptling/Python code execution.`)
 		librariesPath: config.Scriptling.LibrariesPath,
 	}
 
-	// Initialize Scriptling environment
 	if err := mcpServer.initializeScriptling(); err != nil {
 		return nil, fmt.Errorf("failed to initialize scriptling: %w", err)
 	}
 
-	// Register tools
-	if err := mcpServer.registerTools(); err != nil {
-		return nil, fmt.Errorf("failed to register tools: %w", err)
+	if err := mcpServer.registerBuiltinTools(); err != nil {
+		return nil, fmt.Errorf("failed to register builtin tools: %w", err)
 	}
-
-	// Set the tool registry on the server for OnDemand tools
-	server.SetToolRegistry(registry)
 
 	// Connect to remote MCP servers
 	for _, remoteServer := range config.MCP.RemoteServers {
-		// Create auth provider if token is provided
 		var auth mcp.AuthProvider
 		if remoteServer.Token != "" {
 			auth = mcp.NewBearerTokenAuth(remoteServer.Token)
 		}
 
-		// Parse tool visibility
-		visibility := parseToolVisibility(remoteServer.ToolVisibility)
-
-		// Register remote server with visibility
 		client := mcp.NewClient(remoteServer.URL, auth, remoteServer.Namespace)
-		if err := server.RegisterRemoteServerWithVisibility(client, visibility); err != nil {
-			logger.Warn("failed to connect to remote MCP server", "namespace", remoteServer.Namespace, "url", remoteServer.URL, "visibility", remoteServer.ToolVisibility, "error", err)
+
+		if remoteServer.ToolVisibility == "ondemand" {
+			if err := server.RegisterRemoteServerOnDemand(client); err != nil {
+				logger.Warn("failed to connect to remote MCP server", "namespace", remoteServer.Namespace, "url", remoteServer.URL, "error", err)
+			} else {
+				logger.Info("connected to remote MCP server", "namespace", remoteServer.Namespace, "url", remoteServer.URL, "visibility", "ondemand")
+			}
 		} else {
-			logger.Info("connected to remote MCP server", "namespace", remoteServer.Namespace, "url", remoteServer.URL, "visibility", remoteServer.ToolVisibility)
+			if err := server.RegisterRemoteServer(client); err != nil {
+				logger.Warn("failed to connect to remote MCP server", "namespace", remoteServer.Namespace, "url", remoteServer.URL, "error", err)
+			} else {
+				logger.Info("connected to remote MCP server", "namespace", remoteServer.Namespace, "url", remoteServer.URL, "visibility", "native")
+			}
 		}
 	}
 
-	// Attach registry to server (this registers tool_search and execute_tool)
-	registry.Attach(server)
-
 	return mcpServer, nil
-}
-
-// parseToolVisibility converts string visibility to mcp.ToolVisibility
-func parseToolVisibility(visibility string) mcp.ToolVisibility {
-	switch strings.ToLower(visibility) {
-	case "hidden":
-		return mcp.ToolVisibilityHidden
-	case "ondemand":
-		return mcp.ToolVisibilityOnDemand
-	case "visible", "":
-		return mcp.ToolVisibilityVisible
-	default:
-		// Default to visible for unknown values
-		return mcp.ToolVisibilityVisible
-	}
 }
 
 // initializeScriptling sets up the Scriptling environment
 func (m *MCPServer) initializeScriptling() error {
 	m.scriptling = scriptling.New()
-
-	// Setup the Scriptling environment with AI and MCP libraries
 	setupScriptlingEnvironmentWithAI(m.scriptling, m.router, m)
-
-	// Setup on-demand library loading
 	m.setupOnDemandLibraryLoading(m.scriptling)
-
 	return nil
 }
 
-// registerTools registers all available tools
-func (m *MCPServer) registerTools() error {
-	// Register execute_code tool for running arbitrary scripts
+// registerBuiltinTools registers built-in tools like execute_code
+func (m *MCPServer) registerBuiltinTools() error {
 	m.server.RegisterTool(
 		mcp.NewTool("execute_code", "Execute arbitrary Python/Scriptling code. Use this to run custom scripts.",
 			mcp.String("code", "The Python/Scriptling code to execute", mcp.Required()),
@@ -430,24 +396,11 @@ func (m *MCPServer) registerTools() error {
 		},
 	)
 
-	// Add dynamic script tool provider
-	// This allows tools to be added/removed/edited without restarting the server
-	scriptProvider := NewScriptToolProvider(m)
-	m.registry.AddProvider(scriptProvider)
-	m.logger.Info("registered dynamic script tool provider", "tools_path", m.toolsPath)
-
+	m.logger.Info("registered execute_code tool")
 	return nil
 }
 
-// toolParameter defines a tool parameter from tool.toml
-type toolParameter struct {
-	Type        string `toml:"type"`
-	Description string `toml:"description"`
-	Required    bool   `toml:"required"`
-}
-
 // executeScriptToolFromPath reads the script from disk and executes it
-// This allows scripts to be edited without restarting the server
 func (m *MCPServer) executeScriptToolFromPath(scriptPath string, req *mcp.ToolRequest) (*mcp.ToolResponse, error) {
 	content, err := os.ReadFile(scriptPath)
 	if err != nil {
@@ -458,41 +411,27 @@ func (m *MCPServer) executeScriptToolFromPath(scriptPath string, req *mcp.ToolRe
 
 // executeScriptTool executes a tool script with arguments
 func (m *MCPServer) executeScriptTool(scriptContent string, req *mcp.ToolRequest) (*mcp.ToolResponse, error) {
-	// Create a fresh environment for this execution
 	env := scriptling.New()
-
-	// Create MCP library instance to track results
 	mcpLib := NewMCPLibrary(m)
-
-	// Setup the Scriptling environment with AI and MCP libraries
 	setupScriptlingEnvironmentWithAIAndResult(env, m.router, m, mcpLib)
-
-	// Copy on-demand library callback to this environment
-	// Note: SetOnDemandLibraryCallback is on the Scriptling instance, not environment
 	m.setupOnDemandLibraryLoading(env)
 
-	// For now, we'll pass arguments in a simpler way
-	// by prepending them to the script content
 	args := make(map[string]interface{})
 	for key, value := range req.Args() {
 		args[key] = value
 	}
 
-	// Set the arguments on the MCP library
 	mcpLib.SetArgs(args)
 
-	// Set arguments as variables in the Scriptling environment
 	for k, v := range args {
 		if setErr := env.SetVar(k, scriptling.FromGo(v)); setErr != nil {
 			log.Error("failed to set variable in scriptling environment", "key", k, "error", setErr)
 		}
 	}
 
-	// Execute the script
 	result, err := env.Eval(scriptContent)
 	output := env.GetOutput()
 
-	// Check if MCP library set a result
 	if mcpResult := mcpLib.GetResult(); mcpResult != nil {
 		return mcp.NewToolResponseText(*mcpResult), nil
 	}
@@ -513,7 +452,35 @@ func (m *MCPServer) executeScriptTool(scriptContent string, req *mcp.ToolRequest
 	return mcp.NewToolResponseText(response.String()), nil
 }
 
-// HandleRequest handles HTTP requests to the MCP server
+// HandleRequest handles HTTP requests to the MCP server in native mode.
+// Native-visibility tools from providers appear in tools/list.
+// OnDemand-visibility tools are searchable via tool_search but not listed.
 func (m *MCPServer) HandleRequest(w http.ResponseWriter, r *http.Request) {
-	m.server.HandleRequest(w, r)
+	nativeProvider := NewNativeScriptToolProvider(m)
+	onDemandProvider := NewOnDemandScriptToolProvider(m)
+
+	// Start with native providers
+	ctx := mcp.WithToolProviders(r.Context(), nativeProvider)
+
+	// Add ondemand provider if there are any ondemand tools
+	onDemandTools, _ := onDemandProvider.GetTools(r.Context())
+	if len(onDemandTools) > 0 {
+		ctx = mcp.WithOnDemandToolProviders(ctx, onDemandProvider)
+	}
+
+	m.server.HandleRequest(w, r.WithContext(ctx))
+}
+
+// HandleDiscoveryRequest handles HTTP requests to the MCP server in discovery mode.
+// Only tool_search and execute_tool are visible in tools/list.
+// All tools (native and ondemand) are searchable via tool_search.
+func (m *MCPServer) HandleDiscoveryRequest(w http.ResponseWriter, r *http.Request) {
+	nativeProvider := NewNativeScriptToolProvider(m)
+	onDemandProvider := NewOnDemandScriptToolProvider(m)
+
+	// In force ondemand mode, all tools are searchable (native + ondemand)
+	// We pass both providers as regular providers since ForceOnDemandMode
+	// makes all provider tools searchable anyway
+	ctx := mcp.WithForceOnDemandMode(r.Context(), nativeProvider, onDemandProvider)
+	m.server.HandleRequest(w, r.WithContext(ctx))
 }

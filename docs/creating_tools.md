@@ -20,6 +20,7 @@ example-tools/
 ```
 
 Each tool requires:
+
 1. A **directory** named after your tool
 2. A **tool.toml** configuration file defining the tool's metadata and parameters
 3. A **script file** (Python/Scriptling) that implements the tool logic
@@ -33,6 +34,7 @@ name = "my_custom_tool"
 description = "A clear description of what this tool does"
 keywords = ["keyword1", "keyword2", "keyword3"]
 script = "script.py"
+visibility = "ondemand"  # Optional: "native" (default) or "ondemand"
 
 [parameters.name]
 type = "string"
@@ -52,30 +54,53 @@ required = false
 
 ### Configuration Fields
 
-| Field | Description | Required |
-|-------|-------------|----------|
-| `name` | Tool identifier (used in API calls). Defaults to directory name if not specified. | No |
-| `description` | Human-readable description shown in tool discovery. | Yes |
-| `keywords` | Array of keywords for tool search/discovery. | No |
-| `script` | Filename of the script to execute (relative to tool directory). | Yes |
-| `parameters` | Map of parameter definitions. | No |
+| Field         | Description                                                                                                       | Required | Default    |
+| ------------- | ----------------------------------------------------------------------------------------------------------------- | -------- | ---------- |
+| `name`        | Tool identifier (used in API calls). Defaults to directory name if not specified.                                 | No       | -          |
+| `description` | Human-readable description shown in tool discovery.                                                               | Yes      | -          |
+| `keywords`    | Array of keywords for tool search/discovery.                                                                      | No       | -          |
+| `script`      | Filename of the script to execute (relative to tool directory).                                                   | Yes      | -          |
+| `visibility`  | Tool visibility mode: `"native"` (appears in tools/list) or `"ondemand"` (hidden but searchable via tool_search). | No       | `"native"` |
+| `parameters`  | Map of parameter definitions.                                                                                     | No       | -          |
 
 ### Parameter Types
 
-| Type | Description | Python Type |
-|------|-------------|-------------|
-| `string` | Text values | `str` |
-| `number` | Numeric values (integers or floats) | `float` |
-| `boolean` | True/false values | `bool` |
-| `array` | List of values | `list` |
+| Type      | Description                         | Python Type |
+| --------- | ----------------------------------- | ----------- |
+| `string`  | Text values                         | `str`       |
+| `number`  | Numeric values (integers or floats) | `float`     |
+| `boolean` | True/false values                   | `bool`      |
 
 ### Parameter Properties
 
-| Property | Description | Default |
-|----------|-------------|---------|
-| `type` | Parameter type (string, number, boolean, array) | Required |
-| `description` | Human-readable description | Required |
-| `required` | Whether the parameter must be provided | `false` |
+| Property      | Description                              | Default  |
+| ------------- | ---------------------------------------- | -------- |
+| `type`        | Parameter type (string, number, boolean) | Required |
+| `description` | Human-readable description               | Required |
+| `required`    | Whether the parameter must be provided   | `false`  |
+
+### Tool Visibility
+
+The `visibility` field controls how your tool is exposed to MCP clients:
+
+| Visibility           | Description                                                                                                                                              |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `"native"` (default) | Tool appears in `tools/list` and can be called directly. Suitable for commonly used tools.                                                               |
+| `"ondemand"`         | Tool is hidden from `tools/list` but can be discovered via `tool_search` and executed via `execute_tool`. Suitable for specialized or rarely used tools. |
+
+**When to use each visibility:**
+
+- **Native (`"native"`)**: Use for tools that are:
+  - Frequently used
+  - Part of core functionality
+  - Expected to be visible in tool listings
+
+- **OnDemand (`"ondemand"`)**: Use for tools that are:
+  - Specialized or experimental
+  - Used infrequently
+  - Part of a large toolset where showing all tools would be overwhelming
+
+**Note:** The LLM Router provides two MCP endpoints: `/mcp` (native mode) and `/mcp/discovery` (force ondemand mode). In force ondemand mode, ALL tools (regardless of their individual visibility setting) will be hidden from `tools/list` but remain searchable.
 
 ## Tool Script
 
@@ -158,35 +183,122 @@ main()
 
 ## Dynamic Loading
 
-All aspects of scripted tools are now **fully dynamic**:
+The LLM Router supports dynamic tool loading through the MCP library's ToolProvider pattern:
 
-### Script Changes
-Tool scripts are loaded from disk on each execution:
-- ✅ Edit scripts and changes take effect immediately
+### How It Works
+
+The LLM Router uses the ToolProvider pattern for dynamic tool discovery:
+
+1. **Native Tools** (`visibility = "native"` or not set)
+   - Dynamically loaded from disk on **each request**
+   - Appear in `tools/list` and can be called directly
+   - NOT searchable via `tool_search` (in normal mode)
+   - Changes (add/edit/remove) take effect immediately without server restart
+
+2. **Ondemand Tools** (`visibility = "ondemand"`)
+   - Registered globally at **server initialization**
+   - Only discoverable via `tool_search`, not visible in `tools/list`
+   - Changes require server restart to take effect
+
+This hybrid approach provides the best of both worlds: commonly used native tools can be modified dynamically, while specialized ondemand tools are kept out of the tool list to avoid overwhelming the LLM.
+
+### Tool Visibility Modes
+
+The LLM Router provides two MCP endpoints with different visibility behaviors:
+
+**Native endpoint** (`/mcp`):
+
+- Native tools appear in `tools/list` and can be called directly
+- Native tools are NOT searchable via `tool_search`
+- Ondemand tools are hidden from `tools/list` but discoverable via `tool_search`
+- Both tool types are fully functional
+
+**Force ondemand endpoint** (`/mcp/discovery`):
+
+- All tools (native and ondemand) are hidden from `tools/list`
+- All tools are only discoverable via `tool_search`
+- Useful for AI clients that work better with fewer initial tools
+
+### Dynamic Changes
+
+#### Native Tool Changes (Fully Dynamic)
+
+- ✅ Edit native tool scripts and changes take effect immediately
+- ✅ Add new native tools - immediately discoverable
+- ✅ Delete native tools - immediately removed
+- ✅ Modify native tool definitions - changes picked up on next request
 - ✅ No server restart required
 
-### New Tools
-New tools are discovered automatically:
-- ✅ Create a new tool directory with `tool.toml` and script
-- ✅ The tool is immediately discoverable via `tool_search`
-- ✅ No server restart required
+#### Ondemand Tool Changes (Require Restart)
 
-### Removed Tools
-Removed tools are no longer available:
-- ✅ Delete a tool directory
-- ✅ The tool is immediately removed from discovery
-- ✅ No server restart required
+- ⚠️ Edit ondemand tool scripts - requires server restart
+- ⚠️ Add new ondemand tools - requires server restart
+- ⚠️ Delete ondemand tools - requires server restart
+- ⚠️ Modify ondemand tool definitions - requires server restart
 
-### Edited Tool Definitions
-Changes to `tool.toml` files take effect immediately:
-- ✅ Modify tool name, description, parameters, or keywords
-- ✅ Changes are picked up on the next `tool_search` or `execute_tool` call
-- ✅ No server restart required
+#### Library Changes
 
-### Library Changes
 Custom libraries are loaded on-demand:
+
 - ✅ Edit library files and changes take effect on next import
 - ✅ No server restart required
+
+### Technical Details
+
+The hybrid approach is implemented in `mcp_server.go`:
+
+```go
+// HandleRequest handles HTTP requests to the MCP server in native mode.
+// Native-visibility tools from providers appear in tools/list.
+// OnDemand-visibility tools are searchable via tool_search but not listed.
+func (m *MCPServer) HandleRequest(w http.ResponseWriter, r *http.Request) {
+	nativeProvider := NewNativeScriptToolProvider(m)
+	onDemandProvider := NewOnDemandScriptToolProvider(m)
+
+	// Start with native providers
+	ctx := mcp.WithToolProviders(r.Context(), nativeProvider)
+
+	// Add ondemand provider if there are any ondemand tools
+	onDemandTools, _ := onDemandProvider.GetTools(r.Context())
+	if len(onDemandTools) > 0 {
+		ctx = mcp.WithOnDemandToolProviders(ctx, onDemandProvider)
+	}
+
+	m.server.HandleRequest(w, r.WithContext(ctx))
+}
+
+// HandleDiscoveryRequest handles HTTP requests to the MCP server in discovery mode.
+// Only tool_search and execute_tool are visible in tools/list.
+// All tools (native and ondemand) are searchable via tool_search.
+func (m *MCPServer) HandleDiscoveryRequest(w http.ResponseWriter, r *http.Request) {
+	nativeProvider := NewNativeScriptToolProvider(m)
+	onDemandProvider := NewOnDemandScriptToolProvider(m)
+
+	// In force ondemand mode, all tools are searchable (native + ondemand)
+	// We pass both providers as regular providers since ForceOnDemandMode
+	// makes all provider tools searchable anyway
+	ctx := mcp.WithForceOnDemandMode(r.Context(), nativeProvider, onDemandProvider)
+	m.server.HandleRequest(w, r.WithContext(ctx))
+}
+```
+
+Key insight: The MCP library's ToolProvider pattern ensures that provider tools are NOT searched by `tool_search` in normal mode (they only appear in `tools/list`). Only tools registered with `RegisterOnDemandTool()` are searchable via `tool_search`.
+
+### When to Use Each Visibility
+
+**Native (`"native"` or not set)** - Use for tools that are:
+
+- Frequently used
+- Part of core functionality
+- Expected to be modified frequently
+- Needed to be changeable without server restart
+
+**OnDemand (`"ondemand"`)** - Use for tools that are:
+
+- Specialized or experimental
+- Used infrequently
+- Part of a large toolset where showing all tools would be overwhelming
+- Stable and don't need frequent changes
 
 ## Best Practices
 
@@ -351,6 +463,8 @@ curl -X POST http://localhost:12345/mcp \
   }'
 ```
 
+For force ondemand mode, use `/mcp/discovery` instead of `/mcp`.
+
 ### Via CLI
 
 ```bash
@@ -374,6 +488,8 @@ curl -X POST http://localhost:12345/mcp \
     }
   }'
 ```
+
+For force ondemand mode, use `/mcp/discovery` instead of `/mcp`.
 
 ## Related Documentation
 

@@ -1,6 +1,8 @@
 module github.com/paularlott/llmrouter
 
-go 1.25.5
+go 1.25.6
+
+replace github.com/paularlott/mcp => ../mcp/
 
 require (
 	github.com/BurntSushi/toml v1.6.0
@@ -8,7 +10,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/paularlott/cli v0.7.2
 	github.com/paularlott/logger v0.3.0
-	github.com/paularlott/mcp v0.8.0
+	github.com/paularlott/mcp v0.9.0
 	github.com/paularlott/scriptling v0.0.0-20260115081247-b64c0a285865
 )
 
@@ -21,7 +23,7 @@ require (
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-ole/go-ole v1.3.0 // indirect
 	github.com/google/flatbuffers v25.12.19+incompatible // indirect
-	github.com/klauspost/compress v1.18.2 // indirect
+	github.com/klauspost/compress v1.18.3 // indirect
 	github.com/lufia/plan9stats v0.0.0-20251013123823-9fd1530e3ec3 // indirect
 	github.com/power-devops/perfstat v0.0.0-20240221224432-82ca36839d55 // indirect
 	github.com/shirou/gopsutil/v3 v3.24.5 // indirect

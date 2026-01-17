@@ -112,10 +112,11 @@ func NewRouter(config *Config, logger Logger) (*Router, error) {
 		logger.Info("conversations endpoints available")
 	}
 
-	// Add MCP endpoint if server is available
+	// Add MCP endpoints if server is available
 	if router.mcpServer != nil {
 		router.mux.HandleFunc("/mcp", auth(router.HandleMCP))
-		logger.Info("MCP server endpoint available at /mcp")
+		router.mux.HandleFunc("/mcp/discovery", auth(router.HandleMCPDiscovery))
+		logger.Info("MCP server endpoints available at /mcp and /mcp/discovery")
 	}
 
 	// Add catch-all handler for unmatched routes (must be last)
@@ -784,7 +785,7 @@ func writeJSON(w http.ResponseWriter, v interface{}) error {
 	return json.NewEncoder(w).Encode(v)
 }
 
-// HandleMCP handles MCP protocol requests
+// HandleMCP handles MCP protocol requests in native mode
 func (r *Router) HandleMCP(w http.ResponseWriter, req *http.Request) {
 	if r.mcpServer == nil {
 		http.Error(w, "MCP server not available", http.StatusServiceUnavailable)
@@ -792,6 +793,16 @@ func (r *Router) HandleMCP(w http.ResponseWriter, req *http.Request) {
 	}
 
 	r.mcpServer.HandleRequest(w, req)
+}
+
+// HandleMCPDiscovery handles MCP protocol requests in discovery mode
+func (r *Router) HandleMCPDiscovery(w http.ResponseWriter, req *http.Request) {
+	if r.mcpServer == nil {
+		http.Error(w, "MCP server not available", http.StatusServiceUnavailable)
+		return
+	}
+
+	r.mcpServer.HandleDiscoveryRequest(w, req)
 }
 
 // StartBackgroundTasks starts the background health check task
