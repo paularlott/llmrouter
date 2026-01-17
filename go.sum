@@ -40,6 +40,8 @@ github.com/paularlott/logger v0.3.0 h1:QwVUoxmlEFkfHI25y5dn56OJvK4Bpe3OvoJu4GZM7
 github.com/paularlott/logger v0.3.0/go.mod h1:vjAOY1vUvYigmJxxQ0eMclryIjDS6VWNK6FprtTMce0=
 github.com/paularlott/mcp v0.8.0 h1:fti7hRy/ORazSQtfgxNQia9+Rr58NA2oLJmKkBIW9ZU=
 github.com/paularlott/mcp v0.8.0/go.mod h1:2pBfw9nawHDg2AA30lvcvjjEVYyG+mc9lxl+VYrpBrc=
+github.com/paularlott/mcp v0.9.0 h1:y+0TMBjuYkyTboVlXIvGUb0AergqjbSCGlq5n1IcBkg=
+github.com/paularlott/mcp v0.9.0/go.mod h1:fcgH3hHb9viTNB4kRYETRpaCwwXIvIxZbuXPdAj1vbA=
 github.com/paularlott/scriptling v0.0.0-20260115081247-b64c0a285865 h1:/mRK+AIoE50W93fZLQOhc7ewFIeFuB5cEaFoNiuLpDI=
 github.com/paularlott/scriptling v0.0.0-20260115081247-b64c0a285865/go.mod h1:WNhF2Kmsp2EVE28IIhg2Wq97c7Jg2AU4y+lBCyCVPoU=
 github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=

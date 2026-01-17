@@ -2,8 +2,6 @@ module github.com/paularlott/llmrouter
 
 go 1.25.6
 
-replace github.com/paularlott/mcp => ../mcp/
-
 require (
 	github.com/BurntSushi/toml v1.6.0
 	github.com/dgraph-io/badger/v4 v4.9.0
