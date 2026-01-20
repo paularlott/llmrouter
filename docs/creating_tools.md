@@ -100,7 +100,7 @@ The `visibility` field controls how your tool is exposed to MCP clients:
   - Used infrequently
   - Part of a large toolset where showing all tools would be overwhelming
 
-**Note:** The LLM Router provides two MCP endpoints: `/mcp` (native mode) and `/mcp/discovery` (force ondemand mode). In force ondemand mode, ALL tools (regardless of their individual visibility setting) will be hidden from `tools/list` but remain searchable.
+**Note:** The unified `/mcp` endpoint supports two modes. Use the `X-MCP-Tool-Mode: discovery` header or `?tool_mode=discovery` query param to enable discovery mode. In discovery mode, ALL tools (regardless of their individual visibility setting) will be hidden from `tools/list` but remain searchable.
 
 ## Tool Script
 
@@ -204,16 +204,16 @@ This hybrid approach provides the best of both worlds: commonly used native tool
 
 ### Tool Visibility Modes
 
-The LLM Router provides two MCP endpoints with different visibility behaviors:
+The unified `/mcp` endpoint supports two modes via the `X-MCP-Tool-Mode` header or `tool_mode` query param:
 
-**Native endpoint** (`/mcp`):
+**Normal mode** (default):
 
 - Native tools appear in `tools/list` and can be called directly
 - Native tools are NOT searchable via `tool_search`
 - Ondemand tools are hidden from `tools/list` but discoverable via `tool_search`
 - Both tool types are fully functional
 
-**Force ondemand endpoint** (`/mcp/discovery`):
+**Discovery mode** (`X-MCP-Tool-Mode: discovery` or `?tool_mode=discovery`):
 
 - All tools (native and ondemand) are hidden from `tools/list`
 - All tools are only discoverable via `tool_search`
@@ -266,21 +266,9 @@ func (m *MCPServer) HandleRequest(w http.ResponseWriter, r *http.Request) {
 
 	m.server.HandleRequest(w, r.WithContext(ctx))
 }
-
-// HandleDiscoveryRequest handles HTTP requests to the MCP server in discovery mode.
-// Only tool_search and execute_tool are visible in tools/list.
-// All tools (native and ondemand) are searchable via tool_search.
-func (m *MCPServer) HandleDiscoveryRequest(w http.ResponseWriter, r *http.Request) {
-	nativeProvider := NewNativeScriptToolProvider(m)
-	onDemandProvider := NewOnDemandScriptToolProvider(m)
-
-	// In force ondemand mode, all tools are searchable (native + ondemand)
-	// We pass both providers as regular providers since ForceOnDemandMode
-	// makes all provider tools searchable anyway
-	ctx := mcp.WithForceOnDemandMode(r.Context(), nativeProvider, onDemandProvider)
-	m.server.HandleRequest(w, r.WithContext(ctx))
-}
 ```
+
+To enable discovery mode, clients can use the `X-MCP-Tool-Mode: discovery` header or `?tool_mode=discovery` query parameter. This is handled automatically by the MCP library.
 
 Key insight: The MCP library's ToolProvider pattern ensures that provider tools are NOT searched by `tool_search` in normal mode (they only appear in `tools/list`). Only tools registered with `RegisterOnDemandTool()` are searchable via `tool_search`.
 
@@ -463,7 +451,7 @@ curl -X POST http://localhost:12345/mcp \
   }'
 ```
 
-For force ondemand mode, use `/mcp/discovery` instead of `/mcp`.
+For discovery mode, add the `X-MCP-Tool-Mode: discovery` header or use `?tool_mode=discovery` query param.
 
 ### Via CLI
 
@@ -489,7 +477,7 @@ curl -X POST http://localhost:12345/mcp \
   }'
 ```
 
-For force ondemand mode, use `/mcp/discovery` instead of `/mcp`.
+For discovery mode, add the `X-MCP-Tool-Mode: discovery` header or use `?tool_mode=discovery` query param.
 
 ## Related Documentation
 

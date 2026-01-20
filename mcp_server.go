@@ -452,14 +452,16 @@ func (m *MCPServer) executeScriptTool(scriptContent string, req *mcp.ToolRequest
 	return mcp.NewToolResponseText(response.String()), nil
 }
 
-// HandleRequest handles HTTP requests to the MCP server in native mode.
-// Native-visibility tools from providers appear in tools/list.
-// OnDemand-visibility tools are searchable via tool_search but not listed.
+// HandleRequest handles HTTP requests to the MCP server.
+// The tool mode is determined from the X-MCP-Tool-Mode header or tool_mode query parameter.
+// With session management enabled, the mode is stored in the session during initialize.
+// Native-visibility tools from providers appear in tools/list in normal mode.
+// In discovery mode (X-MCP-Tool-Mode: discovery), only tool_search and execute_tool are visible.
 func (m *MCPServer) HandleRequest(w http.ResponseWriter, r *http.Request) {
 	nativeProvider := NewNativeScriptToolProvider(m)
 	onDemandProvider := NewOnDemandScriptToolProvider(m)
 
-	// Start with native providers
+	// Start with providers attached - the MCP server handles mode from headers/session
 	ctx := mcp.WithToolProviders(r.Context(), nativeProvider)
 
 	// Add ondemand provider if there are any ondemand tools
@@ -468,19 +470,5 @@ func (m *MCPServer) HandleRequest(w http.ResponseWriter, r *http.Request) {
 		ctx = mcp.WithOnDemandToolProviders(ctx, onDemandProvider)
 	}
 
-	m.server.HandleRequest(w, r.WithContext(ctx))
-}
-
-// HandleDiscoveryRequest handles HTTP requests to the MCP server in discovery mode.
-// Only tool_search and execute_tool are visible in tools/list.
-// All tools (native and ondemand) are searchable via tool_search.
-func (m *MCPServer) HandleDiscoveryRequest(w http.ResponseWriter, r *http.Request) {
-	nativeProvider := NewNativeScriptToolProvider(m)
-	onDemandProvider := NewOnDemandScriptToolProvider(m)
-
-	// In force ondemand mode, all tools are searchable (native + ondemand)
-	// We pass both providers as regular providers since ForceOnDemandMode
-	// makes all provider tools searchable anyway
-	ctx := mcp.WithForceOnDemandMode(r.Context(), nativeProvider, onDemandProvider)
 	m.server.HandleRequest(w, r.WithContext(ctx))
 }

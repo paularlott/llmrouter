@@ -9,6 +9,42 @@ import (
 	"testing"
 )
 
+// initializeSession initializes an MCP session and returns the session ID
+// toolMode can be "normal" or "discovery" (empty defaults to normal)
+func initializeSession(t *testing.T, mcpServer *MCPServer, toolMode string) string {
+	initBody := map[string]interface{}{
+		"jsonrpc": "2.0",
+		"id":      0,
+		"method":  "initialize",
+		"params": map[string]interface{}{
+			"protocolVersion": "2025-03-26",
+			"capabilities":    map[string]interface{}{},
+			"clientInfo": map[string]interface{}{
+				"name":    "test-client",
+				"version": "1.0.0",
+			},
+		},
+	}
+	body, _ := json.Marshal(initBody)
+
+	req := httptest.NewRequest("POST", "/mcp", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	if toolMode != "" {
+		req.Header.Set("X-MCP-Tool-Mode", toolMode)
+	}
+	w := httptest.NewRecorder()
+
+	mcpServer.HandleRequest(w, req)
+
+	sessionID := w.Header().Get("MCP-Session-Id")
+	if sessionID == "" {
+		t.Logf("Initialize response: %s", w.Body.String())
+		t.Fatal("Failed to get session ID from initialize response")
+	}
+
+	return sessionID
+}
+
 // TestMCPServerIntegration tests the full MCP server with native mode
 func TestMCPServerIntegration(t *testing.T) {
 	tempDir := t.TempDir()
@@ -50,6 +86,9 @@ script = "script.py"
 		t.Fatalf("Failed to create MCP server: %v", err)
 	}
 
+	// Initialize a session first
+	sessionID := initializeSession(t, mcpServer, "")
+
 	// Test tools/list in native mode
 	reqBody := map[string]interface{}{
 		"jsonrpc": "2.0",
@@ -60,6 +99,8 @@ script = "script.py"
 
 	req := httptest.NewRequest("POST", "/mcp", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("MCP-Session-Id", sessionID)
+	req.Header.Set("MCP-Protocol-Version", "2025-03-26")
 	w := httptest.NewRecorder()
 
 	mcpServer.HandleRequest(w, req)
@@ -152,6 +193,9 @@ script = "script.py"
 		t.Fatalf("Failed to create MCP server: %v", err)
 	}
 
+	// Initialize a session first
+	sessionID := initializeSession(t, mcpServer, "")
+
 	// Test tools/list in native mode
 	reqBody := map[string]interface{}{
 		"jsonrpc": "2.0",
@@ -162,6 +206,8 @@ script = "script.py"
 
 	req := httptest.NewRequest("POST", "/mcp", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("MCP-Session-Id", sessionID)
+	req.Header.Set("MCP-Protocol-Version", "2025-03-26")
 	w := httptest.NewRecorder()
 
 	mcpServer.HandleRequest(w, req)
@@ -261,7 +307,7 @@ script = "script.py"
 	}
 }
 
-// TestMCPServerDiscoveryMode tests the /mcp/discovery endpoint
+// TestMCPServerDiscoveryMode tests discovery mode via X-MCP-Tool-Mode header
 func TestMCPServerDiscoveryMode(t *testing.T) {
 	tempDir := t.TempDir()
 
@@ -304,7 +350,10 @@ visibility = "ondemand"
 		t.Fatalf("Failed to create MCP server: %v", err)
 	}
 
-	// Test tools/list in discovery mode
+	// Initialize a session with discovery mode
+	sessionID := initializeSession(t, mcpServer, "discovery")
+
+	// Test tools/list with discovery mode via header
 	reqBody := map[string]interface{}{
 		"jsonrpc": "2.0",
 		"id":      1,
@@ -312,11 +361,13 @@ visibility = "ondemand"
 	}
 	body, _ := json.Marshal(reqBody)
 
-	req := httptest.NewRequest("POST", "/mcp/discovery", bytes.NewReader(body))
+	req := httptest.NewRequest("POST", "/mcp", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("MCP-Session-Id", sessionID)
+	req.Header.Set("MCP-Protocol-Version", "2025-03-26")
 	w := httptest.NewRecorder()
 
-	mcpServer.HandleDiscoveryRequest(w, req)
+	mcpServer.HandleRequest(w, req)
 
 	var response struct {
 		Result struct {
@@ -357,7 +408,7 @@ visibility = "ondemand"
 		t.Errorf("Expected exactly 2 tools in discovery mode, got %d", len(toolNames))
 	}
 
-	// Test that tools are searchable via tool_search
+	// Test that tools are searchable via tool_search (with discovery mode header)
 	searchBody := map[string]interface{}{
 		"jsonrpc": "2.0",
 		"id":      2,
@@ -371,11 +422,13 @@ visibility = "ondemand"
 	}
 	body, _ = json.Marshal(searchBody)
 
-	req = httptest.NewRequest("POST", "/mcp/discovery", bytes.NewReader(body))
+	req = httptest.NewRequest("POST", "/mcp", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("MCP-Protocol-Version", "2025-03-26")
+	req.Header.Set("X-MCP-Tool-Mode", "discovery") // Use header for discovery mode
 	w = httptest.NewRecorder()
 
-	mcpServer.HandleDiscoveryRequest(w, req)
+	mcpServer.HandleRequest(w, req)
 
 	var searchResponse struct {
 		Result struct {
@@ -451,6 +504,9 @@ visibility = "native"
 		t.Fatalf("Failed to create MCP server: %v", err)
 	}
 
+	// Initialize a session first
+	sessionID := initializeSession(t, mcpServer, "")
+
 	// Test tools/list - should NOT show discovery tools
 	reqBody := map[string]interface{}{
 		"jsonrpc": "2.0",
@@ -461,6 +517,8 @@ visibility = "native"
 
 	req := httptest.NewRequest("POST", "/mcp", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("MCP-Session-Id", sessionID)
+	req.Header.Set("MCP-Protocol-Version", "2025-03-26")
 	w := httptest.NewRecorder()
 
 	mcpServer.HandleRequest(w, req)

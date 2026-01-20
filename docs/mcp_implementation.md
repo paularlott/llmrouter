@@ -7,7 +7,7 @@ The llmrouter MCP server provides fully dynamic tool loading with per-tool visib
 1. **Built-in tools** (`execute_code`) - registered globally as native
 2. **Script tools** - loaded dynamically per-request via provider, with per-tool visibility
 3. **Remote MCP servers** - with configurable visibility (native or ondemand)
-4. **Two endpoints** - `/mcp` for native mode, `/mcp/discovery` for force ondemand mode
+4. **Single endpoint with mode selection** - `/mcp` with header or query param for mode
 
 ## Architecture
 
@@ -21,16 +21,18 @@ The llmrouter MCP server provides fully dynamic tool loading with per-tool visib
 - Per-tool visibility can be changed between requests
 - No global registration required
 
-### Two Endpoints
+### Tool Mode Selection
 
-**`/mcp`** (Native mode):
+The `/mcp` endpoint supports two modes, controlled via the `X-MCP-Tool-Mode` header or `tool_mode` query parameter:
+
+**Normal mode** (default):
 
 - Native-visibility tools appear in `tools/list`
 - OnDemand-visibility tools are hidden but searchable via `tool_search`
 - If any ondemand tools exist, `tool_search` and `execute_tool` are available
 - All tools are directly callable by name
 
-**`/mcp/discovery`** (Force OnDemand mode):
+**Discovery mode** (`X-MCP-Tool-Mode: discovery` or `?tool_mode=discovery`):
 
 - Only `tool_search` and `execute_tool` appear in `tools/list`
 - ALL tools (native and ondemand) are searchable via `tool_search`
@@ -108,7 +110,7 @@ func (m *MCPServer) HandleRequest(w http.ResponseWriter, r *http.Request) {
     nativeProvider := NewNativeScriptToolProvider(m)
     onDemandProvider := NewOnDemandScriptToolProvider(m)
 
-    // Native provider tools appear in tools/list
+    // Native provider tools appear in tools/list (unless discovery mode header is set)
     ctx := mcp.WithToolProviders(r.Context(), nativeProvider)
 
     // OnDemand provider tools are searchable but hidden
@@ -117,16 +119,7 @@ func (m *MCPServer) HandleRequest(w http.ResponseWriter, r *http.Request) {
         ctx = mcp.WithOnDemandToolProviders(ctx, onDemandProvider)
     }
 
-    m.server.HandleRequest(w, r.WithContext(ctx))
-}
-
-// /mcp/discovery endpoint - force ondemand mode
-func (m *MCPServer) HandleDiscoveryRequest(w http.ResponseWriter, r *http.Request) {
-    nativeProvider := NewNativeScriptToolProvider(m)
-    onDemandProvider := NewOnDemandScriptToolProvider(m)
-
-    // All tools searchable, none in tools/list
-    ctx := mcp.WithForceOnDemandMode(r.Context(), nativeProvider, onDemandProvider)
+    // MCP server handles mode from X-MCP-Tool-Mode header or tool_mode query param
     m.server.HandleRequest(w, r.WithContext(ctx))
 }
 ```
@@ -160,7 +153,7 @@ All script tool changes are picked up immediately:
 
 ## Tool Discovery
 
-### On `/mcp` endpoint (native mode):
+### Normal mode (default):
 
 - Native tools appear in `tools/list`
 - OnDemand tools are hidden from `tools/list`
@@ -168,7 +161,7 @@ All script tool changes are picked up immediately:
 - Both native and ondemand tools are searchable via `tool_search`
 - All tools are directly callable by name
 
-### On `/mcp/discovery` endpoint (force ondemand mode):
+### Discovery mode (`X-MCP-Tool-Mode: discovery` or `?tool_mode=discovery`):
 
 - Only `tool_search` and `execute_tool` appear in `tools/list`
 - ALL tools (native, ondemand, builtin, remote) are searchable via `tool_search`
@@ -259,7 +252,7 @@ required = true
 **Tool not appearing in tools/list:**
 
 - Check `visibility` setting in `tool.toml` (must be "native" or omitted)
-- Verify using `/mcp` endpoint, not `/mcp/discovery`
+- Verify not using discovery mode (no `X-MCP-Tool-Mode: discovery` header)
 - Ensure `tool.toml` has required fields (name, description, script)
 
 **Tool not found via tool_search:**
@@ -270,9 +263,9 @@ required = true
 
 **tool_search not available:**
 
-- Only available when there are ondemand tools OR using `/mcp/discovery` endpoint
+- Only available when there are ondemand tools OR using discovery mode
 - Register at least one tool with `visibility = "ondemand"`
-- Or use the `/mcp/discovery` endpoint
+- Or use `X-MCP-Tool-Mode: discovery` header or `?tool_mode=discovery` query param
 
 **Changes not picked up:**
 
@@ -287,7 +280,7 @@ The implementation provides:
 
 - ✅ Fully dynamic script tools (no restart needed)
 - ✅ Per-tool visibility control (native vs ondemand)
-- ✅ Two endpoints: `/mcp` (native mode) and `/mcp/discovery` (force ondemand)
+- ✅ Single endpoint with mode selection via header or query param
 - ✅ Per-request tool loading with visibility filtering
 - ✅ Support for remote MCP servers with visibility control
 - ✅ Automatic tool discovery with keywords
