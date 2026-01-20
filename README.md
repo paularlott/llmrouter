@@ -267,19 +267,26 @@ curl -X POST http://localhost:12345/mcp \
   }'
 ```
 
-### POST /mcp/discovery
+#### Discovery Mode
 
-Model Context Protocol endpoint in force ondemand mode. All tools are hidden from `tools/list` but remain searchable via `tool_search`. Useful for AI clients that work better with fewer initial tools.
+Use the `X-MCP-Tool-Mode: discovery` header or `?tool_mode=discovery` query parameter to enable discovery mode. In this mode, all tools are hidden from `tools/list` but remain searchable via `tool_search`. Useful for AI clients that work better with fewer initial tools.
 
 ```bash
-# Only tool_search and execute_tool are visible in tools/list
-curl -X POST http://localhost:12345/mcp/discovery \
+# Only tool_search and execute_tool are visible in tools/list (using header)
+curl -X POST http://localhost:12345/mcp \
+  -H "Content-Type: application/json" \
+  -H "X-MCP-Tool-Mode: discovery" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
+
+# Or using query parameter
+curl -X POST "http://localhost:12345/mcp?tool_mode=discovery" \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
 
-# All tools are searchable
-curl -X POST http://localhost:12345/mcp/discovery \
+# All tools are searchable via tool_search
+curl -X POST http://localhost:12345/mcp \
   -H "Content-Type: application/json" \
+  -H "X-MCP-Tool-Mode: discovery" \
   -d '{
     "jsonrpc":"2.0","id":1,"method":"tools/call",
     "params":{"name":"tool_search","arguments":{"query":"calculator"}}
