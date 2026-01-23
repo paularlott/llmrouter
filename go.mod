@@ -8,13 +8,13 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/paularlott/cli v0.7.2
 	github.com/paularlott/logger v0.3.0
-	github.com/paularlott/mcp v0.9.0
-	github.com/paularlott/scriptling v0.0.0-20260115081247-b64c0a285865
+	github.com/paularlott/mcp v0.9.6
+	github.com/paularlott/scriptling v0.0.0-20260123003759-47f14cfa9918
 )
 
 require (
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
-	github.com/dgraph-io/ristretto/v2 v2.3.0 // indirect
+	github.com/dgraph-io/ristretto/v2 v2.4.0 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
@@ -39,5 +39,3 @@ require (
 	golang.org/x/text v0.33.0 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
 )
-
-replace github.com/paularlott/mcp => ../mcp
