@@ -196,11 +196,11 @@ The LLM Router uses the ToolProvider pattern for dynamic tool discovery:
    - Changes (add/edit/remove) take effect immediately without server restart
 
 2. **Ondemand Tools** (`visibility = "ondemand"`)
-   - Registered globally at **server initialization**
+   - Dynamically loaded from disk on **each request**
    - Only discoverable via `tool_search`, not visible in `tools/list`
-   - Changes require server restart to take effect
+   - Changes (add/edit/remove) take effect immediately without server restart
 
-This hybrid approach provides the best of both worlds: commonly used native tools can be modified dynamically, while specialized ondemand tools are kept out of the tool list to avoid overwhelming the LLM.
+Both tool types are fully dynamic and loaded on-demand, providing flexibility for development while maintaining clean tool organization.
 
 ### Tool Visibility Modes
 
@@ -229,12 +229,13 @@ The unified `/mcp` endpoint supports two modes via the `X-MCP-Tool-Mode` header 
 - ✅ Modify native tool definitions - changes picked up on next request
 - ✅ No server restart required
 
-#### Ondemand Tool Changes (Require Restart)
+#### Ondemand Tool Changes (Also Fully Dynamic)
 
-- ⚠️ Edit ondemand tool scripts - requires server restart
-- ⚠️ Add new ondemand tools - requires server restart
-- ⚠️ Delete ondemand tools - requires server restart
-- ⚠️ Modify ondemand tool definitions - requires server restart
+- ✅ Edit ondemand tool scripts - changes take effect immediately
+- ✅ Add new ondemand tools - immediately discoverable via `tool_search`
+- ✅ Delete ondemand tools - immediately removed
+- ✅ Modify ondemand tool definitions - changes picked up on next request
+- ✅ No server restart required
 
 #### Library Changes
 
@@ -245,7 +246,7 @@ Custom libraries are loaded on-demand:
 
 ### Technical Details
 
-The hybrid approach is implemented in `mcp_server.go`:
+Both native and ondemand tools use the ToolProvider pattern and are loaded dynamically from disk on each request:
 
 ```go
 // HandleRequest handles HTTP requests to the MCP server in native mode.
@@ -270,7 +271,10 @@ func (m *MCPServer) HandleRequest(w http.ResponseWriter, r *http.Request) {
 
 To enable discovery mode, clients can use the `X-MCP-Tool-Mode: discovery` header or `?tool_mode=discovery` query parameter. This is handled automatically by the MCP library.
 
-Key insight: The MCP library's ToolProvider pattern ensures that provider tools are NOT searched by `tool_search` in normal mode (they only appear in `tools/list`). Only tools registered with `RegisterOnDemandTool()` are searchable via `tool_search`.
+Key insight: Both native and ondemand script tools are loaded dynamically on each request. The difference is in visibility:
+
+- **Native tools** (via `WithToolProviders`): Appear in `tools/list` and can be called directly
+- **Ondemand tools** (via `WithOnDemandToolProviders`): Hidden from `tools/list` but discoverable via `tool_search`
 
 ### When to Use Each Visibility
 
@@ -278,15 +282,13 @@ Key insight: The MCP library's ToolProvider pattern ensures that provider tools 
 
 - Frequently used
 - Part of core functionality
-- Expected to be modified frequently
-- Needed to be changeable without server restart
+- Expected to be visible in tool listings
 
 **OnDemand (`"ondemand"`)** - Use for tools that are:
 
 - Specialized or experimental
 - Used infrequently
 - Part of a large toolset where showing all tools would be overwhelming
-- Stable and don't need frequent changes
 
 ## Best Practices
 
