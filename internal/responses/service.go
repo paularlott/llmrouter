@@ -9,13 +9,14 @@ import (
 	"github.com/paularlott/llmrouter/internal/storage"
 	"github.com/paularlott/llmrouter/internal/types"
 	"github.com/paularlott/llmrouter/log"
-	"github.com/paularlott/mcp/openai"
+	"github.com/paularlott/mcp/ai/openai"
 )
 
 type Service struct {
-	storage storage.ResponseStorage
-	config  *types.ResponsesConfig
-	router  ChatCompletionRouter
+	storage     storage.ResponseStorage
+	config      *types.ResponsesConfig
+	router      ChatCompletionRouter
+	sharedStore *storage.Store
 }
 
 // ChatCompletionRouter interface for processing chat completions
@@ -23,31 +24,16 @@ type ChatCompletionRouter interface {
 	CreateChatCompletion(ctx context.Context, req *openai.ChatCompletionRequest) (*openai.ChatCompletionResponse, error)
 }
 
-func NewService(config *types.ResponsesConfig, router ChatCompletionRouter) (*Service, error) {
-	var store storage.ResponseStorage
-	var err error
-
-	if config.StoragePath == "" {
-		// Use memory storage when no storage path specified
-		store = storage.NewMemoryStorage()
-	} else {
-		storagePath := config.StoragePath
-
-		ttl := time.Duration(config.TTLDays) * 24 * time.Hour
-		if config.TTLDays == 0 {
-			ttl = 30 * 24 * time.Hour // Default 30 days
-		}
-
-		store, err = storage.NewBadgerStorage(storagePath, ttl)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create badger storage: %w", err)
-		}
+func NewService(sharedStore *storage.Store, config *types.ResponsesConfig, router ChatCompletionRouter) (*Service, error) {
+	ttl := time.Duration(config.TTLDays) * 24 * time.Hour
+	if config.TTLDays == 0 {
+		ttl = 30 * 24 * time.Hour
 	}
-
 	return &Service{
-		storage: store,
-		config:  config,
-		router:  router,
+		storage:     sharedStore.NewResponseStorage(ttl),
+		config:      config,
+		router:      router,
+		sharedStore: sharedStore,
 	}, nil
 }
 
@@ -165,8 +151,8 @@ func (s *Service) GetResponse(ctx context.Context, id string) (*openai.ResponseO
 	// Add error if response failed
 	if stored.Status == storage.StatusError {
 		if errorMsg, ok := stored.Response["error"].(string); ok {
-			response.Error = &openai.APIError{
-				Message: errorMsg,
+			response.Error = &openai.ResponseError{
+				APIError: &openai.APIError{Message: errorMsg},
 			}
 		}
 	}
@@ -174,12 +160,14 @@ func (s *Service) GetResponse(ctx context.Context, id string) (*openai.ResponseO
 	// Add usage if available
 	if usage, ok := stored.Response["usage"]; ok {
 		if usageMap, ok := usage.(map[string]interface{}); ok {
-			response.Usage = &openai.Usage{
-				PromptTokens:     int(usageMap["prompt_tokens"].(float64)),
-				CompletionTokens: int(usageMap["completion_tokens"].(float64)),
-				TotalTokens:      int(usageMap["total_tokens"].(float64)),
+			prompt, _ := usageMap["prompt_tokens"].(float64)
+			completion, _ := usageMap["completion_tokens"].(float64)
+			response.Usage = &openai.ResponseUsage{
+				InputTokens:  int(prompt),
+				OutputTokens: int(completion),
+				TotalTokens:  int(prompt + completion),
 			}
-		} else if usageObj, ok := usage.(*openai.Usage); ok {
+		} else if usageObj, ok := usage.(*openai.ResponseUsage); ok {
 			response.Usage = usageObj
 		}
 	}
@@ -223,12 +211,10 @@ func (s *Service) CancelResponse(ctx context.Context, id string) (*openai.Respon
 }
 
 func (s *Service) CompactResponses(ctx context.Context) error {
-	return s.storage.RunGC()
+	return s.sharedStore.RunGC()
 }
 
-func (s *Service) Close() error {
-	return s.storage.Close()
-}
+func (s *Service) Close() {}
 
 // StoreCompletionResponse stores a completed chat completion response
 func (s *Service) StoreCompletionResponse(ctx context.Context, responseID string, chatResp *openai.ChatCompletionResponse, provider string) error {

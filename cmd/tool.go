@@ -1,17 +1,20 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
+	"time"
 
 	"github.com/paularlott/cli"
 	"github.com/paularlott/llmrouter/log"
 )
 
-// serverTools are tools registered directly on the MCP server (not via discovery registry)
+// serverTools are tools registered directly on the MCP server
 var serverTools = map[string]bool{
-	"execute_code": true,
 	"execute_tool": true,
 	"tool_search":  true,
 }
@@ -64,19 +67,12 @@ var ToolCmd = &cli.Command{
 			}
 		}
 
-		logger := log.GetLogger()
-
 		if verbose {
-			logger.Debug("executing tool",
-				"tool", toolName,
-				"args", toolArgs)
+			log.GetLogger().Debug("executing tool", "tool", toolName, "args", toolArgs)
 		}
 
 		var request map[string]interface{}
-
-		// Check if this is a server-level tool or a discoverable tool
 		if serverTools[toolName] {
-			// Direct call to server tool
 			request = map[string]interface{}{
 				"jsonrpc": "2.0",
 				"id":      1,
@@ -87,7 +83,6 @@ var ToolCmd = &cli.Command{
 				},
 			}
 		} else {
-			// Call via execute_tool for discoverable tools
 			request = map[string]interface{}{
 				"jsonrpc": "2.0",
 				"id":      1,
@@ -104,4 +99,65 @@ var ToolCmd = &cli.Command{
 
 		return ExecuteMCPRequest(serverURL, request, token, verbose)
 	},
+}
+
+// ExecuteMCPRequest sends an MCP request and processes the response
+func ExecuteMCPRequest(serverURL string, request map[string]interface{}, token string, verbose bool) error {
+	logger := log.GetLogger()
+
+	requestBody, err := json.Marshal(request)
+	if err != nil {
+		return fmt.Errorf("failed to marshal request: %w", err)
+	}
+	if verbose {
+		logger.Debug("MCP request", "request", string(requestBody))
+	}
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	req, err := http.NewRequest("POST", serverURL+"/mcp", bytes.NewBuffer(requestBody))
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to send request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	responseBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read response: %w", err)
+	}
+	if verbose {
+		logger.Debug("MCP response", "status", resp.Status, "response", string(responseBody))
+	}
+
+	var response map[string]interface{}
+	if err := json.Unmarshal(responseBody, &response); err != nil {
+		return fmt.Errorf("failed to parse response: %w", err)
+	}
+
+	if jsonrpcError, ok := response["error"].(map[string]interface{}); ok {
+		message, _ := jsonrpcError["message"].(string)
+		return fmt.Errorf("MCP error: %s", message)
+	}
+
+	if result, ok := response["result"].(map[string]interface{}); ok {
+		if content, ok := result["content"].([]interface{}); ok {
+			for _, item := range content {
+				if contentItem, ok := item.(map[string]interface{}); ok {
+					if text, ok := contentItem["text"].(string); ok {
+						fmt.Print(text)
+					}
+				}
+			}
+		}
+	}
+
+	return nil
 }

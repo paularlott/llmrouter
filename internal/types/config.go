@@ -7,7 +7,7 @@ type Config struct {
 	Logging       LoggingConfig       `json:"logging"`
 	Providers     []ProviderConfig    `json:"providers"`
 	MCP           MCPConfig           `json:"mcp"`
-	Scriptling    ScriptlingConfig    `json:"scriptling"`
+	Storage       StorageConfig       `json:"storage"`
 	Responses     ResponsesConfig     `json:"responses"`
 	Conversations ConversationsConfig `json:"conversations"`
 }
@@ -45,17 +45,14 @@ type MCPRemoteServerConfig struct {
 	ToolVisibility string `json:"tool_visibility,omitempty"` // "native" (default) or "ondemand"
 }
 
-type ScriptlingConfig struct {
-	ToolsPath     string `json:"tools_path,omitempty"`
-	LibrariesPath string `json:"libraries_path,omitempty"`
+type StorageConfig struct {
+	Path string `json:"path,omitempty"` // empty = memory-only
 }
 
 type ResponsesConfig struct {
-	StoragePath string `json:"storage_path,omitempty"`
-	TTLDays     int    `json:"ttl_days,omitempty"`
+	TTLDays int `json:"ttl_days,omitempty"`
 }
 
 type ConversationsConfig struct {
-	StoragePath string `json:"storage_path,omitempty"`
-	TTLDays     int    `json:"ttl_days,omitempty"`
+	TTLDays int `json:"ttl_days,omitempty"`
 }

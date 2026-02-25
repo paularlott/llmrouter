@@ -49,8 +49,6 @@ type ResponseStorage interface {
 	List(ctx context.Context, filter ResponseFilter) ([]StoredResponse, error)
 	Delete(ctx context.Context, id string) error
 	UpdateStatus(ctx context.Context, id string, status ResponseStatus) error
-	RunGC() error
-	Close() error
 }
 
 // Helper function to generate response IDs

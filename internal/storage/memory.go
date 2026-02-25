@@ -55,11 +55,3 @@ func (s *MemoryStorage) UpdateStatus(ctx context.Context, id string, status Resp
 	response.UpdatedAt = time.Now()
 	return nil
 }
-
-func (s *MemoryStorage) RunGC() error {
-	return nil // No-op for memory storage
-}
-
-func (s *MemoryStorage) Close() error {
-	return nil // No-op for memory storage
-}

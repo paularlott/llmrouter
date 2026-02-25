@@ -7,7 +7,7 @@ import (
 
 	"github.com/paularlott/llmrouter/internal/storage"
 	"github.com/paularlott/llmrouter/internal/types"
-	"github.com/paularlott/mcp/openai"
+	"github.com/paularlott/mcp/ai/openai"
 )
 
 type Service struct {
@@ -15,29 +15,13 @@ type Service struct {
 	config  *types.ConversationsConfig
 }
 
-func NewService(config *types.ConversationsConfig) (*Service, error) {
-	var store storage.ConversationStorage
-	var err error
-
-	if config.StoragePath == "" {
-		// Use memory storage when no storage path specified
-		store = storage.NewMemoryConversationStorage()
-	} else {
-		storagePath := config.StoragePath
-
-		ttl := time.Duration(config.TTLDays) * 24 * time.Hour
-		if config.TTLDays == 0 {
-			ttl = 30 * 24 * time.Hour // Default 30 days
-		}
-
-		store, err = storage.NewBadgerConversationStorage(storagePath, ttl)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create badger storage: %w", err)
-		}
+func NewService(sharedStore *storage.Store, config *types.ConversationsConfig) (*Service, error) {
+	ttl := time.Duration(config.TTLDays) * 24 * time.Hour
+	if config.TTLDays == 0 {
+		ttl = 30 * 24 * time.Hour
 	}
-
 	return &Service{
-		storage: store,
+		storage: sharedStore.NewConversationStorage(ttl),
 		config:  config,
 	}, nil
 }
@@ -197,8 +181,4 @@ func (s *Service) DeleteItem(ctx context.Context, conversationID string, itemID 
 	return s.GetConversation(ctx, conversationID)
 }
 
-func (s *Service) Close() {
-	if s.storage != nil {
-		s.storage.Close()
-	}
-}
+func (s *Service) Close() {}

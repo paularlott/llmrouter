@@ -142,11 +142,3 @@ func (s *BadgerStorage) UpdateStatus(ctx context.Context, id string, status Resp
 		return txn.SetEntry(entry)
 	})
 }
-
-func (s *BadgerStorage) RunGC() error {
-	return s.db.RunValueLogGC(0.5)
-}
-
-func (s *BadgerStorage) Close() error {
-	return s.db.Close()
-}

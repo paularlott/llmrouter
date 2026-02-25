@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/dgraph-io/badger/v4"
-	"github.com/paularlott/mcp/openai"
+	"github.com/paularlott/mcp/ai/openai"
 )
 
 // StoredConversation represents a conversation stored in the database
@@ -24,14 +24,10 @@ type ConversationStorage interface {
 	Get(ctx context.Context, id string) (*StoredConversation, error)
 	Delete(ctx context.Context, id string) error
 	Update(ctx context.Context, id string, metadata map[string]interface{}) error
-
-	// Item operations
 	AddItems(ctx context.Context, conversationID string, items []openai.ConversationItem) error
 	GetItems(ctx context.Context, conversationID string, after string, limit int, order string) ([]openai.ConversationItem, bool, error)
 	GetItem(ctx context.Context, conversationID string, itemID string) (*openai.ConversationItem, error)
 	DeleteItem(ctx context.Context, conversationID string, itemID string) error
-
-	Close() error
 }
 
 // BadgerConversationStorage implements ConversationStorage using Badger
@@ -40,22 +36,8 @@ type BadgerConversationStorage struct {
 	ttl time.Duration
 }
 
-// NewBadgerConversationStorage creates a new Badger-based conversation storage
-func NewBadgerConversationStorage(path string, ttl time.Duration) (*BadgerConversationStorage, error) {
-	opts := badger.DefaultOptions(path)
-	opts.Logger = nil // Disable badger logging
-
-	db, err := badger.Open(opts)
-	if err != nil {
-		return nil, fmt.Errorf("failed to open badger: %w", err)
-	}
-
-	storage := &BadgerConversationStorage{
-		db:  db,
-		ttl: ttl,
-	}
-
-	return storage, nil
+func newBadgerConversationStorage(db *badger.DB, ttl time.Duration) *BadgerConversationStorage {
+	return &BadgerConversationStorage{db: db, ttl: ttl}
 }
 
 func (s *BadgerConversationStorage) Store(ctx context.Context, conversation *StoredConversation) error {
@@ -215,10 +197,6 @@ func (s *BadgerConversationStorage) DeleteItem(ctx context.Context, conversation
 	return s.Store(ctx, conversation)
 }
 
-func (s *BadgerConversationStorage) Close() error {
-	return s.db.Close()
-}
-
 // MemoryConversationStorage implements ConversationStorage using in-memory storage
 type MemoryConversationStorage struct {
 	conversations map[string]*StoredConversation
@@ -358,6 +336,3 @@ func (s *MemoryConversationStorage) DeleteItem(ctx context.Context, conversation
 	return s.Store(ctx, conversation)
 }
 
-func (s *MemoryConversationStorage) Close() error {
-	return nil
-}

@@ -1,4 +1,4 @@
-package main
+package router
 
 import (
 	"bufio"
@@ -13,11 +13,13 @@ import (
 
 	"github.com/paularlott/llmrouter/internal/conversations"
 	"github.com/paularlott/llmrouter/internal/responses"
+	"github.com/paularlott/llmrouter/internal/storage"
+	"github.com/paularlott/llmrouter/internal/types"
 	"github.com/paularlott/llmrouter/middleware"
-	"github.com/paularlott/mcp/openai"
+	"github.com/paularlott/mcp/ai/openai"
 )
 
-func NewRouter(config *Config, logger Logger) (*Router, error) {
+func NewRouter(config *types.Config, logger Logger) (*Router, error) {
 	router := &Router{
 		Providers:    make(map[string]*Provider),
 		ModelMap:     make(map[string][]string),
@@ -51,7 +53,7 @@ func NewRouter(config *Config, logger Logger) (*Router, error) {
 	}
 
 	// Initialize MCP server
-	mcpServer, err := NewMCPServer(config, logger, router)
+	mcpServer, err := NewMCPServer(config, logger)
 	if err != nil {
 		logger.Warn("failed to initialize MCP server", "error", err)
 		// Continue running even if MCP server fails - it's optional
@@ -60,8 +62,15 @@ func NewRouter(config *Config, logger Logger) (*Router, error) {
 		logger.Info("initialized MCP server")
 	}
 
+	// Initialize shared storage
+	sharedStore, err := storage.NewStore(config.Storage.Path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize storage: %w", err)
+	}
+	router.sharedStore = sharedStore
+
 	// Initialize responses service (always enabled)
-	responsesService, err := responses.NewService(&config.Responses, router)
+	responsesService, err := responses.NewService(sharedStore, &config.Responses, router)
 	if err != nil {
 		logger.Warn("failed to initialize responses service", "error", err)
 	} else {
@@ -70,7 +79,7 @@ func NewRouter(config *Config, logger Logger) (*Router, error) {
 	}
 
 	// Initialize conversations service
-	conversationsService, err := conversations.NewService(&config.Conversations)
+	conversationsService, err := conversations.NewService(sharedStore, &config.Conversations)
 	if err != nil {
 		logger.Warn("failed to initialize conversations service", "error", err)
 	} else {
@@ -892,11 +901,8 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 func (r *Router) Shutdown() {
 	r.shutdownOnce.Do(func() {
 		close(r.shutdownChan)
-		if r.responsesService != nil {
-			r.responsesService.Close()
-		}
-		if r.conversationsService != nil {
-			r.conversationsService.Close()
+		if r.sharedStore != nil {
+			r.sharedStore.Close()
 		}
 	})
 	r.wg.Wait()
