@@ -1,39 +1,40 @@
 package router
 
 import (
-	"context"
 	"net/http"
 	"sync"
+	"sync/atomic"
 
 	"github.com/paularlott/llmrouter/internal/conversations"
 	"github.com/paularlott/llmrouter/internal/responses"
 	"github.com/paularlott/llmrouter/internal/storage"
 	"github.com/paularlott/llmrouter/internal/types"
 	"github.com/paularlott/logger"
+	"github.com/paularlott/mcp/ai"
 	"github.com/paularlott/mcp/ai/openai"
 )
 
-// Logger is the logger interface
 type Logger = logger.Logger
 
 type Provider struct {
 	Name              string
 	ProviderType      string // openai | claude | gemini | ollama | mistral | zai
-	BaseURL           string
-	Token             string
+	Client            ai.Client
 	Enabled           bool
 	Healthy           bool
-	Client            OpenAIClient
-	ActiveCompletions int64
-	StaticModels      bool     // true only for claude (no discovery API)
-	ModelWhitelist    []string // non-empty = filter discovered models to this list
+	ActiveCompletions atomic.Int64
+	StaticModels      bool
+	ModelWhitelist    []string
 	Weight            float64
+	Tags              []string            // provider-level tags
+	ModelTags         map[string][]string // model_id -> tags
 }
 
 type Router struct {
 	Providers            map[string]*Provider
 	ModelMap             map[string][]string
 	ModelMapMu           sync.RWMutex
+	ModelTags            map[string][]string // model_id -> merged tags across all providers
 	config               *types.Config
 	logger               Logger
 	shutdownChan         chan struct{}
@@ -44,14 +45,7 @@ type Router struct {
 	sharedStore          *storage.Store
 	responsesService     *responses.Service
 	conversationsService *conversations.Service
-}
-
-type OpenAIClient interface {
-	ListModels(ctx context.Context) (*openai.ModelsResponse, error)
-	ListModelsWithTimeout(ctx context.Context) (*openai.ModelsResponse, error)
-	ChatCompletion(ctx context.Context, req *openai.ChatCompletionRequest) (*openai.ChatCompletionResponse, error)
-	StreamChatCompletion(ctx context.Context, req *openai.ChatCompletionRequest) *openai.ChatStream
-	CreateEmbedding(ctx context.Context, req *openai.EmbeddingRequest) (*openai.EmbeddingResponse, error)
+	smartRouter          *SmartRouter
 }
 
 type (

@@ -10,6 +10,7 @@ type Config struct {
 	Storage       StorageConfig       `json:"storage"`
 	Responses     ResponsesConfig     `json:"responses"`
 	Conversations ConversationsConfig `json:"conversations"`
+	SmartRouting  SmartRoutingConfig  `json:"smart_routing"`
 }
 
 type ServerConfig struct {
@@ -24,13 +25,15 @@ type LoggingConfig struct {
 }
 
 type ProviderConfig struct {
-	Name     string   `json:"name"`
-	Provider string   `json:"provider"`           // openai | claude | gemini | ollama | mistral | zai
-	BaseURL  string   `json:"base_url,omitempty"` // optional override
-	Token    string   `json:"token"`
-	Enabled  bool     `json:"enabled"`
-	Weight   float64  `json:"weight,omitempty"`   // 0.0-2.0, default 1.0; higher = preferred
-	Models   []string `json:"models,omitempty"`   // empty = auto-discover; required for claude
+	Name     string            `json:"name"`
+	Provider string            `json:"provider"`           // openai | claude | gemini | ollama | mistral | zai
+	BaseURL  string            `json:"base_url,omitempty"` // optional override
+	Token    string            `json:"token"`
+	Enabled  bool              `json:"enabled"`
+	Weight   float64           `json:"weight,omitempty"`   // 0.0-2.0, default 1.0; higher = preferred
+	Models   []string          `json:"models,omitempty"`   // empty = auto-discover; required for claude
+	Tags     []string          `json:"tags,omitempty"`     // arbitrary tags for routing scripts
+	ModelTags map[string][]string `json:"model_tags,omitempty"` // model_id -> tags
 }
 
 type MCPConfig struct {
@@ -54,4 +57,10 @@ type ResponsesConfig struct {
 
 type ConversationsConfig struct {
 	TTLDays int `json:"ttl_days,omitempty"`
+}
+
+type SmartRoutingConfig struct {
+	Enabled      bool   `json:"enabled"`
+	Script       string `json:"script,omitempty"`
+	DefaultModel string `json:"default_model,omitempty"`
 }

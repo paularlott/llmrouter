@@ -23,6 +23,7 @@ func NewRouter(config *types.Config, logger Logger) (*Router, error) {
 	router := &Router{
 		Providers:    make(map[string]*Provider),
 		ModelMap:     make(map[string][]string),
+		ModelTags:    make(map[string][]string),
 		config:       config,
 		logger:       logger,
 		shutdownChan: make(chan struct{}),
@@ -49,8 +50,6 @@ func NewRouter(config *types.Config, logger Logger) (*Router, error) {
 		if providerType == "" {
 			providerType = "openai"
 		}
-		// Claude has no model discovery API — models list is required and used as-is
-		// All other providers: models list is a whitelist filter on auto-discovered models
 		isStatic := providerType == "claude" && len(providerConfig.Models) > 0
 		var whitelist []string
 		if !isStatic {
@@ -60,18 +59,18 @@ func NewRouter(config *types.Config, logger Logger) (*Router, error) {
 		provider := &Provider{
 			Name:           providerConfig.Name,
 			ProviderType:   providerType,
-			BaseURL:        providerConfig.BaseURL,
-			Token:          providerConfig.Token,
 			Enabled:        providerConfig.Enabled,
 			Healthy:        true,
 			Client:         client,
 			StaticModels:   isStatic,
 			ModelWhitelist: whitelist,
 			Weight:         weight,
+			Tags:           providerConfig.Tags,
+			ModelTags:      providerConfig.ModelTags,
 		}
 
 		router.Providers[provider.Name] = provider
-		logger.Info("initialized provider", "name", provider.Name, "base_url", provider.BaseURL)
+		logger.Info("initialized provider", "name", provider.Name, "type", provider.ProviderType)
 	}
 
 	// Initialize MCP server
@@ -142,6 +141,22 @@ func NewRouter(config *types.Config, logger Logger) (*Router, error) {
 		router.mux.HandleFunc("GET /v1/conversations/{conversation_id}/items/{item_id}", auth(router.HandleGetItem))
 		router.mux.HandleFunc("DELETE /v1/conversations/{conversation_id}/items/{item_id}", auth(router.HandleDeleteItem))
 		logger.Info("conversations endpoints available")
+	}
+
+	// Initialize smart routing if enabled
+	if config.SmartRouting.Enabled {
+		sr, err := newSmartRouter(
+			config.SmartRouting.Script,
+			config.SmartRouting.DefaultModel,
+			router,
+			logger,
+		)
+		if err != nil {
+			logger.Warn("failed to initialize smart router", "error", err)
+		} else {
+			router.smartRouter = sr
+			logger.Info("smart routing enabled", "script", config.SmartRouting.Script, "default_model", config.SmartRouting.DefaultModel)
+		}
 	}
 
 	// Add MCP endpoints if server is available
@@ -218,10 +233,10 @@ func (r *Router) RefreshModels(ctx context.Context) error {
 		go func(name string, p *Provider) {
 			defer wg.Done()
 
-			r.logger.Debug("fetching models from provider", "provider", name, "base_url", p.BaseURL)
+			r.logger.Debug("fetching models from provider", "provider", name)
 
 			// Use the timeout method for model fetching
-			modelsResp, err := p.Client.ListModelsWithTimeout(ctx)
+			modelsResp, err := p.Client.GetModels(ctx)
 			if err != nil {
 				r.logger.WithError(err).Error("failed to fetch models from provider", "provider", name)
 				r.DisableProvider(name, fmt.Sprintf("model fetch failed: %v", err))
@@ -280,6 +295,25 @@ func (r *Router) RefreshModels(ctx context.Context) error {
 			r.logger.Debug("model available on multiple providers",
 				"model", modelID,
 				"providers", providerNames)
+		}
+	}
+
+	// Rebuild global model tags from all providers
+	r.ModelTags = make(map[string][]string)
+	tagSet := make(map[string]map[string]bool)
+	for _, p := range r.Providers {
+		for modelID, tags := range p.ModelTags {
+			if tagSet[modelID] == nil {
+				tagSet[modelID] = make(map[string]bool)
+			}
+			for _, t := range tags {
+				tagSet[modelID][t] = true
+			}
+		}
+	}
+	for modelID, tags := range tagSet {
+		for t := range tags {
+			r.ModelTags[modelID] = append(r.ModelTags[modelID], t)
 		}
 	}
 
@@ -397,7 +431,7 @@ func (r *Router) GetProviderForModel(model string) (string, error) {
 		if w <= 0 {
 			w = 1.0
 		}
-		score := float64(provider.ActiveCompletions) / w
+		score := float64(provider.ActiveCompletions.Load()) / w
 		if bestScore < 0 || score < bestScore {
 			bestScore = score
 			selectedProvider = providerName
@@ -415,10 +449,20 @@ func (r *Router) ListModels() ModelsResponse {
 	r.ModelMapMu.RLock()
 	defer r.ModelMapMu.RUnlock()
 
-	models := make([]Model, 0, len(r.ModelMap))
+	models := make([]Model, 0, len(r.ModelMap)+1)
 	for modelID := range r.ModelMap {
 		models = append(models, Model{
 			ID:      modelID,
+			Object:  "model",
+			Created: time.Now().Unix(),
+			OwnedBy: "router",
+		})
+	}
+
+	// Inject "auto" model if smart routing is enabled
+	if r.smartRouter != nil {
+		models = append(models, Model{
+			ID:      "auto",
 			Object:  "model",
 			Created: time.Now().Unix(),
 			OwnedBy: "router",
@@ -437,6 +481,14 @@ func (r *Router) ListModels() ModelsResponse {
 }
 
 func (r *Router) CreateChatCompletion(ctx context.Context, req *ChatCompletionRequest) (*ChatCompletionResponse, error) {
+	if req.Model == "auto" && r.smartRouter != nil {
+		resolved := r.smartRouter.Route(ctx, req)
+		if resolved == "" {
+			return nil, fmt.Errorf("model auto not found in any provider")
+		}
+		req.Model = resolved
+	}
+
 	providerName, err := r.GetProviderForModel(req.Model)
 	if err != nil {
 		return nil, err
@@ -448,7 +500,7 @@ func (r *Router) CreateChatCompletion(ctx context.Context, req *ChatCompletionRe
 
 	r.logger.Debug("routing chat completion", "model", req.Model, "provider", providerName)
 
-	resp, err := provider.Client.ChatCompletion(ctx, req)
+	resp, err := provider.Client.ChatCompletion(ctx, *req)
 	if err != nil {
 		if r.isConnectionError(err) {
 			r.DisableProvider(providerName, fmt.Sprintf("connection error: %v", err))
@@ -468,7 +520,7 @@ func (r *Router) CreateEmbedding(ctx context.Context, req *EmbeddingRequest) (*E
 	provider := r.Providers[providerName]
 	r.logger.Info("routing embedding request", "model", req.Model, "provider", providerName)
 
-	resp, err := provider.Client.CreateEmbedding(ctx, req)
+	resp, err := provider.Client.CreateEmbedding(ctx, *req)
 	if err != nil {
 		if r.isConnectionError(err) {
 			r.DisableProvider(providerName, fmt.Sprintf("connection error: %v", err))
@@ -482,8 +534,36 @@ func (r *Router) CreateEmbedding(ctx context.Context, req *EmbeddingRequest) (*E
 func (r *Router) streamChatCompletion(ctx context.Context, providerName string, req *ChatCompletionRequest) *openai.ChatStream {
 	provider := r.Providers[providerName]
 	r.incrementActiveCompletions(providerName)
-	stream := provider.Client.StreamChatCompletion(ctx, req)
-	return stream
+	return provider.Client.StreamChatCompletion(ctx, *req)
+}
+
+func (r *Router) writeStream(w http.ResponseWriter, stream *openai.ChatStream, model, providerName string) {
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.WriteHeader(http.StatusOK)
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		return
+	}
+
+	for stream.Next() {
+		data, err := json.Marshal(stream.Current())
+		if err != nil {
+			continue
+		}
+		fmt.Fprintf(w, "data: %s\n\n", data)
+		flusher.Flush()
+	}
+
+	if err := stream.Err(); err != nil {
+		r.logger.WithError(err).Error("streaming error", "model", model, "provider", providerName)
+	}
+
+	fmt.Fprint(w, "data: [DONE]\n\n")
+	flusher.Flush()
+	r.logger.Debug("streaming response completed", "model", model, "provider", providerName)
 }
 
 func (r *Router) isConnectionError(err error) bool {
@@ -530,13 +610,13 @@ func (r *Router) isConnectionError(err error) bool {
 
 func (r *Router) incrementActiveCompletions(providerName string) {
 	if provider, exists := r.Providers[providerName]; exists {
-		provider.ActiveCompletions++
+		provider.ActiveCompletions.Add(1)
 	}
 }
 
 func (r *Router) decrementActiveCompletions(providerName string) {
-	if provider, exists := r.Providers[providerName]; exists && provider.ActiveCompletions > 0 {
-		provider.ActiveCompletions--
+	if provider, exists := r.Providers[providerName]; exists {
+		provider.ActiveCompletions.Add(-1)
 	}
 }
 
@@ -590,6 +670,16 @@ func (r *Router) handleNonStreamingChatCompletion(w http.ResponseWriter, req *ht
 func (r *Router) handleStreamingChatCompletion(w http.ResponseWriter, req *http.Request, completionReq *ChatCompletionRequest) {
 	ctx := req.Context()
 
+	// Resolve "auto" model before streaming
+	if completionReq.Model == "auto" && r.smartRouter != nil {
+		resolved := r.smartRouter.Route(ctx, completionReq)
+		if resolved == "" {
+			http.Error(w, "auto routing failed: no model available", http.StatusServiceUnavailable)
+			return
+		}
+		completionReq.Model = resolved
+	}
+
 	providerName, err := r.GetProviderForModel(completionReq.Model)
 	if err != nil {
 		r.logger.WithError(err).Error("streaming chat completion failed")
@@ -603,36 +693,7 @@ func (r *Router) handleStreamingChatCompletion(w http.ResponseWriter, req *http.
 
 	stream := r.streamChatCompletion(ctx, providerName, completionReq)
 	defer r.decrementActiveCompletions(providerName)
-
-	w.Header().Set("Content-Type", "text/event-stream")
-	w.Header().Set("Cache-Control", "no-cache")
-	w.Header().Set("Connection", "keep-alive")
-	w.WriteHeader(http.StatusOK)
-
-	flusher, ok := w.(http.Flusher)
-	if !ok {
-		http.Error(w, "Streaming not supported", http.StatusInternalServerError)
-		return
-	}
-
-	for stream.Next() {
-		chunk := stream.Current()
-		data, err := json.Marshal(chunk)
-		if err != nil {
-			continue
-		}
-		fmt.Fprintf(w, "data: %s\n\n", data)
-		flusher.Flush()
-	}
-
-	if err := stream.Err(); err != nil {
-		r.logger.WithError(err).Error("streaming error", "model", completionReq.Model, "provider", providerName)
-	}
-
-	fmt.Fprint(w, "data: [DONE]\n\n")
-	flusher.Flush()
-
-	r.logger.Debug("streaming response completed", "model", completionReq.Model, "provider", providerName)
+	r.writeStream(w, stream, completionReq.Model, providerName)
 }
 
 func (r *Router) HandleMessages(w http.ResponseWriter, req *http.Request) {
@@ -705,7 +766,7 @@ func (r *Router) HandleHealth(w http.ResponseWriter, req *http.Request) {
 		providerStatus[name] = map[string]interface{}{
 			"enabled":            provider.Enabled,
 			"healthy":            provider.Healthy,
-			"active_completions": provider.ActiveCompletions,
+			"active_completions": provider.ActiveCompletions.Load(),
 		}
 	}
 	health["provider_status"] = providerStatus
@@ -801,7 +862,7 @@ func (r *Router) checkDisabledProviders() {
 			defer cancel()
 
 			provider := r.Providers[name]
-			_, err := provider.Client.ListModels(ctx)
+			_, err := provider.Client.GetModels(ctx)
 			if err != nil {
 				r.logger.Debug("provider still unhealthy", "provider", name, "error", err)
 				return
@@ -834,6 +895,9 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 func (r *Router) Shutdown() {
 	r.shutdownOnce.Do(func() {
 		close(r.shutdownChan)
+		if r.smartRouter != nil {
+			r.smartRouter.Stop()
+		}
 		if r.sharedStore != nil {
 			r.sharedStore.Close()
 		}

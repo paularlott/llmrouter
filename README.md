@@ -7,6 +7,7 @@ A unified gateway that aggregates multiple LLM providers behind a single endpoin
 - **Multi-Provider**: OpenAI, Claude, Gemini, Ollama, Mistral, ZAi — configure once, route by model name
 - **Protocol Translation**: Clients speak OpenAI or Messages (Claude) format; the gateway translates as needed
 - **Weight-Based Load Balancing**: Distribute load across providers with configurable weights
+- **Smart Routing**: Request the `auto` model and a Scriptling script picks the best provider/model based on tags, load, and request content
 - **MCP Aggregator**: Aggregate tools from multiple remote MCP servers with namespace isolation
 - **Responses API**: OpenAI-compatible responses storage (emulated for all providers)
 - **Conversations API**: n8n-compatible conversation management
@@ -47,6 +48,11 @@ provider = "openai"           # openai | claude | gemini | ollama | mistral | za
 token = "sk-..."
 enabled = true
 weight = 1.0                  # 0.0-2.0, default 1.0; higher = preferred
+tags = ["capable", "expensive"]  # optional tags for smart routing
+
+[providers.model_tags]        # optional per-model tags
+"gpt-4o"      = ["capable", "expensive"]
+"gpt-4o-mini" = ["fast", "cheap"]
 
 [[providers]]
 name = "anthropic"
@@ -54,6 +60,11 @@ provider = "claude"
 token = "sk-ant-..."
 enabled = true
 models = ["claude-opus-4-5", "claude-sonnet-4-5"]  # Required for Claude
+tags = ["capable"]
+
+[providers.model_tags]
+"claude-opus-4-5"   = ["capable", "expensive"]
+"claude-sonnet-4-5" = ["capable", "fast"]
 
 [[providers]]
 name = "google"
@@ -67,6 +78,11 @@ name = "local"
 provider = "ollama"
 base_url = "http://localhost:11434/v1"
 enabled = true
+
+[smart_routing]
+enabled = false
+script = "router.py"  # Scriptling script for routing decisions
+default_model = "mistralai/ministral-3-3b"  # Fallback if script returns nothing
 
 [mcp]
 [[mcp.remote_servers]]
@@ -89,22 +105,88 @@ tool_visibility = "native"    # native | discoverable
 
 `base_url` is optional — each provider has a built-in default. Set it to override (e.g. local LM Studio).
 
+### Smart Routing
+
+When a client requests the model name `auto`, the router runs a [Scriptling](https://github.com/paularlott/scriptling) script to pick the best provider and model. If the script returns nothing or fails, `default_model` is used.
+
+```toml
+[smart_routing]
+enabled = true
+script = "router.py"  # Scriptling script for routing decisions
+default_model = "mistralai/ministral-3-3b"
+```
+
+The `auto` model appears in `/v1/models` so clients can discover it.
+
+#### Provider and Model Tags
+
+Tags are arbitrary strings assigned to providers and individual models. The routing script uses them to select the right provider/model for each request.
+
+```toml
+[[providers]]
+name = "mistral"
+provider = "mistral"
+token = "..."
+enabled = true
+tags = ["fast", "cheap"]           # provider-level tags
+
+[providers.model_tags]
+"mistralai/ministral-3-3b"      = ["small", "fast", "cheap"]
+"mistralai/mistral-small-latest" = ["small", "fast"]
+```
+
+The routing script can then query by tag:
+
+```python
+import router
+
+req = router.get_request()
+
+# Route tool-heavy requests to a capable model
+if router.is_chat_completion() and len(req["tools"]) > 0:
+    models = router.models_by_tag("capable")
+else:
+    models = router.models_by_tag("cheap")
+
+if models:
+    router.set_model(models[0])
+```
+
+Use `router.model_tags(model_id)` to narrow a candidate list by a secondary tag:
+
+```python
+import router
+
+# Start broad: all "capable" models
+candidates = router.models_by_tag("capable")
+
+# Narrow: prefer "super_fast" within that set
+fast = [m for m in candidates if "super_fast" in router.model_tags(m)]
+cheap = [m for m in candidates if "cheap" in router.model_tags(m)]
+
+models = fast or cheap or candidates
+if models:
+    router.set_model(models[0])
+```
+
+See [docs/scriptling-router-library.md](docs/scriptling-router-library.md) for the full script API reference.
+
 ### Weight-Based Load Balancing
 
 When multiple providers serve the same model, the router selects using `score = active_completions / weight`. Lower score wins.
 
-| Weight | Effect                                    |
-| ------ | ----------------------------------------- |
-| `0.0`  | Last resort only                          |
-| `1.0`  | Normal (default)                          |
-| `2.0`  | Preferred — gets 2× the traffic share     |
+| Weight | Effect                                |
+| ------ | ------------------------------------- |
+| `0.0`  | Last resort only                      |
+| `1.0`  | Normal (default)                      |
+| `2.0`  | Preferred — gets 2× the traffic share |
 
 ### MCP Tool Visibility
 
-| Mode          | Behavior                                              |
-| ------------- | ----------------------------------------------------- |
-| `native`      | Tools appear in `tools/list`, directly callable       |
-| `discoverable`| Hidden from list, searchable via `tool_search` only   |
+| Mode           | Behavior                                            |
+| -------------- | --------------------------------------------------- |
+| `native`       | Tools appear in `tools/list`, directly callable     |
+| `discoverable` | Hidden from list, searchable via `tool_search` only |
 
 ## API Endpoints
 
@@ -186,6 +268,7 @@ Client (OpenAI or Messages protocol)
    LLM Router
    ├── Protocol Layer  (OpenAI ↔ Messages translation via mcp/ai)
    ├── Routing Layer   (model → provider, weight-based load balancing)
+   ├── Smart Routing   (Scriptling script, tag-based selection, hot-reload)
    ├── Provider Layer  (openai | claude | gemini | ollama | mistral | zai)
    ├── MCP Aggregator  (remote MCP servers with namespace + visibility control)
    ├── Responses API   (emulated for all providers, stored in BadgerDB)
