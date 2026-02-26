@@ -7,12 +7,10 @@ import (
 	"github.com/dgraph-io/badger/v4"
 )
 
-// Store is a shared storage instance (BadgerDB or memory) used by all services.
 type Store struct {
-	db *badger.DB // nil = memory mode
+	db *badger.DB
 }
 
-// NewStore opens a BadgerDB at path, or returns a memory-only store if path is empty.
 func NewStore(path string) (*Store, error) {
 	if path == "" {
 		return &Store{}, nil
@@ -41,15 +39,6 @@ func (s *Store) Close() error {
 	return s.db.Close()
 }
 
-// NewResponseStorage returns a ResponseStorage backed by this store.
-func (s *Store) NewResponseStorage(ttl time.Duration) ResponseStorage {
-	if s.db == nil {
-		return NewMemoryStorage()
-	}
-	return &BadgerStorage{db: s.db, ttl: ttl}
-}
-
-// NewConversationStorage returns a ConversationStorage backed by this store.
 func (s *Store) NewConversationStorage(ttl time.Duration) ConversationStorage {
 	if s.db == nil {
 		return NewMemoryConversationStorage()

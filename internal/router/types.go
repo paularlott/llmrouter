@@ -69,5 +69,4 @@ type (
 	ResponseObject          = openai.ResponseObject
 	ResponseListResponse    = openai.ResponseListResponse
 	CreateResponseRequest   = openai.CreateResponseRequest
-	ResponseFilter          = storage.ResponseFilter
 )

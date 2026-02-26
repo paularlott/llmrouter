@@ -90,14 +90,9 @@ func NewRouter(config *types.Config, logger Logger) (*Router, error) {
 	}
 	router.sharedStore = sharedStore
 
-	// Initialize responses service (always enabled)
-	responsesService, err := responses.NewService(sharedStore, &config.Responses, router)
-	if err != nil {
-		logger.Warn("failed to initialize responses service", "error", err)
-	} else {
-		router.responsesService = responsesService
-		logger.Info("initialized responses service")
-	}
+	// Initialize responses service
+	router.responsesService = responses.NewService(config.Responses.TTLDays)
+	logger.Info("initialized responses service")
 
 	// Initialize conversations service
 	conversationsService, err := conversations.NewService(sharedStore, &config.Conversations)
@@ -124,7 +119,7 @@ func NewRouter(config *types.Config, logger Logger) (*Router, error) {
 		router.mux.HandleFunc("DELETE /v1/responses/{id}", auth(router.HandleDeleteResponse))
 		router.mux.HandleFunc("GET /v1/responses", auth(router.HandleListResponses))
 		router.mux.HandleFunc("POST /v1/responses/{id}/cancel", auth(router.HandleCancelResponse))
-		router.mux.HandleFunc("POST /v1/responses/compact", auth(router.HandleCompactResponses))
+		router.mux.HandleFunc("POST /v1/responses/{id}/compact", auth(router.HandleCompactResponses))
 		router.mux.HandleFunc("GET /v1/responses/{id}/input-items", auth(router.HandleUnsupported))
 		router.mux.HandleFunc("GET /v1/responses/{id}/input-tokens", auth(router.HandleUnsupported))
 		logger.Info("responses endpoints available")
@@ -480,6 +475,43 @@ func (r *Router) ListModels() ModelsResponse {
 	}
 }
 
+type anthropicModelsResponse = claude.ModelsListResponse
+
+func (r *Router) ListModelsAnthropic() anthropicModelsResponse {
+	r.ModelMapMu.RLock()
+	defer r.ModelMapMu.RUnlock()
+
+	models := make([]claude.ModelInfo, 0, len(r.ModelMap))
+	for modelID := range r.ModelMap {
+		models = append(models, claude.ModelInfo{
+			Type:        "model",
+			ID:          modelID,
+			DisplayName: modelID,
+			CreatedAt:   time.Now().UTC().Format(time.RFC3339),
+		})
+	}
+
+	if r.smartRouter != nil {
+		models = append(models, claude.ModelInfo{
+			Type:        "model",
+			ID:          "auto",
+			DisplayName: "auto",
+			CreatedAt:   time.Now().UTC().Format(time.RFC3339),
+		})
+	}
+
+	sort.Slice(models, func(i, j int) bool {
+		return models[i].ID < models[j].ID
+	})
+
+	resp := anthropicModelsResponse{Data: models, HasMore: false}
+	if len(models) > 0 {
+		resp.FirstID = models[0].ID
+		resp.LastID = models[len(models)-1].ID
+	}
+	return resp
+}
+
 func (r *Router) CreateChatCompletion(ctx context.Context, req *ChatCompletionRequest) (*ChatCompletionResponse, error) {
 	if req.Model == "auto" && r.smartRouter != nil {
 		resolved := r.smartRouter.Route(ctx, req)
@@ -626,8 +658,14 @@ func (r *Router) HandleModels(w http.ResponseWriter, req *http.Request) {
 		r.logger.WithError(err).Error("failed to refresh models")
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if err := writeJSON(w, r.ListModels()); err != nil {
-		r.logger.WithError(err).Error("failed to write models response")
+	if req.Header.Get("anthropic-version") != "" {
+		if err := writeJSON(w, r.ListModelsAnthropic()); err != nil {
+			r.logger.WithError(err).Error("failed to write models response")
+		}
+	} else {
+		if err := writeJSON(w, r.ListModels()); err != nil {
+			r.logger.WithError(err).Error("failed to write models response")
+		}
 	}
 }
 
@@ -921,15 +959,19 @@ func (r *Router) HandleCreateResponse(w http.ResponseWriter, req *http.Request) 
 		return
 	}
 
-	resp, err := r.responsesService.CreateResponse(req.Context(), &createReq, nil) // Use default completion for API calls
+	providerName, err := r.GetProviderForModel(createReq.Model)
+	if err != nil {
+		r.logger.WithError(err).Error("no provider for model")
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+
+	resp, err := r.responsesService.CreateResponse(req.Context(), r.Providers[providerName].Client, &createReq)
 	if err != nil {
 		r.logger.WithError(err).Error("failed to create response")
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
-
-	// log.PrettyJSON(createReq)
-	// log.PrettyJSON(resp)
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
@@ -1002,18 +1044,7 @@ func (r *Router) HandleListResponses(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	// Parse query parameters
-	filter := ResponseFilter{}
-	if limitStr := req.URL.Query().Get("limit"); limitStr != "" {
-		if limit, err := parseIntParam(limitStr); err == nil {
-			filter.Limit = limit
-		}
-	}
-	filter.Order = req.URL.Query().Get("order")
-	filter.After = req.URL.Query().Get("after")
-	filter.Before = req.URL.Query().Get("before")
-
-	resp, err := r.responsesService.ListResponses(req.Context(), filter)
+	resp, err := r.responsesService.ListResponses(req.Context())
 	if err != nil {
 		r.logger.WithError(err).Error("failed to list responses")
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
@@ -1061,14 +1092,25 @@ func (r *Router) HandleCompactResponses(w http.ResponseWriter, req *http.Request
 		return
 	}
 
-	if err := r.responsesService.CompactResponses(req.Context()); err != nil {
-		r.logger.WithError(err).Error("failed to compact responses")
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
+	id := req.PathValue("id")
+	if id == "" {
+		http.Error(w, "Response ID required", http.StatusBadRequest)
+		return
+	}
+
+	resp, err := r.responsesService.CompactResponse(req.Context(), id)
+	if err != nil {
+		if err.Error() == "response not found" {
+			http.Error(w, "Response not found", http.StatusNotFound)
+		} else {
+			r.logger.WithError(err).Error("failed to compact response")
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+		}
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	if err := writeJSON(w, map[string]string{"status": "completed"}); err != nil {
+	if err := writeJSON(w, resp); err != nil {
 		r.logger.WithError(err).Error("failed to write response")
 	}
 }

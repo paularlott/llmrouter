@@ -3,410 +3,130 @@ package responses
 import (
 	"context"
 	"fmt"
-	"strings"
+	"sync"
 	"time"
 
-	"github.com/paularlott/llmrouter/internal/storage"
-	"github.com/paularlott/llmrouter/internal/types"
-	"github.com/paularlott/llmrouter/log"
+	"github.com/paularlott/mcp/ai"
 	"github.com/paularlott/mcp/ai/openai"
 )
 
+// entry tracks enough metadata for ListResponses without re-querying the client.
+type entry struct {
+	client    ai.Client
+	model     string
+	createdAt int64
+	expiresAt time.Time
+}
+
+// Service delegates all Responses API operations to the originating ai.Client.
+// Response IDs are mapped to their client in RAM (single-instance assumption).
 type Service struct {
-	storage     storage.ResponseStorage
-	config      *types.ResponsesConfig
-	router      ChatCompletionRouter
-	sharedStore *storage.Store
+	mu      sync.RWMutex
+	entries map[string]*entry // response ID -> entry
+	ttl     time.Duration
 }
 
-// ChatCompletionRouter interface for processing chat completions
-type ChatCompletionRouter interface {
-	CreateChatCompletion(ctx context.Context, req *openai.ChatCompletionRequest) (*openai.ChatCompletionResponse, error)
-}
-
-func NewService(sharedStore *storage.Store, config *types.ResponsesConfig, router ChatCompletionRouter) (*Service, error) {
-	ttl := time.Duration(config.TTLDays) * 24 * time.Hour
-	if config.TTLDays == 0 {
+func NewService(ttlDays int) *Service {
+	ttl := time.Duration(ttlDays) * 24 * time.Hour
+	if ttl <= 0 {
 		ttl = 30 * 24 * time.Hour
 	}
-	return &Service{
-		storage:     sharedStore.NewResponseStorage(ttl),
-		config:      config,
-		router:      router,
-		sharedStore: sharedStore,
-	}, nil
+	s := &Service{entries: make(map[string]*entry), ttl: ttl}
+	go s.cleanup()
+	return s
 }
 
-// CompletionFunc is a function that creates a chat completion
-type CompletionFunc func(ctx context.Context, req *openai.ChatCompletionRequest) (*openai.ChatCompletionResponse, error)
-
-func (s *Service) CreateResponse(ctx context.Context, req *openai.CreateResponseRequest, completionFunc CompletionFunc) (*openai.ResponseObject, error) {
-	return s.createEmulatedResponse(ctx, req, completionFunc)
+func (s *Service) cleanup() {
+	ticker := time.NewTicker(time.Hour)
+	defer ticker.Stop()
+	for range ticker.C {
+		now := time.Now()
+		s.mu.Lock()
+		for id, e := range s.entries {
+			if now.After(e.expiresAt) {
+				delete(s.entries, id)
+			}
+		}
+		s.mu.Unlock()
+	}
 }
 
-// createEmulatedResponse handles the existing emulation logic
-func (s *Service) createEmulatedResponse(ctx context.Context, req *openai.CreateResponseRequest, completionFunc CompletionFunc) (*openai.ResponseObject, error) {
-	responseID := storage.GenerateResponseID()
-	now := time.Now()
-
-	storedResponse := &storage.StoredResponse{
-		ID:        responseID,
-		CreatedAt: now,
-		UpdatedAt: now,
-		Status:    storage.StatusPending,
-		Request: map[string]interface{}{
-			"model":        req.Model,
-			"input":        req.Input,
-			"instructions": req.Instructions,
-			"modalities":   req.Modalities,
-			"tools":        req.Tools,
-			"metadata":     req.Metadata,
-		},
-		Response: map[string]interface{}{},
-		Metadata: storage.ResponseMetadata{
-			Model:     req.Model,
-			CreatedAt: now,
-			UpdatedAt: now,
-		},
+func (s *Service) CreateResponse(ctx context.Context, client ai.Client, req *openai.CreateResponseRequest) (*openai.ResponseObject, error) {
+	resp, err := client.CreateResponse(ctx, *req)
+	if err != nil {
+		return nil, err
 	}
-
-	if err := s.storage.Store(ctx, storedResponse); err != nil {
-		return nil, fmt.Errorf("failed to store response: %w", err)
-	}
-
-	// Check if background processing is requested
-	background := req.Background
-
-	if background {
-		// Process the response asynchronously
-		go s.processResponse(context.Background(), responseID, req, completionFunc)
-
-		// Create response object with pending status
-		responseObj := &openai.ResponseObject{
-			ID:        responseID,
-			Object:    "response",
-			CreatedAt: now.Unix(),
-			Model:     req.Model,
-			Status:    string(storage.StatusPending),
-		}
-
-		// Add optional fields from request
-		if req.Instructions != "" {
-			responseObj.Instructions = req.Instructions
-		}
-		if req.Metadata != nil {
-			responseObj.Metadata = req.Metadata
-		}
-		if req.Tools != nil {
-			responseObj.Tools = req.Tools
-		}
-		if req.PreviousResponseID != "" {
-			responseObj.PreviousResponseID = req.PreviousResponseID
-		}
-
-		return responseObj, nil
-	}
-
-	// Synchronous processing (default)
-	s.processResponse(ctx, responseID, req, completionFunc)
-
-	// Retrieve the completed response
-	return s.GetResponse(ctx, responseID)
+	s.mu.Lock()
+	s.entries[resp.ID] = &entry{client: client, model: resp.Model, createdAt: resp.CreatedAt, expiresAt: time.Now().Add(s.ttl)}
+	s.mu.Unlock()
+	return resp, nil
 }
 
 func (s *Service) GetResponse(ctx context.Context, id string) (*openai.ResponseObject, error) {
-	stored, err := s.storage.Get(ctx, id)
+	client, err := s.clientFor(id)
 	if err != nil {
 		return nil, err
 	}
-
-	response := &openai.ResponseObject{
-		ID:        stored.ID,
-		Object:    "response",
-		CreatedAt: stored.CreatedAt.Unix(),
-		Model:     stored.Metadata.Model,
-		Status:    string(stored.Status),
-		Output:    []interface{}{}, // Always initialize as empty array
-	}
-
-	// Add output if response is completed
-	if stored.Status == storage.StatusCompleted {
-		if output, ok := stored.Response["output"]; ok {
-			// Convert ChatCompletionResponse to Response API format
-			if chatResp, ok := output.(*openai.ChatCompletionResponse); ok {
-				response.Output = s.convertChatCompletionToOutput(chatResp)
-			}
-		}
-	}
-
-	// Add error if response failed
-	if stored.Status == storage.StatusError {
-		if errorMsg, ok := stored.Response["error"].(string); ok {
-			response.Error = &openai.ResponseError{
-				APIError: &openai.APIError{Message: errorMsg},
-			}
-		}
-	}
-
-	// Add usage if available
-	if usage, ok := stored.Response["usage"]; ok {
-		if usageMap, ok := usage.(map[string]interface{}); ok {
-			prompt, _ := usageMap["prompt_tokens"].(float64)
-			completion, _ := usageMap["completion_tokens"].(float64)
-			response.Usage = &openai.ResponseUsage{
-				InputTokens:  int(prompt),
-				OutputTokens: int(completion),
-				TotalTokens:  int(prompt + completion),
-			}
-		} else if usageObj, ok := usage.(*openai.ResponseUsage); ok {
-			response.Usage = usageObj
-		}
-	}
-
-	return response, nil
-}
-
-func (s *Service) ListResponses(ctx context.Context, filter storage.ResponseFilter) (*openai.ResponseListResponse, error) {
-	stored, err := s.storage.List(ctx, filter)
-	if err != nil {
-		return nil, err
-	}
-
-	responses := make([]openai.ResponseObject, len(stored))
-	for i, sr := range stored {
-		responses[i] = openai.ResponseObject{
-			ID:        sr.ID,
-			Object:    "response",
-			CreatedAt: sr.CreatedAt.Unix(),
-			Model:     sr.Metadata.Model,
-			Status:    string(sr.Status),
-		}
-	}
-
-	return &openai.ResponseListResponse{
-		Object: "list",
-		Data:   responses,
-	}, nil
+	return client.GetResponse(ctx, id)
 }
 
 func (s *Service) DeleteResponse(ctx context.Context, id string) error {
-	return s.storage.Delete(ctx, id)
-}
-
-func (s *Service) CancelResponse(ctx context.Context, id string) (*openai.ResponseObject, error) {
-	if err := s.storage.UpdateStatus(ctx, id, storage.StatusCancelled); err != nil {
-		return nil, err
-	}
-
-	return s.GetResponse(ctx, id)
-}
-
-func (s *Service) CompactResponses(ctx context.Context) error {
-	return s.sharedStore.RunGC()
-}
-
-func (s *Service) Close() {}
-
-// StoreCompletionResponse stores a completed chat completion response
-func (s *Service) StoreCompletionResponse(ctx context.Context, responseID string, chatResp *openai.ChatCompletionResponse, provider string) error {
-	stored, err := s.storage.Get(ctx, responseID)
+	client, err := s.clientFor(id)
 	if err != nil {
 		return err
 	}
-
-	stored.Status = storage.StatusCompleted
-	stored.UpdatedAt = time.Now()
-	stored.Response = map[string]interface{}{
-		"output": chatResp,
-		"usage":  chatResp.Usage,
+	if err := client.DeleteResponse(ctx, id); err != nil {
+		return err
 	}
-	stored.Metadata.Provider = provider
-	stored.Metadata.UpdatedAt = stored.UpdatedAt
-
-	return s.storage.Store(ctx, stored)
+	s.mu.Lock()
+	delete(s.entries, id)
+	s.mu.Unlock()
+	return nil
 }
 
-// processResponse processes a stored response through the LLM
-func (s *Service) processResponse(ctx context.Context, responseID string, req *openai.CreateResponseRequest, completionFunc CompletionFunc) {
-	// Update status to in_progress
-	if err := s.storage.UpdateStatus(ctx, responseID, storage.StatusInProgress); err != nil {
-		return
+func (s *Service) CancelResponse(ctx context.Context, id string) (*openai.ResponseObject, error) {
+	client, err := s.clientFor(id)
+	if err != nil {
+		return nil, err
 	}
+	return client.CancelResponse(ctx, id)
+}
 
-	// Convert input and instructions to messages
-	var messages []openai.Message
-
-	// Load previous conversation if previous_response_id provided
-	if req.PreviousResponseID != "" {
-		prevResponse, err := s.storage.Get(ctx, req.PreviousResponseID)
-		if err == nil {
-			// Extract previous input as user message
-			if prevInput, ok := prevResponse.Request["input"].([]interface{}); ok {
-				for _, inp := range prevInput {
-					if inputStr, ok := inp.(string); ok {
-						messages = append(messages, openai.Message{
-							Role:    "user",
-							Content: inputStr,
-						})
-					}
-				}
-			}
-			// Extract previous output as assistant message
-			if prevOutput, ok := prevResponse.Response["output"]; ok {
-				if chatResp, ok := prevOutput.(*openai.ChatCompletionResponse); ok {
-					if len(chatResp.Choices) > 0 {
-						messages = append(messages, openai.Message{
-							Role:    chatResp.Choices[0].Message.Role,
-							Content: chatResp.Choices[0].Message.GetContentAsString(),
-						})
-					}
-				}
-			}
-		}
+func (s *Service) CompactResponse(ctx context.Context, id string) (*openai.ResponseObject, error) {
+	client, err := s.clientFor(id)
+	if err != nil {
+		return nil, err
 	}
+	return client.CompactResponse(ctx, id)
+}
 
-	// Add instructions as system message if provided
-	if req.Instructions != "" {
-		messages = append(messages, openai.Message{
-			Role:    "system",
-			Content: req.Instructions,
+// ListResponses returns a summary list from the in-RAM index.
+func (s *Service) ListResponses(ctx context.Context) (*openai.ResponseListResponse, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	data := make([]openai.ResponseObject, 0, len(s.entries))
+	for id, e := range s.entries {
+		data = append(data, openai.ResponseObject{
+			ID:        id,
+			Object:    "response",
+			CreatedAt: e.createdAt,
+			Model:     e.model,
 		})
 	}
-
-	// Convert input to user messages
-	for _, input := range req.Input {
-		// Handle string input
-		if inputStr, ok := input.(string); ok {
-			messages = append(messages, openai.Message{
-				Role:    "user",
-				Content: inputStr,
-			})
-			continue
-		}
-
-		// Handle message object input (from N8N)
-		if inputMap, ok := input.(map[string]interface{}); ok {
-			msg := openai.Message{}
-
-			// Extract role
-			if role, ok := inputMap["role"].(string); ok {
-				msg.Role = role
-			} else {
-				msg.Role = "user" // Default to user if not specified
-			}
-
-			// Extract content - can be string or array
-			if contentStr, ok := inputMap["content"].(string); ok {
-				msg.Content = contentStr
-			} else if contentArray, ok := inputMap["content"].([]interface{}); ok {
-				// Handle content as array of content parts
-				var textParts []string
-				for _, part := range contentArray {
-					if partMap, ok := part.(map[string]interface{}); ok {
-						if text, ok := partMap["text"].(string); ok {
-							textParts = append(textParts, text)
-						}
-					}
-				}
-				if len(textParts) > 0 {
-					msg.Content = strings.Join(textParts, "\n")
-				}
-			}
-
-			if msg.Content != "" {
-				messages = append(messages, msg)
-			}
-		}
-	}
-
-	// Convert to chat completion request
-	chatReq := &openai.ChatCompletionRequest{
-		Model:    req.Model,
-		Messages: messages,
-		Tools:    req.Tools,
-	}
-
-	// Process through the provided completion function or fallback to router
-	var chatResp *openai.ChatCompletionResponse
-	var err error
-	if completionFunc != nil {
-		chatResp, err = completionFunc(ctx, chatReq)
-	} else {
-		chatResp, err = s.router.CreateChatCompletion(ctx, chatReq)
-	}
-	if err != nil {
-		// Store error message
-		stored, getErr := s.storage.Get(ctx, responseID)
-		if getErr == nil {
-			stored.Status = storage.StatusError
-			stored.UpdatedAt = time.Now()
-			stored.Response = map[string]interface{}{
-				"error": err.Error(),
-			}
-			if storeErr := s.storage.Store(ctx, stored); storeErr != nil {
-				log.Error("failed to store error response", "error", storeErr)
-			}
-		} else {
-			// Fallback to just updating status
-			if updateErr := s.storage.UpdateStatus(ctx, responseID, storage.StatusError); updateErr != nil {
-				log.Error("failed to update response status to error", "error", updateErr)
-			}
-		}
-		return
-	}
-
-	// Store the completed response
-	stored, err := s.storage.Get(ctx, responseID)
-	if err != nil {
-		return
-	}
-
-	stored.Status = storage.StatusCompleted
-	stored.UpdatedAt = time.Now()
-	stored.Response = map[string]interface{}{
-		"output": chatResp,
-		"usage":  chatResp.Usage,
-	}
-	stored.Metadata.UpdatedAt = stored.UpdatedAt
-
-	if storeErr := s.storage.Store(ctx, stored); storeErr != nil {
-		log.Error("failed to store completed response", "error", storeErr)
-	}
+	return &openai.ResponseListResponse{Object: "list", Data: data}, nil
 }
 
-// convertChatCompletionToOutput converts a ChatCompletionResponse to Response API output format
-func (s *Service) convertChatCompletionToOutput(chatResp *openai.ChatCompletionResponse) []interface{} {
-	var output []interface{}
-
-	for _, choice := range chatResp.Choices {
-		// Create message output item
-		message := map[string]interface{}{
-			"type":   "message",
-			"id":     fmt.Sprintf("msg_%s", storage.GenerateResponseID()[5:]), // Generate a message ID
-			"status": "completed",
-			"role":   choice.Message.Role,
-		}
-
-		// Convert content to output_text format
-		content := []map[string]interface{}{
-			{
-				"type":        "output_text",
-				"text":        choice.Message.GetContentAsString(),
-				"annotations": []interface{}{},
-			},
-		}
-
-		message["content"] = content
-		output = append(output, message)
+func (s *Service) clientFor(id string) (ai.Client, error) {
+	s.mu.RLock()
+	e, ok := s.entries[id]
+	s.mu.RUnlock()
+	if !ok {
+		return nil, fmt.Errorf("response not found")
 	}
-
-	return output
+	return e.client, nil
 }
 
-// Helper methods for provider access
-func (s *Service) getProviderForModel(model string) (string, error) {
-	if router, ok := s.router.(interface{ GetProviderForModel(string) (string, error) }); ok {
-		return router.GetProviderForModel(model)
-	}
-	return "", fmt.Errorf("router does not support GetProviderForModel")
-}
+// Close is a no-op; cleanup is handled by the ai.Client instances.
+func (s *Service) Close() {}
+
