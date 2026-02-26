@@ -18,20 +18,16 @@ type Logger = logger.Logger
 
 type Provider struct {
 	Name              string
+	ProviderType      string // openai | claude | gemini | ollama | mistral | zai
 	BaseURL           string
 	Token             string
 	Enabled           bool
 	Healthy           bool
 	Client            OpenAIClient
 	ActiveCompletions int64
-	StaticModels      bool
-	Allowlist         []string
-	Denylist          []string
-	NativeResponses   bool
-}
-
-func (p *Provider) GetNativeResponses() bool {
-	return p.NativeResponses
+	StaticModels      bool     // true only for claude (no discovery API)
+	ModelWhitelist    []string // non-empty = filter discovered models to this list
+	Weight            float64
 }
 
 type Router struct {
@@ -53,8 +49,8 @@ type Router struct {
 type OpenAIClient interface {
 	ListModels(ctx context.Context) (*openai.ModelsResponse, error)
 	ListModelsWithTimeout(ctx context.Context) (*openai.ModelsResponse, error)
-	CreateChatCompletion(ctx context.Context, req *openai.ChatCompletionRequest) (*openai.ChatCompletionResponse, error)
-	CreateChatCompletionRaw(ctx context.Context, req *openai.ChatCompletionRequest) (*http.Response, error)
+	ChatCompletion(ctx context.Context, req *openai.ChatCompletionRequest) (*openai.ChatCompletionResponse, error)
+	StreamChatCompletion(ctx context.Context, req *openai.ChatCompletionRequest) *openai.ChatStream
 	CreateEmbedding(ctx context.Context, req *openai.EmbeddingRequest) (*openai.EmbeddingResponse, error)
 }
 

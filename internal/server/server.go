@@ -59,13 +59,13 @@ func RunServer(ctx context.Context, cmd *cli.Command) error {
 		typedConfig := cli.NewTypedConfigFile(cmd.ConfigFile)
 		for _, pc := range typedConfig.GetObjectSlice("providers") {
 			config.Providers = append(config.Providers, types.ProviderConfig{
-				Name:      pc.GetString("name"),
-				BaseURL:   strings.TrimSuffix(pc.GetString("base_url"), "/"),
-				Token:     pc.GetString("token"),
-				Enabled:   pc.GetBool("enabled"),
-				Models:    pc.GetStringSlice("models"),
-				Allowlist: pc.GetStringSlice("allowlist"),
-				Denylist:  pc.GetStringSlice("denylist"),
+				Name:     pc.GetString("name"),
+				Provider: pc.GetString("provider"),
+				BaseURL:  strings.TrimSuffix(pc.GetString("base_url"), "/"),
+				Token:    pc.GetString("token"),
+				Enabled:  pc.GetBool("enabled"),
+				Weight:   pc.GetFloat64("weight"),
+				Models:   pc.GetStringSlice("models"),
 			})
 		}
 		if mcpCfg := typedConfig.GetObject("mcp"); mcpCfg != nil {

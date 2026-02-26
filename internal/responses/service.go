@@ -41,15 +41,6 @@ func NewService(sharedStore *storage.Store, config *types.ResponsesConfig, route
 type CompletionFunc func(ctx context.Context, req *openai.ChatCompletionRequest) (*openai.ChatCompletionResponse, error)
 
 func (s *Service) CreateResponse(ctx context.Context, req *openai.CreateResponseRequest, completionFunc CompletionFunc) (*openai.ResponseObject, error) {
-	// Check if the model's provider supports native responses
-	if providerName, err := s.getProviderForModel(req.Model); err == nil {
-		if provider := s.getProvider(providerName); provider != nil && provider.GetNativeResponses() {
-			// Use native responses API - delegate to provider
-			return s.createNativeResponse(ctx, req, provider)
-		}
-	}
-
-	// Use emulated responses (existing logic)
 	return s.createEmulatedResponse(ctx, req, completionFunc)
 }
 
@@ -418,24 +409,4 @@ func (s *Service) getProviderForModel(model string) (string, error) {
 		return router.GetProviderForModel(model)
 	}
 	return "", fmt.Errorf("router does not support GetProviderForModel")
-}
-
-type ProviderInterface interface {
-	GetNativeResponses() bool
-}
-
-func (s *Service) getProvider(name string) ProviderInterface {
-	if router, ok := s.router.(interface {
-		GetProvider(string) interface{ GetNativeResponses() bool }
-	}); ok {
-		return router.GetProvider(name)
-	}
-	return nil
-}
-
-// createNativeResponse delegates to provider's native responses API
-func (s *Service) createNativeResponse(ctx context.Context, req *openai.CreateResponseRequest, provider ProviderInterface) (*openai.ResponseObject, error) {
-	// TODO: Implement native provider delegation
-	// For now, fallback to emulation
-	return s.createEmulatedResponse(ctx, req, nil)
 }

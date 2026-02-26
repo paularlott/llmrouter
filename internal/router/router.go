@@ -1,7 +1,6 @@
 package router
 
 import (
-	"bufio"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -16,6 +15,7 @@ import (
 	"github.com/paularlott/llmrouter/internal/storage"
 	"github.com/paularlott/llmrouter/internal/types"
 	"github.com/paularlott/llmrouter/middleware"
+	"github.com/paularlott/mcp/ai/claude"
 	"github.com/paularlott/mcp/ai/openai"
 )
 
@@ -34,18 +34,40 @@ func NewRouter(config *types.Config, logger Logger) (*Router, error) {
 			continue
 		}
 
+		client, err := newAIClient(&providerConfig)
+		if err != nil {
+			logger.Warn("failed to create client for provider", "name", providerConfig.Name, "error", err)
+			continue
+		}
+
+		weight := providerConfig.Weight
+		if weight <= 0 {
+			weight = 1.0
+		}
+
+		providerType := providerConfig.Provider
+		if providerType == "" {
+			providerType = "openai"
+		}
+		// Claude has no model discovery API — models list is required and used as-is
+		// All other providers: models list is a whitelist filter on auto-discovered models
+		isStatic := providerType == "claude" && len(providerConfig.Models) > 0
+		var whitelist []string
+		if !isStatic {
+			whitelist = providerConfig.Models
+		}
+
 		provider := &Provider{
-			Name:              providerConfig.Name,
-			BaseURL:           providerConfig.BaseURL,
-			Token:             providerConfig.Token,
-			Enabled:           providerConfig.Enabled,
-			Healthy:           true, // Start as healthy, will be verified
-			Client:            NewOpenAIClient(providerConfig.BaseURL, providerConfig.Token, logger),
-			ActiveCompletions: 0,
-			StaticModels:      len(providerConfig.Models) > 0, // Static if models are provided in config
-			Allowlist:         providerConfig.Allowlist,
-			Denylist:          providerConfig.Denylist,
-			NativeResponses:   providerConfig.NativeResponses,
+			Name:           providerConfig.Name,
+			ProviderType:   providerType,
+			BaseURL:        providerConfig.BaseURL,
+			Token:          providerConfig.Token,
+			Enabled:        providerConfig.Enabled,
+			Healthy:        true,
+			Client:         client,
+			StaticModels:   isStatic,
+			ModelWhitelist: whitelist,
+			Weight:         weight,
 		}
 
 		router.Providers[provider.Name] = provider
@@ -92,6 +114,7 @@ func NewRouter(config *types.Config, logger Logger) (*Router, error) {
 	router.mux = http.NewServeMux()
 	router.mux.HandleFunc("/v1/models", auth(router.HandleModels))
 	router.mux.HandleFunc("/v1/chat/completions", auth(router.HandleChatCompletions))
+	router.mux.HandleFunc("/v1/messages", auth(router.HandleMessages))
 	router.mux.HandleFunc("/v1/embeddings", auth(router.HandleEmbeddings))
 	router.mux.HandleFunc("/health", router.HandleHealth) // Health endpoint is not protected
 
@@ -165,7 +188,7 @@ func (r *Router) RefreshModels(ctx context.Context) error {
 
 			modelSetMu.Lock()
 			for _, modelID := range staticModels {
-				if shouldIncludeModel(modelID, provider.Allowlist, provider.Denylist) {
+				if shouldIncludeModel(modelID) {
 					if modelSet[modelID] == nil {
 						modelSet[modelID] = make(map[string]bool)
 					}
@@ -221,15 +244,19 @@ func (r *Router) RefreshModels(ctx context.Context) error {
 				"count", len(modelsResp.Data),
 				"models", modelIDs)
 
-			// Safely update the shared modelSet with filtering
+			// Safely update the shared modelSet, applying whitelist if set
 			modelSetMu.Lock()
 			for _, model := range modelsResp.Data {
-				if shouldIncludeModel(model.ID, p.Allowlist, p.Denylist) {
-					if modelSet[model.ID] == nil {
-						modelSet[model.ID] = make(map[string]bool)
-					}
-					modelSet[model.ID][name] = true
+				if !shouldIncludeModel(model.ID) {
+					continue
 				}
+				if len(p.ModelWhitelist) > 0 && !inSlice(model.ID, p.ModelWhitelist) {
+					continue
+				}
+				if modelSet[model.ID] == nil {
+					modelSet[model.ID] = make(map[string]bool)
+				}
+				modelSet[model.ID][name] = true
 			}
 			modelSetMu.Unlock()
 		}(providerName, provider)
@@ -329,34 +356,18 @@ func (r *Router) EnableProvider(providerName string) {
 	r.logger.Info("provider re-enabled", "provider", providerName)
 }
 
-// shouldIncludeModel checks if a model should be included based on allowlist and denylist
-func shouldIncludeModel(model string, allowlist, denylist []string) bool {
-	// If denylist is provided, check if model is in it
-	if len(denylist) > 0 {
-		for _, denied := range denylist {
-			if model == denied {
-				return false
-			}
-		}
-	}
-
-	// If allowlist is provided, check if model is in it
-	if len(allowlist) > 0 {
-		for _, allowed := range allowlist {
-			if model == allowed {
-				return true
-			}
-		}
-		// Model not found in allowlist, exclude it
-		return false
-	}
-
-	// No allowlist, include model (assuming not denylisted)
-	return true
+// shouldIncludeModel checks if a model should be included (no filtering in new spec)
+func shouldIncludeModel(model string) bool {
+	return model != ""
 }
 
-func (r *Router) GetProvider(name string) interface{ GetNativeResponses() bool } {
-	return r.Providers[name]
+func inSlice(s string, slice []string) bool {
+	for _, v := range slice {
+		if v == s {
+			return true
+		}
+	}
+	return false
 }
 
 func (r *Router) GetProviderForModel(model string) (string, error) {
@@ -372,18 +383,23 @@ func (r *Router) GetProviderForModel(model string) (string, error) {
 		return providers[0], nil
 	}
 
-	// Find provider with least active completions
+	// Select provider with best score: lowest load adjusted by weight
+	// score = ActiveCompletions / weight (lower is better)
 	var selectedProvider string
-	minCompletions := int64(-1)
+	bestScore := float64(-1)
 
 	for _, providerName := range providers {
 		provider, exists := r.Providers[providerName]
-		if !exists || !provider.Enabled {
+		if !exists || !provider.Enabled || !provider.Healthy {
 			continue
 		}
-
-		if minCompletions == -1 || provider.ActiveCompletions < minCompletions {
-			minCompletions = provider.ActiveCompletions
+		w := provider.Weight
+		if w <= 0 {
+			w = 1.0
+		}
+		score := float64(provider.ActiveCompletions) / w
+		if bestScore < 0 || score < bestScore {
+			bestScore = score
 			selectedProvider = providerName
 		}
 	}
@@ -421,76 +437,39 @@ func (r *Router) ListModels() ModelsResponse {
 }
 
 func (r *Router) CreateChatCompletion(ctx context.Context, req *ChatCompletionRequest) (*ChatCompletionResponse, error) {
-	// Find provider for the model
 	providerName, err := r.GetProviderForModel(req.Model)
 	if err != nil {
 		return nil, err
 	}
 
 	provider := r.Providers[providerName]
-
-	// Increment active completions
 	r.incrementActiveCompletions(providerName)
 	defer r.decrementActiveCompletions(providerName)
 
 	r.logger.Debug("routing chat completion", "model", req.Model, "provider", providerName)
 
-	// Create token counter for usage estimation
-	tokenCounter := openai.NewTokenCounter()
-	// Convert messages to openai format for token counting
-	openaiMessages := make([]openai.Message, len(req.Messages))
-	for i, msg := range req.Messages {
-		openaiMessages[i] = openai.Message{Role: msg.Role, Content: msg.Content}
-	}
-	tokenCounter.AddPromptTokensFromMessages(openaiMessages)
-
-	// Make the request
-	resp, err := provider.Client.CreateChatCompletion(ctx, req)
+	resp, err := provider.Client.ChatCompletion(ctx, req)
 	if err != nil {
-		// Check if this is a connection error and disable the provider
 		if r.isConnectionError(err) {
 			r.DisableProvider(providerName, fmt.Sprintf("connection error: %v", err))
 		}
 		return nil, err
-	}
-
-	// Add completion tokens from response
-	if len(resp.Choices) > 0 {
-		openaiMsg := openai.Message{Role: resp.Choices[0].Message.Role, Content: resp.Choices[0].Message.Content}
-		tokenCounter.AddCompletionTokensFromMessage(&openaiMsg)
-	}
-
-	// Inject usage if missing
-	// Convert to openai format for usage injection
-	openaiResp := &openai.ChatCompletionResponse{}
-	tokenCounter.InjectUsageIfMissing(openaiResp)
-	// Copy usage back to our response
-	if openaiResp.Usage != nil && resp.Usage == nil {
-		resp.Usage = &Usage{
-			PromptTokens:     openaiResp.Usage.PromptTokens,
-			CompletionTokens: openaiResp.Usage.CompletionTokens,
-			TotalTokens:      openaiResp.Usage.TotalTokens,
-		}
 	}
 
 	return resp, nil
 }
 
 func (r *Router) CreateEmbedding(ctx context.Context, req *EmbeddingRequest) (*EmbeddingResponse, error) {
-	// Find provider for the model
 	providerName, err := r.GetProviderForModel(req.Model)
 	if err != nil {
 		return nil, err
 	}
 
 	provider := r.Providers[providerName]
-
 	r.logger.Info("routing embedding request", "model", req.Model, "provider", providerName)
 
-	// Make the request
 	resp, err := provider.Client.CreateEmbedding(ctx, req)
 	if err != nil {
-		// Check if this is a connection error and disable the provider
 		if r.isConnectionError(err) {
 			r.DisableProvider(providerName, fmt.Sprintf("connection error: %v", err))
 		}
@@ -500,37 +479,11 @@ func (r *Router) CreateEmbedding(ctx context.Context, req *EmbeddingRequest) (*E
 	return resp, nil
 }
 
-func (r *Router) CreateChatCompletionRaw(ctx context.Context, req *ChatCompletionRequest) (*http.Response, string, error) {
-	// Find provider for the model
-	providerName, err := r.GetProviderForModel(req.Model)
-	if err != nil {
-		return nil, "", err
-	}
-
+func (r *Router) streamChatCompletion(ctx context.Context, providerName string, req *ChatCompletionRequest) *openai.ChatStream {
 	provider := r.Providers[providerName]
-
-	// Increment active completions
 	r.incrementActiveCompletions(providerName)
-
-	// Create a deferred function to decrement completions
-	defer func() {
-		r.decrementActiveCompletions(providerName)
-	}()
-
-	r.logger.Debug("routing chat completion (raw)", "model", req.Model, "provider", providerName, "stream", req.Stream)
-
-	// Make the raw request
-	resp, err := provider.Client.CreateChatCompletionRaw(ctx, req)
-	if err != nil {
-		// Check if this is a connection error and disable the provider
-		if r.isConnectionError(err) {
-			r.DisableProvider(providerName, fmt.Sprintf("connection error: %v", err))
-		}
-		return nil, "", err
-	}
-
-	// Return the response body as-is for pass-through
-	return resp, providerName, nil
+	stream := provider.Client.StreamChatCompletion(ctx, req)
+	return stream
 }
 
 func (r *Router) isConnectionError(err error) bool {
@@ -589,14 +542,11 @@ func (r *Router) decrementActiveCompletions(providerName string) {
 
 // HTTP Handlers
 func (r *Router) HandleModels(w http.ResponseWriter, req *http.Request) {
-	// Update the models list and return it
 	if err := r.RefreshModels(req.Context()); err != nil {
 		r.logger.WithError(err).Error("failed to refresh models")
 	}
-	models := r.ListModels()
-
 	w.Header().Set("Content-Type", "application/json")
-	if err := writeJSON(w, models); err != nil {
+	if err := writeJSON(w, r.ListModels()); err != nil {
 		r.logger.WithError(err).Error("failed to write models response")
 	}
 }
@@ -623,8 +573,6 @@ func (r *Router) handleNonStreamingChatCompletion(w http.ResponseWriter, req *ht
 	resp, err := r.CreateChatCompletion(ctx, completionReq)
 	if err != nil {
 		r.logger.WithError(err).Error("chat completion failed")
-
-		// Check if it's a model not found error
 		if strings.Contains(err.Error(), "not found") {
 			http.Error(w, err.Error(), http.StatusNotFound)
 		} else {
@@ -642,93 +590,78 @@ func (r *Router) handleNonStreamingChatCompletion(w http.ResponseWriter, req *ht
 func (r *Router) handleStreamingChatCompletion(w http.ResponseWriter, req *http.Request, completionReq *ChatCompletionRequest) {
 	ctx := req.Context()
 
-	// Create token counter for usage estimation
-	tokenCounter := openai.NewTokenCounter()
-	tokenCounter.AddPromptTokensFromMessages(completionReq.Messages)
-
-	// Get raw response from provider
-	resp, providerName, err := r.CreateChatCompletionRaw(ctx, completionReq)
+	providerName, err := r.GetProviderForModel(completionReq.Model)
 	if err != nil {
 		r.logger.WithError(err).Error("streaming chat completion failed")
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		if strings.Contains(err.Error(), "not found") {
+			http.Error(w, err.Error(), http.StatusNotFound)
+		} else {
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+		}
 		return
 	}
-	defer resp.Body.Close()
 
-	// Copy headers from provider response
-	for key, values := range resp.Header {
-		for _, value := range values {
-			w.Header().Add(key, value)
-		}
-	}
+	stream := r.streamChatCompletion(ctx, providerName, completionReq)
+	defer r.decrementActiveCompletions(providerName)
 
-	// Set up to inject token usage at the end of stream
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
 	w.WriteHeader(http.StatusOK)
 
-	// Create flusher for SSE
 	flusher, ok := w.(http.Flusher)
 	if !ok {
-		r.logger.Error("response writer does not support flushing")
 		http.Error(w, "Streaming not supported", http.StatusInternalServerError)
 		return
 	}
 
-	// Copy the streaming response to the client and inject usage when needed
-	scanner := bufio.NewScanner(resp.Body)
-	for scanner.Scan() {
-		line := scanner.Text()
-
-		// Check if this is a data line that needs modification
-		if strings.HasPrefix(line, "data:") && !strings.HasPrefix(line, "data: [DONE]") {
-			dataStr := strings.TrimPrefix(line, "data: ")
-			var chunk ChatCompletionResponse
-
-			if err := json.Unmarshal([]byte(dataStr), &chunk); err == nil && len(chunk.Choices) > 0 {
-				// Convert delta to openai format for token counting
-				openaiDelta := openai.Delta{Role: chunk.Choices[0].Delta.Role, Content: chunk.Choices[0].Delta.Content}
-				tokenCounter.AddCompletionTokensFromDelta(&openaiDelta)
-
-				// If this chunk has a finish_reason and no usage, inject our estimates
-				if chunk.Choices[0].FinishReason == "stop" && chunk.Usage == nil {
-					// Convert to openai format for usage injection
-					openaiChunk := openai.ChatCompletionResponse{}
-					tokenCounter.InjectUsageIfMissing(&openaiChunk)
-					// Copy usage back to our chunk
-					if openaiChunk.Usage != nil {
-						chunk.Usage = &Usage{
-							PromptTokens:     openaiChunk.Usage.PromptTokens,
-							CompletionTokens: openaiChunk.Usage.CompletionTokens,
-							TotalTokens:      openaiChunk.Usage.TotalTokens,
-						}
-					}
-					modifiedJSON, _ := json.Marshal(chunk)
-					fmt.Fprintf(w, "data: %s\n", string(modifiedJSON))
-				} else {
-					// Pass through unchanged
-					fmt.Fprintln(w, line)
-				}
-			} else {
-				// Parse failed or no choices, pass through unchanged
-				fmt.Fprintln(w, line)
-			}
-		} else {
-			// Not a data line or is [DONE], pass through unchanged
-			fmt.Fprintln(w, line)
+	for stream.Next() {
+		chunk := stream.Current()
+		data, err := json.Marshal(chunk)
+		if err != nil {
+			continue
 		}
-
-		if flusher != nil {
-			flusher.Flush()
-		}
+		fmt.Fprintf(w, "data: %s\n\n", data)
+		flusher.Flush()
 	}
 
-	r.logger.Debug("streaming response completed",
-		"model", completionReq.Model,
-		"provider", providerName)
+	if err := stream.Err(); err != nil {
+		r.logger.WithError(err).Error("streaming error", "model", completionReq.Model, "provider", providerName)
+	}
+
+	fmt.Fprint(w, "data: [DONE]\n\n")
+	flusher.Flush()
+
+	r.logger.Debug("streaming response completed", "model", completionReq.Model, "provider", providerName)
 }
 
+func (r *Router) HandleMessages(w http.ResponseWriter, req *http.Request) {
+	var messagesReq claude.MessagesRequest
+	if err := readJSON(req, &messagesReq); err != nil {
+		r.logger.WithError(err).Error("failed to parse messages request")
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	openaiReq := claude.MessagesRequestToOpenAI(&messagesReq)
+
+	ctx := req.Context()
+	resp, err := r.CreateChatCompletion(ctx, &openaiReq)
+	if err != nil {
+		r.logger.WithError(err).Error("messages request failed")
+		if strings.Contains(err.Error(), "not found") {
+			http.Error(w, err.Error(), http.StatusNotFound)
+		} else {
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+		}
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := writeJSON(w, claude.OpenAIToMessagesResponse(resp)); err != nil {
+		r.logger.WithError(err).Error("failed to write messages response")
+	}
+}
 func (r *Router) HandleEmbeddings(w http.ResponseWriter, req *http.Request) {
 	var embeddingReq EmbeddingRequest
 	if err := readJSON(req, &embeddingReq); err != nil {

@@ -12,6 +12,8 @@ require (
 	github.com/paularlott/scriptling v0.2.4
 )
 
+replace github.com/paularlott/mcp => /Users/paul/Code/Source/mcp
+
 require (
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/dgraph-io/ristretto/v2 v2.4.0 // indirect

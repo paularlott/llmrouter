@@ -1,464 +1,198 @@
 # LLM Router
 
-A powerful router for LLM services that supports the OpenAI protocol and provides a complete Model Context Protocol (MCP) server with Scriptling integration.
+A unified gateway that aggregates multiple LLM providers behind a single endpoint. Clients use their preferred protocol (OpenAI or Anthropic Messages) and the gateway handles routing, protocol translation, and load balancing.
 
 ## Features
 
-- **OpenAI Protocol Compatible**: Supports standard OpenAI API endpoints
-- **Multiple Provider Support**: Aggregate models from multiple OpenAI-compatible servers
-- **Load-Based Routing**: Routes to the provider with the least active completions
-- **MCP Server**: Full Model Context Protocol server with tool discovery and execution
-- **Scriptling Integration**: Python-like scripting environment for custom tools
-- **Dynamic Tool Loading**: Edit tool scripts without restarting the server
-- **Automatic Tool Calling**: AI completions automatically execute tools
-- **Responses API**: OpenAI-compatible responses storage and retrieval
-- **CLI Tools**: Command-line interface for script and tool execution
+- **Multi-Provider**: OpenAI, Claude, Gemini, Ollama, Mistral, ZAi — configure once, route by model name
+- **Protocol Translation**: Clients speak OpenAI or Messages (Claude) format; the gateway translates as needed
+- **Weight-Based Load Balancing**: Distribute load across providers with configurable weights
+- **MCP Aggregator**: Aggregate tools from multiple remote MCP servers with namespace isolation
+- **Responses API**: OpenAI-compatible responses storage (emulated for all providers)
+- **Conversations API**: n8n-compatible conversation management
+- **Optional Auth**: Bearer token protection for all endpoints
 
 ## Quick Start
 
 ```bash
-# Build
 go build -o llmrouter .
-
-# Or use task/make for multi-platform builds
-task              # Build for current platform
-make              # Build for current platform
-task build-all    # Build for all platforms
-
-# Run the server
 ./llmrouter server
-
-# Run with custom config
 ./llmrouter -config /path/to/config.toml server
 ```
 
 ## Configuration
 
-Create a `config.toml` file:
-
 ```toml
 [server]
-port = 12345
 host = "0.0.0.0"
-token = "your-secret-token"  # Optional: Bearer token for API authentication
+port = 12345
+token = "your-secret-token"   # Optional bearer token
 
 [logging]
-level = "info"       # trace, debug, info, warn, error
-format = "console"   # console, json
+level = "info"    # trace | debug | info | warn | error
+format = "console" # console | json
 
-# LLM Providers
-[[providers]]
-name = "local-llm"
-base_url = "http://localhost:8080/v1"
-token = ""
-enabled = true
+[storage]
+# path = "./data"  # Omit for memory-only storage
+
+[responses]
+ttl_days = 30
+
+[conversations]
+ttl_days = 30
 
 [[providers]]
 name = "openai"
-base_url = "https://api.openai.com/v1"
-token = "your-api-key"
+provider = "openai"           # openai | claude | gemini | ollama | mistral | zai
+token = "sk-..."
 enabled = true
-native_responses = true  # Provider supports native responses API
+weight = 1.0                  # 0.0-2.0, default 1.0; higher = preferred
 
-# Provider with static models (no API fetching)
+[[providers]]
+name = "anthropic"
+provider = "claude"
+token = "sk-ant-..."
+enabled = true
+models = ["claude-opus-4-5", "claude-sonnet-4-5"]  # Required for Claude
+
 [[providers]]
 name = "google"
-base_url = "https://generativelanguage.googleapis.com/v1beta/openai/"
+provider = "gemini"
 token = "your-google-key"
 enabled = true
-models = ["gemini-2.5-flash-lite", "gemini-2.5-pro"]
+models = ["gemini-2.5-flash-lite"]  # Optional: restrict to specific models
 
-# Provider with allowlist (only these models exposed)
 [[providers]]
-name = "openai-filtered"
-base_url = "https://api.openai.com/v1"
-token = "your-api-key"
+name = "local"
+provider = "ollama"
+base_url = "http://localhost:11434/v1"
 enabled = true
-allowlist = ["gpt-4", "gpt-4-turbo", "gpt-3.5-turbo"]
-
-# Provider with denylist (these models excluded)
-[[providers]]
-name = "azure"
-base_url = "https://your-resource.openai.azure.com"
-token = "your-azure-key"
-enabled = true
-denylist = ["text-davinci-003"]
 
 [mcp]
-# Remote MCP servers (optional)
-# Configure external MCP servers with tool visibility control
-# [[mcp.remote_servers]]
-#   namespace = "ai"                    # Namespace prefix for tools
-#   url = "https://ai.example.com/mcp"  # MCP server URL
-#   token = "your-bearer-token"         # Optional authentication
-#   tool_visibility = "native"          # "native" (default) or "ondemand"
-
-[scriptling]
-tools_path = "./example-tools"
-libraries_path = "./example-libs"
-
-[responses]
-storage_path = "./responses.db"
-ttl_days = 30
+[[mcp.remote_servers]]
+namespace = "tools"
+url = "https://tools.example.com/mcp"
+token = "secret"
+tool_visibility = "native"    # native | discoverable
 ```
 
-### Provider Configuration
+### Provider Types
 
-| Field       | Description                                  |
-| ----------- | -------------------------------------------- |
-| `name`      | Unique identifier for the provider           |
-| `base_url`  | OpenAI-compatible API base URL               |
-| `token`     | API token/key (optional for local servers)   |
-| `enabled`   | Enable/disable the provider                  |
-| `models`    | Static model list (skips API model fetching) |
-| `allowlist` | Only expose these models                     |
-| `denylist`  | Exclude these models                         |
+| Provider  | Default Base URL                              | Embeddings | Model Discovery  |
+| --------- | --------------------------------------------- | ---------- | ---------------- |
+| `openai`  | https://api.openai.com/v1                     | Yes        | Auto             |
+| `claude`  | https://api.anthropic.com/v1                  | No         | **Must specify** |
+| `gemini`  | https://generativelanguage.googleapis.com/... | Yes        | Auto             |
+| `ollama`  | https://ollama.com/v1/                        | Yes        | Auto             |
+| `mistral` | https://api.mistral.ai/v1                     | Yes        | Auto             |
+| `zai`     | https://api.z.ai/api/paas/v4/                 | Yes        | Auto             |
 
-### Model Filtering Rules
+`base_url` is optional — each provider has a built-in default. Set it to override (e.g. local LM Studio).
 
-1. Denylist is applied first - matching models are always excluded
-2. If allowlist is provided, only matching models are included
-3. If no allowlist, all non-denylisted models are included
+### Weight-Based Load Balancing
 
-### Authentication
+When multiple providers serve the same model, the router selects using `score = active_completions / weight`. Lower score wins.
 
-Optional bearer token authentication can be enabled by setting the `token` field in the server configuration:
+| Weight | Effect                                    |
+| ------ | ----------------------------------------- |
+| `0.0`  | Last resort only                          |
+| `1.0`  | Normal (default)                          |
+| `2.0`  | Preferred — gets 2× the traffic share     |
 
-```toml
-[server]
-token = "your-secret-token"
-```
+### MCP Tool Visibility
 
-When configured, all API endpoints (except `/health`) require a valid bearer token:
-
-```bash
-curl -H "Authorization: Bearer your-secret-token" http://localhost:12345/v1/models
-```
-
-If no token is configured, the server runs without authentication.
-
-### MCP Configuration
-
-| Field             | Description                                                        |
-| ----------------- | ------------------------------------------------------------------ |
-| `mode`            | Global mode: `native` (default) or `ondemand`                      |
-| `namespace`       | Namespace for the remote MCP server (prevents tool name conflicts) |
-| `url`             | URL of the remote MCP server                                       |
-| `token`           | Optional bearer token for authentication                           |
-| `tool_visibility` | Tool visibility mode: `native` (default) or `ondemand`             |
-
-#### Global Mode
-
-**`native`** (default): All tools (local, remote, and script-based) appear directly in tools/list. The LLM can call them directly by name.
-
-**`ondemand`**: Only `tool_search` and `execute_tool` appear in tools/list. All other tools must be discovered via `tool_search` and called via `execute_tool`. Reduces initial context.
-
-#### Tool Visibility Modes (Per Remote Server)
-
-**`native`** (default): Remote server tools appear directly in the tools/list manifest. The LLM can call them directly by name (e.g., `namespace/tool-name`).
-
-**`ondemand`**: Remote server tools are hidden from tools/list but searchable via `tool_search` and callable via `execute_tool`.
-
-### Responses Configuration
-
-| Field          | Description                                                    |
-| -------------- | -------------------------------------------------------------- |
-| `storage_path` | Path to BadgerDB storage directory (default: "./responses.db") |
-| `ttl_days`     | Time-to-live for stored responses in days (default: 30)        |
+| Mode          | Behavior                                              |
+| ------------- | ----------------------------------------------------- |
+| `native`      | Tools appear in `tools/list`, directly callable       |
+| `discoverable`| Hidden from list, searchable via `tool_search` only   |
 
 ## API Endpoints
 
-### GET /v1/models
-
-Returns aggregated models from all enabled providers.
+### Chat & Models
 
 ```bash
-# Without authentication
-curl http://localhost:12345/v1/models
-
-# With authentication (if token is configured)
-curl -H "Authorization: Bearer your-secret-token" http://localhost:12345/v1/models
+GET  /v1/models
+POST /v1/chat/completions    # OpenAI format, streaming supported
+POST /v1/messages            # Anthropic Messages format
+POST /v1/embeddings
+GET  /health
 ```
 
-### POST /v1/chat/completions
-
-Creates a chat completion (routed to appropriate provider).
+### Responses API
 
 ```bash
-# Without authentication
-curl -X POST http://localhost:12345/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "gpt-3.5-turbo",
-    "messages": [{"role": "user", "content": "Hello!"}]
-  }'
-
-# With authentication (if token is configured)
-curl -X POST http://localhost:12345/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your-secret-token" \
-  -d '{
-    "model": "gpt-3.5-turbo",
-    "messages": [{"role": "user", "content": "Hello!"}]
-  }'
+POST   /v1/responses
+GET    /v1/responses/{id}
+DELETE /v1/responses/{id}
+GET    /v1/responses
+POST   /v1/responses/{id}/cancel
+POST   /v1/responses/compact
 ```
 
-### POST /v1/embeddings
-
-Creates embeddings (routed to appropriate provider).
+### Conversations API
 
 ```bash
-# Single text input (without authentication)
-curl -X POST http://localhost:12345/v1/embeddings \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "text-embedding-embeddinggemma-300m-qat",
-    "input": "Hello world"
-  }'
-
-# Multiple text inputs (with authentication)
-curl -X POST http://localhost:12345/v1/embeddings \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your-secret-token" \
-  -d '{
-    "model": "text-embedding-embeddinggemma-300m-qat",
-    "input": ["Hello", "World"]
-  }'
+POST   /v1/conversations
+GET    /v1/conversations/{id}
+POST   /v1/conversations/{id}
+DELETE /v1/conversations/{id}
+GET    /v1/conversations/{conversation_id}/items
+POST   /v1/conversations/{conversation_id}/items
+GET    /v1/conversations/{conversation_id}/items/{item_id}
+DELETE /v1/conversations/{conversation_id}/items/{item_id}
 ```
 
-### POST /mcp
-
-Model Context Protocol endpoint for tool discovery and execution in native mode. Native tools appear in `tools/list` and can be called directly.
+### MCP
 
 ```bash
-# List available tools
-curl -X POST http://localhost:12345/mcp \
-  -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
-
-# Search for tools
-curl -X POST http://localhost:12345/mcp \
-  -H "Content-Type: application/json" \
-  -d '{
-    "jsonrpc":"2.0","id":1,"method":"tools/call",
-    "params":{"name":"tool_search","arguments":{"query":"calculator"}}
-  }'
-
-# Execute a tool
-curl -X POST http://localhost:12345/mcp \
-  -H "Content-Type: application/json" \
-  -d '{
-    "jsonrpc":"2.0","id":1,"method":"tools/call",
-    "params":{
-      "name":"execute_tool",
-      "arguments":{"name":"calculator","arguments":{"operation":"add","a":5,"b":3}}
-    }
-  }'
-
-# Execute arbitrary code
-curl -X POST http://localhost:12345/mcp \
-  -H "Content-Type: application/json" \
-  -d '{
-    "jsonrpc":"2.0","id":1,"method":"tools/call",
-    "params":{
-      "name":"execute_code",
-      "arguments":{"code":"import llmr.mcp\nllmr.mcp.return_string(str(2+2))"}
-    }
-  }'
+POST /mcp    # MCP protocol — aggregates tools from all configured remote servers
 ```
 
-#### Discovery Mode
+### Authentication
 
-Use the `X-MCP-Tool-Mode: discovery` header or `?tool_mode=discovery` query parameter to enable discovery mode. In this mode, all tools are hidden from `tools/list` but remain searchable via `tool_search`. Useful for AI clients that work better with fewer initial tools.
+When `server.token` is set, all endpoints except `/health` require:
 
-```bash
-# Only tool_search and execute_tool are visible in tools/list (using header)
-curl -X POST http://localhost:12345/mcp \
-  -H "Content-Type: application/json" \
-  -H "X-MCP-Tool-Mode: discovery" \
-  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
-
-# Or using query parameter
-curl -X POST "http://localhost:12345/mcp?tool_mode=discovery" \
-  -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
-
-# All tools are searchable via tool_search
-curl -X POST http://localhost:12345/mcp \
-  -H "Content-Type: application/json" \
-  -H "X-MCP-Tool-Mode: discovery" \
-  -d '{
-    "jsonrpc":"2.0","id":1,"method":"tools/call",
-    "params":{"name":"tool_search","arguments":{"query":"calculator"}}
-  }'
+```
+Authorization: Bearer your-secret-token
 ```
 
-### GET /health
-
-Returns health information including provider status.
+## CLI
 
 ```bash
-curl http://localhost:12345/health
-```
-
-## Responses API Endpoints
-
-The responses API allows storing, retrieving, and managing chat completion responses.
-
-### POST /v1/responses
-
-Create a new response entry.
-
-```bash
-curl -X POST http://localhost:12345/v1/responses \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your-secret-token" \
-  -d '{
-    "model": "gpt-3.5-turbo",
-    "messages": [{"role": "user", "content": "Hello!"}],
-    "metadata": {"user_id": "123"}
-  }'
-```
-
-### GET /v1/responses/{id}
-
-Retrieve a specific response by ID.
-
-```bash
-curl -H "Authorization: Bearer your-secret-token" \
-  http://localhost:12345/v1/responses/resp_abc123
-```
-
-### DELETE /v1/responses/{id}
-
-Delete a specific response.
-
-```bash
-curl -X DELETE \
-  -H "Authorization: Bearer your-secret-token" \
-  http://localhost:12345/v1/responses/resp_abc123
-```
-
-### GET /v1/responses
-
-List responses with optional filtering.
-
-```bash
-# List all responses
-curl -H "Authorization: Bearer your-secret-token" \
-  http://localhost:12345/v1/responses
-
-# List with limit
-curl -H "Authorization: Bearer your-secret-token" \
-  "http://localhost:12345/v1/responses?limit=10&order=desc"
-```
-
-### POST /v1/responses/{id}/cancel
-
-Cancel an in-progress response.
-
-```bash
-curl -X POST \
-  -H "Authorization: Bearer your-secret-token" \
-  http://localhost:12345/v1/responses/resp_abc123/cancel
-```
-
-### POST /v1/responses/compact
-
-Trigger garbage collection and compaction of stored responses.
-
-```bash
-curl -X POST \
-  -H "Authorization: Bearer your-secret-token" \
-  http://localhost:12345/v1/responses/compact
-```
-
-## CLI Commands
-
-### Server
-
-```bash
-./llmrouter server                    # Run with default config
-./llmrouter -config custom.toml server  # Custom config
-./llmrouter server -port 8080         # Override port
-./llmrouter server -token secret123   # Set bearer token via CLI
-```
-
-### Script Execution
-
-```bash
-./llmrouter script path/to/script.py arg1 arg2
-./llmrouter script -server http://localhost:8080 script.py
-./llmrouter script -v script.py       # Verbose output
-./llmrouter script -token secret123 script.py  # With authentication
-```
-
-### Tool Execution
-
-```bash
-./llmrouter tool calculator '{"operation":"add","a":5,"b":3}'
-./llmrouter tool -server http://localhost:8080 my_tool args
-./llmrouter tool -v tool_name args    # Verbose output
-./llmrouter tool -token secret123 calculator args  # With authentication
+./llmrouter server                          # Start server
+./llmrouter -config custom.toml server      # Custom config
+./llmrouter server -port 8080               # Override port
+./llmrouter server -token secret123         # Set bearer token
+./llmrouter tool calculator '{"op":"add","a":1,"b":2}'  # Execute MCP tool
 ```
 
 ## Building
-
-### Using Taskfile (parallel builds)
 
 ```bash
 task              # Build for current platform
 task build-all    # Build all platforms (parallel)
 task release      # Build all with checksums
-task clean        # Clean build artifacts
-task test         # Run tests
+make              # Alternative via Makefile
 ```
 
-### Using Makefile
-
-```bash
-make              # Build for current platform
-make build-all    # Build all platforms
-make release      # Build all with checksums
-make clean        # Clean build artifacts
-make help         # Show all targets
-```
-
-### Supported Platforms
-
-- Linux (AMD64, ARM64)
-- macOS (AMD64, ARM64)
-- Windows (AMD64, ARM64)
-
-## Documentation
-
-- [Creating Custom Tools](docs/creating_tools.md) - Guide to creating MCP tools
-- [MCP Library Reference](docs/mcp_library.md) - `llmr.mcp` library functions for tools
-- [AI Library Reference](docs/ai_library.md) - `llmr.ai` library for LLM integration
+Supported platforms: Linux, macOS, Windows × AMD64/ARM64.
 
 ## Architecture
 
-### Routing Logic
+```
+Client (OpenAI or Messages protocol)
+        │
+        ▼
+   LLM Router
+   ├── Protocol Layer  (OpenAI ↔ Messages translation via mcp/ai)
+   ├── Routing Layer   (model → provider, weight-based load balancing)
+   ├── Provider Layer  (openai | claude | gemini | ollama | mistral | zai)
+   ├── MCP Aggregator  (remote MCP servers with namespace + visibility control)
+   ├── Responses API   (emulated for all providers, stored in BadgerDB)
+   └── Conversations   (n8n-compatible, stored in BadgerDB)
+```
 
-1. **Model Selection**: Router checks which providers have the requested model
-2. **Load Balancing**: Routes to provider with fewest active completions
-3. **Failover**: Returns 404 if model not available on any provider
-
-### MCP Server
-
-The MCP server provides three built-in tools:
-
-| Tool           | Description                              |
-| -------------- | ---------------------------------------- |
-| `tool_search`  | Search for available tools by keyword    |
-| `execute_tool` | Execute a discovered tool with arguments |
-| `execute_code` | Execute arbitrary Python/Scriptling code |
-
-### Dynamic Loading
-
-- **Tool scripts**: Loaded from disk on each execution (edit without restart)
-- **Tool definitions**: Dynamically scanned from filesystem (add/remove/edit without restart)
-- **Libraries**: Loaded on-demand when first imported (edit without restart)
+Protocol translation is handled by the `mcp/ai` package — the gateway always works in OpenAI format internally and translates at the edges.
 
 ## License
 

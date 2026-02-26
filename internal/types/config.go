@@ -24,14 +24,13 @@ type LoggingConfig struct {
 }
 
 type ProviderConfig struct {
-	Name            string   `json:"name"`
-	BaseURL         string   `json:"base_url"`
-	Token           string   `json:"token"`
-	Enabled         bool     `json:"enabled"`
-	Models          []string `json:"models,omitempty"`
-	Allowlist       []string `json:"allowlist,omitempty"`
-	Denylist        []string `json:"denylist,omitempty"`
-	NativeResponses bool     `json:"native_responses,omitempty"`
+	Name     string   `json:"name"`
+	Provider string   `json:"provider"`           // openai | claude | gemini | ollama | mistral | zai
+	BaseURL  string   `json:"base_url,omitempty"` // optional override
+	Token    string   `json:"token"`
+	Enabled  bool     `json:"enabled"`
+	Weight   float64  `json:"weight,omitempty"`   // 0.0-2.0, default 1.0; higher = preferred
+	Models   []string `json:"models,omitempty"`   // empty = auto-discover; required for claude
 }
 
 type MCPConfig struct {
