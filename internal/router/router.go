@@ -152,6 +152,8 @@ func NewRouter(config *types.Config, logger Logger) (*Router, error) {
 			router.smartRouter = sr
 			logger.Info("smart routing enabled", "script", config.SmartRouting.Script, "default_model", config.SmartRouting.DefaultModel)
 		}
+	} else {
+		logger.Info("smart routing disabled")
 	}
 
 	// Add MCP endpoints if server is available

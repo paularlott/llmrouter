@@ -58,7 +58,7 @@ func RunServer(ctx context.Context, cmd *cli.Command) error {
 	if cmd.ConfigFile != nil {
 		typedConfig := cli.NewTypedConfigFile(cmd.ConfigFile)
 		for _, pc := range typedConfig.GetObjectSlice("providers") {
-			config.Providers = append(config.Providers, types.ProviderConfig{
+			providerCfg := types.ProviderConfig{
 				Name:     pc.GetString("name"),
 				Provider: pc.GetString("provider"),
 				BaseURL:  strings.TrimSuffix(pc.GetString("base_url"), "/"),
@@ -66,7 +66,15 @@ func RunServer(ctx context.Context, cmd *cli.Command) error {
 				Enabled:  pc.GetBool("enabled"),
 				Weight:   pc.GetFloat64("weight"),
 				Models:   pc.GetStringSlice("models"),
-			})
+				Tags:     pc.GetStringSlice("tags"),
+			}
+			if mtObj := pc.GetObject("model_tags"); mtObj != nil {
+				providerCfg.ModelTags = make(map[string][]string)
+				for _, k := range mtObj.GetKeys("") {
+					providerCfg.ModelTags[k] = mtObj.GetStringSlice(k)
+				}
+			}
+			config.Providers = append(config.Providers, providerCfg)
 		}
 		if mcpCfg := typedConfig.GetObject("mcp"); mcpCfg != nil {
 			for _, sc := range mcpCfg.GetObjectSlice("remote_servers") {
@@ -77,6 +85,11 @@ func RunServer(ctx context.Context, cmd *cli.Command) error {
 					ToolVisibility: sc.GetString("tool_visibility"),
 				})
 			}
+		}
+		if srCfg := typedConfig.GetObject("smart_routing"); srCfg != nil {
+			config.SmartRouting.Enabled = srCfg.GetBool("enabled")
+			config.SmartRouting.Script = srCfg.GetString("script")
+			config.SmartRouting.DefaultModel = srCfg.GetString("default_model")
 		}
 	}
 

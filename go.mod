@@ -9,7 +9,7 @@ require (
 	github.com/paularlott/cli v0.7.11
 	github.com/paularlott/logger v0.3.0
 	github.com/paularlott/mcp v0.12.10
-	github.com/paularlott/scriptling v0.2.5
+	github.com/paularlott/scriptling v0.2.6
 )
 
 require (

@@ -92,7 +92,7 @@ func (sr *SmartRouter) watchLoop() {
 			if err := sr.loadScript(); err != nil {
 				sr.logger.Warn("routing script reload failed", "error", err)
 			} else {
-				sr.logger.Info("routing script hot-reloaded", "path", sr.scriptPath)
+				sr.logger.Debug("routing script content loaded", "path", sr.scriptPath, "bytes", len(sr.scriptSrc))
 			}
 			debounce = nil
 		case err, ok := <-sr.watcher.Errors:

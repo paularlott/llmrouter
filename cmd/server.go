@@ -49,6 +49,21 @@ var ServerCmd = &cli.Command{
 			ConfigPath:   []string{"conversations.ttl_days"},
 			DefaultValue: 30,
 		},
+		&cli.BoolFlag{
+			Name:       "smart-routing",
+			Usage:      "Enable smart routing",
+			ConfigPath: []string{"smart_routing.enabled"},
+		},
+		&cli.StringFlag{
+			Name:       "router-script",
+			Usage:      "Path to the smart routing script",
+			ConfigPath: []string{"smart_routing.script"},
+		},
+		&cli.StringFlag{
+			Name:       "router-default-model",
+			Usage:      "Default model when smart routing returns nothing",
+			ConfigPath: []string{"smart_routing.default_model"},
+		},
 	},
 	Run: func(ctx context.Context, cmd *cli.Command) error {
 		return server.RunServer(ctx, cmd)
