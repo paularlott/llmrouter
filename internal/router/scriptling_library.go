@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"math/rand"
 
+	"github.com/paularlott/mcp/ai/openai"
 	"github.com/paularlott/scriptling/object"
 )
 
@@ -35,14 +36,10 @@ func buildRouterLibraryForRequest(r *Router, reqJSON string, reqType string, msg
 	}, "message_content_types() -> list - Unique content part types across all messages (e.g. 'text', 'image_url')")
 
 	b.FunctionWithHelp("total_tokens_estimate", func() int {
-		total := 0
-		for _, m := range msgs {
-			if s, ok := m.Content.(string); ok {
-				total += len(s) / 4
-			}
-		}
-		return total
-	}, "total_tokens_estimate() -> int - Rough token estimate (chars/4) across all messages")
+		tc := openai.NewTokenCounter()
+		tc.AddPromptTokensFromMessages(msgs)
+		return tc.GetUsage().PromptTokens
+	}, "total_tokens_estimate() -> int - Estimated prompt token count across all messages")
 
 	b.FunctionWithHelp("models_by_tags", func(tags []string) []string {
 		r.ModelMapMu.RLock()

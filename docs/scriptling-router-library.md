@@ -58,7 +58,7 @@ tags = ["capable", "expensive"]
 | `router.has_model` | `has_model(model_id)` | `bool` | True if the model is available from any provider |
 | `router.provider_load` | `provider_load(name)` | `int` | Active completions for a provider (`-1` if not found) |
 | `router.message_content_types` | `message_content_types()` | `list[str]` | Unique content part types across all messages (e.g. `"text"`, `"image_url"`) |
-| `router.total_tokens_estimate` | `total_tokens_estimate()` | `int` | Rough token estimate (chars/4) across all messages |
+| `router.total_tokens_estimate` | `total_tokens_estimate()` | `int` | Estimated prompt token count across all messages (accounts for content parts, images, tool calls) |
 | `router.models_by_tags` | `models_by_tags(tags)` | `list[str]` | Model IDs that have ALL of the given tags |
 | `router.provider_for_model` | `provider_for_model(model_id)` | `str` | Provider name for a model (first if multiple, `""` if not found) |
 | `router.random_model` | `random_model(tag)` | `str` | Weighted random model with the given tag (`""` if none) |
