@@ -151,7 +151,11 @@ func (sr *SmartRouter) route(ctx context.Context, chatReq *ChatCompletionRequest
 	var selectedModel string
 	vm := scriptling.New()
 	stdlib.RegisterAll(vm)
-	vm.RegisterLibrary(buildRouterLibraryForRequest(sr.router, string(reqJSON), reqType, func(m string) {
+	var msgs []Message
+	if chatReq != nil {
+		msgs = chatReq.Messages
+	}
+	vm.RegisterLibrary(buildRouterLibraryForRequest(sr.router, string(reqJSON), reqType, msgs, func(m string) {
 		selectedModel = m
 	}))
 
@@ -193,6 +197,29 @@ func (sr *SmartRouter) route(ctx context.Context, chatReq *ChatCompletionRequest
 
 	sr.logger.Debug("smart routing resolved", "model", selectedModel)
 	return selectedModel
+}
+
+func messageContentTypes(msgs []Message) []string {
+	seen := make(map[string]struct{})
+	for _, m := range msgs {
+		switch c := m.Content.(type) {
+		case string:
+			seen["text"] = struct{}{}
+		case []any:
+			for _, part := range c {
+				if p, ok := part.(map[string]any); ok {
+					if t, ok := p["type"].(string); ok {
+						seen[t] = struct{}{}
+					}
+				}
+			}
+		}
+	}
+	result := make([]string, 0, len(seen))
+	for t := range seen {
+		result = append(result, t)
+	}
+	return result
 }
 
 func messagesForScript(msgs []Message) []interface{} {

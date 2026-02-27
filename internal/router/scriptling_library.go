@@ -2,13 +2,14 @@ package router
 
 import (
 	"encoding/json"
+	"math/rand"
 
 	"github.com/paularlott/scriptling/object"
 )
 
 // buildRouterLibraryForRequest creates the library bound to a specific request.
 // setModel is called when the script calls router.set_model(model_id).
-func buildRouterLibraryForRequest(r *Router, reqJSON string, reqType string, setModel func(string)) *object.Library {
+func buildRouterLibraryForRequest(r *Router, reqJSON string, reqType string, msgs []Message, setModel func(string)) *object.Library {
 	b := object.NewLibraryBuilder("router", "LLM Router - provider and model data for routing scripts")
 
 	b.FunctionWithHelp("set_model", func(modelID string) {
@@ -28,6 +29,87 @@ func buildRouterLibraryForRequest(r *Router, reqJSON string, reqType string, set
 	b.FunctionWithHelp("is_responses", func() bool {
 		return reqType == reqTypeResponses
 	}, "is_responses() -> bool - True if this is a responses API request")
+
+	b.FunctionWithHelp("message_content_types", func() []string {
+		return messageContentTypes(msgs)
+	}, "message_content_types() -> list - Unique content part types across all messages (e.g. 'text', 'image_url')")
+
+	b.FunctionWithHelp("total_tokens_estimate", func() int {
+		total := 0
+		for _, m := range msgs {
+			if s, ok := m.Content.(string); ok {
+				total += len(s) / 4
+			}
+		}
+		return total
+	}, "total_tokens_estimate() -> int - Rough token estimate (chars/4) across all messages")
+
+	b.FunctionWithHelp("models_by_tags", func(tags []string) []string {
+		r.ModelMapMu.RLock()
+		defer r.ModelMapMu.RUnlock()
+
+		var result []string
+		outer:
+		for modelID, modelTags := range r.ModelTags {
+			for _, tag := range tags {
+				if !hasTag(modelTags, tag) {
+					continue outer
+				}
+			}
+			result = append(result, modelID)
+		}
+		return result
+	}, "models_by_tags(tags) -> list - Model IDs that have ALL of the given tags")
+
+	b.FunctionWithHelp("provider_for_model", func(modelID string) string {
+		r.ModelMapMu.RLock()
+		defer r.ModelMapMu.RUnlock()
+		if names, ok := r.ModelMap[modelID]; ok && len(names) > 0 {
+			return names[0]
+		}
+		return ""
+	}, "provider_for_model(model_id) -> str - Provider name for a model (first if multiple, empty if not found)")
+
+	b.FunctionWithHelp("random_model", func(tag string) string {
+		r.ModelMapMu.RLock()
+		defer r.ModelMapMu.RUnlock()
+
+		type candidate struct {
+			modelID string
+			weight  float64
+		}
+		var pool []candidate
+		for modelID, tags := range r.ModelTags {
+			if !hasTag(tags, tag) {
+				continue
+			}
+			w := 1.0
+			if names, ok := r.ModelMap[modelID]; ok {
+				for _, name := range names {
+					if p, ok := r.Providers[name]; ok && p.Enabled && p.Healthy {
+						w = p.Weight
+						break
+					}
+				}
+			}
+			pool = append(pool, candidate{modelID, w})
+		}
+		if len(pool) == 0 {
+			return ""
+		}
+		total := 0.0
+		for _, c := range pool {
+			total += c.weight
+		}
+		r2 := rand.Float64() * total
+		for _, c := range pool {
+			r2 -= c.weight
+			if r2 <= 0 {
+				return c.modelID
+			}
+		}
+		return pool[len(pool)-1].modelID
+	}, "random_model(tag) -> str - Weighted random model with the given tag (empty string if none)")
 
 	b.FunctionWithHelp("providers", func(kwargs object.Kwargs) []map[string]interface{} {
 		filterTag := kwargs.MustGetString("tag", "")

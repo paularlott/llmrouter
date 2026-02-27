@@ -57,6 +57,11 @@ tags = ["capable", "expensive"]
 | `router.model_tags` | `model_tags(model_id)` | `list[str]` | Tags assigned to a model |
 | `router.has_model` | `has_model(model_id)` | `bool` | True if the model is available from any provider |
 | `router.provider_load` | `provider_load(name)` | `int` | Active completions for a provider (`-1` if not found) |
+| `router.message_content_types` | `message_content_types()` | `list[str]` | Unique content part types across all messages (e.g. `"text"`, `"image_url"`) |
+| `router.total_tokens_estimate` | `total_tokens_estimate()` | `int` | Rough token estimate (chars/4) across all messages |
+| `router.models_by_tags` | `models_by_tags(tags)` | `list[str]` | Model IDs that have ALL of the given tags |
+| `router.provider_for_model` | `provider_for_model(model_id)` | `str` | Provider name for a model (first if multiple, `""` if not found) |
+| `router.random_model` | `random_model(tag)` | `str` | Weighted random model with the given tag (`""` if none) |
 
 ### Provider dict fields
 
@@ -84,8 +89,8 @@ import router
 
 req = router.get_request()
 # req["type"]     - "chat" or "responses"
-# req["messages"] - list of {"role": str, "content": str}  (chat only)
-# req["tools"]    - list of {"type": str, "name": str}      (chat only)
+# req["messages"] - list of {"role": str, "content": str|list}  (chat only)
+# req["tools"]    - list of {"type": str, "name": str}           (chat only)
 ```
 
 Or check the type directly:
@@ -120,6 +125,20 @@ The routing script is watched with a filesystem watcher. Changes are picked up w
 ---
 
 ## Example Scripts
+
+### Route vision requests to a capable model
+
+```python
+import router
+
+if "image_url" in router.message_content_types():
+    models = router.models_by_tag("vision")
+else:
+    models = router.models_by_tag("cheap")
+
+if models:
+    router.set_model(models[0])
+```
 
 ### Narrow by secondary tag
 
@@ -196,17 +215,10 @@ if best:
 
 ```python
 import router
-import random
 
-weighted = []
-for p in router.providers():
-    if len(p["models"]) > 0:
-        for _ in range(int(p["weight"] * 10)):
-            weighted.append(p)
-
-if weighted:
-    chosen = weighted[random.randint(0, len(weighted) - 1)]
-    router.set_model(chosen["models"][0])
+model = router.random_model("cheap")
+if model:
+    router.set_model(model)
 ```
 
 ---
