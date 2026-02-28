@@ -747,7 +747,7 @@ func (r *Router) HandleMessages(w http.ResponseWriter, req *http.Request) {
 	openaiReq := claude.MessagesRequestToOpenAI(&messagesReq)
 
 	ctx := req.Context()
-	resp, err := r.CreateChatCompletion(ctx, &openaiReq)
+	resp, err := r.createChatCompletionWithHeaders(ctx, &openaiReq, passthroughHeaders(req))
 	if err != nil {
 		r.logger.WithError(err).Error("messages request failed")
 		if strings.Contains(err.Error(), "not found") {
@@ -762,6 +762,87 @@ func (r *Router) HandleMessages(w http.ResponseWriter, req *http.Request) {
 	if err := writeJSON(w, claude.OpenAIToMessagesResponse(resp)); err != nil {
 		r.logger.WithError(err).Error("failed to write messages response")
 	}
+}
+
+// passthroughHeaders returns headers from the incoming request, excluding auth and hop-by-hop headers.
+var skipHeaders = map[string]bool{
+	"authorization":    true,
+	"x-api-key":        true,
+	"content-length":   true,
+	"content-type":     true,
+	"host":             true,
+	"connection":       true,
+	"transfer-encoding": true,
+}
+
+func passthroughHeaders(req *http.Request) http.Header {
+	h := make(http.Header)
+	for k, v := range req.Header {
+		if !skipHeaders[strings.ToLower(k)] {
+			h[k] = v
+		}
+	}
+	if len(h) == 0 {
+		return nil
+	}
+	return h
+}
+
+// createChatCompletionWithHeaders routes a chat completion, using a temporary client
+// with extra headers for claude providers.
+func (r *Router) createChatCompletionWithHeaders(ctx context.Context, req *ChatCompletionRequest, extraHeaders http.Header) (*ChatCompletionResponse, error) {
+	if len(extraHeaders) == 0 {
+		return r.CreateChatCompletion(ctx, req)
+	}
+
+	if req.Model == "auto" && r.smartRouter != nil {
+		resolved := r.smartRouter.Route(ctx, req)
+		if resolved == "" {
+			return nil, fmt.Errorf("model auto not found in any provider")
+		}
+		req.Model = resolved
+	}
+
+	providerName, err := r.GetProviderForModel(req.Model)
+	if err != nil {
+		return nil, err
+	}
+
+	provider := r.Providers[providerName]
+	if provider.ProviderType != "claude" {
+		return r.CreateChatCompletion(ctx, req)
+	}
+
+	// Find provider config to create a temporary client with extra headers
+	var providerCfg *types.ProviderConfig
+	for i := range r.config.Providers {
+		if r.config.Providers[i].Name == providerName {
+			providerCfg = &r.config.Providers[i]
+			break
+		}
+	}
+	if providerCfg == nil {
+		return r.CreateChatCompletion(ctx, req)
+	}
+
+	client, err := newAIClientWithHeaders(providerCfg, extraHeaders)
+	if err != nil {
+		return r.CreateChatCompletion(ctx, req)
+	}
+
+	r.incrementActiveCompletions(providerName)
+	defer r.decrementActiveCompletions(providerName)
+
+	r.logger.Debug("routing chat completion with passthrough headers", "model", req.Model, "provider", providerName)
+
+	resp, err := client.ChatCompletion(ctx, *req)
+	if err != nil {
+		if r.isConnectionError(err) {
+			r.DisableProvider(providerName, fmt.Sprintf("connection error: %v", err))
+		}
+		return nil, err
+	}
+	return resp, nil
 }
 func (r *Router) HandleEmbeddings(w http.ResponseWriter, req *http.Request) {
 	var embeddingReq EmbeddingRequest

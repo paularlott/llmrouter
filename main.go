@@ -61,6 +61,8 @@ func main() {
 		Commands: []*cli.Command{
 			cmd.ServerCmd,
 			cmd.ToolCmd,
+			cmd.ModelsCmd,
+			cmd.AskCmd,
 		},
 	}
 
