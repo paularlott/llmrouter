@@ -104,9 +104,7 @@ func RunServer(ctx context.Context, cmd *cli.Command) error {
 	r.StartBackgroundTasks()
 	defer r.StopBackgroundTasks()
 
-	if err := r.RefreshModels(ctx); err != nil {
-		logger.Warn("initial model refresh failed", "error", err)
-	}
+	r.RefreshModels(ctx)
 
 	shutdownChan := make(chan os.Signal, 1)
 	signal.Notify(shutdownChan, syscall.SIGINT, syscall.SIGTERM)

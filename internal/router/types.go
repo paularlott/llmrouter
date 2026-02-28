@@ -23,6 +23,7 @@ type Provider struct {
 	Enabled           bool
 	Healthy           bool
 	ActiveCompletions atomic.Int64
+	Fetching          atomic.Bool
 	StaticModels      bool
 	ModelWhitelist    []string
 	Weight            float64

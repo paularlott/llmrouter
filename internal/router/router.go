@@ -171,154 +171,89 @@ func NewRouter(config *types.Config, logger Logger) (*Router, error) {
 func (r *Router) RefreshModels(ctx context.Context) error {
 	r.logger.Info("refreshing models from all providers concurrently")
 
-	// Clear existing model map with mutex protection
-	r.ModelMapMu.Lock()
-	r.ModelMap = make(map[string][]string)
-	r.ModelMapMu.Unlock()
-
-	modelSet := make(map[string]map[string]bool) // model -> provider -> exists
-	var modelSetMu sync.Mutex
-
-	// Use WaitGroup to fetch models from all healthy providers concurrently
-	var wg sync.WaitGroup
-
-	// First, add static models from providers with predefined model lists
 	for providerName, provider := range r.Providers {
 		if !provider.Enabled {
 			continue
 		}
-
 		if provider.StaticModels {
-			// Get static models from config
-			var staticModels []string
 			for _, providerConfig := range r.config.Providers {
 				if providerConfig.Name == providerName {
-					staticModels = providerConfig.Models
+					r.addProviderModels(providerName, providerConfig.Models, provider)
+					r.logger.Info("using static models from config", "provider", providerName, "count", len(providerConfig.Models))
 					break
 				}
 			}
-
-			modelSetMu.Lock()
-			for _, modelID := range staticModels {
-				if shouldIncludeModel(modelID) {
-					if modelSet[modelID] == nil {
-						modelSet[modelID] = make(map[string]bool)
-					}
-					modelSet[modelID][providerName] = true
-				}
-			}
-			modelSetMu.Unlock()
-
-			r.logger.Info("using static models from config",
-				"provider", providerName,
-				"count", len(staticModels))
-		}
-	}
-
-	// Then, fetch dynamic models from providers without static lists
-	for providerName, provider := range r.Providers {
-		if !provider.Enabled || !provider.Healthy || provider.StaticModels {
-			r.logger.Debug("skipping provider",
-				"provider", providerName,
-				"enabled", provider.Enabled,
-				"healthy", provider.Healthy,
-				"static_models", provider.StaticModels)
 			continue
 		}
-
-		wg.Add(1)
+		if !provider.Healthy {
+			r.logger.Debug("skipping provider", "provider", providerName, "enabled", provider.Enabled, "healthy", provider.Healthy, "static_models", provider.StaticModels)
+			continue
+		}
+		if !provider.Fetching.CompareAndSwap(false, true) {
+			r.logger.Debug("skipping provider fetch already in progress", "provider", providerName)
+			continue
+		}
 		go func(name string, p *Provider) {
-			defer wg.Done()
-
+			defer p.Fetching.Store(false)
 			r.logger.Debug("fetching models from provider", "provider", name)
-
-			// Use the timeout method for model fetching
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
 			modelsResp, err := p.Client.GetModels(ctx)
 			if err != nil {
 				r.logger.WithError(err).Error("failed to fetch models from provider", "provider", name)
 				r.DisableProvider(name, fmt.Sprintf("model fetch failed: %v", err))
 				return
 			}
-
-			// Mark provider as healthy since we successfully got models
-			if !p.Healthy {
-				r.EnableProvider(name)
-			}
-
-			// Log the models we found
 			modelIDs := make([]string, 0, len(modelsResp.Data))
 			for _, model := range modelsResp.Data {
 				modelIDs = append(modelIDs, model.ID)
 			}
-
-			r.logger.Debug("fetched models from provider",
-				"provider", name,
-				"count", len(modelsResp.Data),
-				"models", modelIDs)
-
-			// Safely update the shared modelSet, applying whitelist if set
-			modelSetMu.Lock()
-			for _, model := range modelsResp.Data {
-				if !shouldIncludeModel(model.ID) {
-					continue
-				}
-				if len(p.ModelWhitelist) > 0 && !inSlice(model.ID, p.ModelWhitelist) {
-					continue
-				}
-				if modelSet[model.ID] == nil {
-					modelSet[model.ID] = make(map[string]bool)
-				}
-				modelSet[model.ID][name] = true
-			}
-			modelSetMu.Unlock()
+			r.logger.Debug("fetched models from provider", "provider", name, "count", len(modelsResp.Data), "models", modelIDs)
+			r.addProviderModels(name, modelIDs, p)
 		}(providerName, provider)
 	}
 
-	// Wait for all goroutines to complete
-	wg.Wait()
+	return nil
+}
 
-	// Build the final model map with mutex protection
+func (r *Router) addProviderModels(providerName string, modelIDs []string, p *Provider) {
 	r.ModelMapMu.Lock()
 	defer r.ModelMapMu.Unlock()
 
-	for modelID, providers := range modelSet {
-		providerNames := make([]string, 0, len(providers))
-		for providerName := range providers {
-			providerNames = append(providerNames, providerName)
-		}
-		r.ModelMap[modelID] = providerNames
-
-		if len(providers) > 1 {
-			r.logger.Debug("model available on multiple providers",
-				"model", modelID,
-				"providers", providerNames)
-		}
-	}
-
-	// Rebuild global model tags from all providers
-	r.ModelTags = make(map[string][]string)
-	tagSet := make(map[string]map[string]bool)
-	for _, p := range r.Providers {
-		for modelID, tags := range p.ModelTags {
-			if tagSet[modelID] == nil {
-				tagSet[modelID] = make(map[string]bool)
-			}
-			for _, t := range tags {
-				tagSet[modelID][t] = true
+	// Remove this provider from all existing model entries
+	for modelID, providers := range r.ModelMap {
+		newProviders := make([]string, 0, len(providers))
+		for _, pn := range providers {
+			if pn != providerName {
+				newProviders = append(newProviders, pn)
 			}
 		}
-	}
-	for modelID, tags := range tagSet {
-		for t := range tags {
-			r.ModelTags[modelID] = append(r.ModelTags[modelID], t)
+		if len(newProviders) == 0 {
+			delete(r.ModelMap, modelID)
+		} else {
+			r.ModelMap[modelID] = newProviders
 		}
 	}
 
-	r.logger.Info("model refresh complete",
-		"total_models", len(r.ModelMap),
-		"total_providers", len(r.Providers))
+	for _, modelID := range modelIDs {
+		if !shouldIncludeModel(modelID) {
+			continue
+		}
+		if len(p.ModelWhitelist) > 0 && !inSlice(modelID, p.ModelWhitelist) {
+			continue
+		}
+		r.ModelMap[modelID] = append(r.ModelMap[modelID], providerName)
+	}
 
-	return nil
+	for modelID, tags := range p.ModelTags {
+		for _, t := range tags {
+			if !inSlice(t, r.ModelTags[modelID]) {
+				r.ModelTags[modelID] = append(r.ModelTags[modelID], t)
+			}
+		}
+	}
+
+	r.logger.Info("model refresh complete", "total_models", len(r.ModelMap), "total_providers", len(r.Providers))
 }
 
 // DisableProvider marks a provider as unhealthy and removes its models from the map
@@ -656,9 +591,6 @@ func (r *Router) decrementActiveCompletions(providerName string) {
 
 // HTTP Handlers
 func (r *Router) HandleModels(w http.ResponseWriter, req *http.Request) {
-	if err := r.RefreshModels(req.Context()); err != nil {
-		r.logger.WithError(err).Error("failed to refresh models")
-	}
 	w.Header().Set("Content-Type", "application/json")
 	if req.Header.Get("anthropic-version") != "" {
 		if err := writeJSON(w, r.ListModelsAnthropic()); err != nil {
@@ -989,18 +921,11 @@ func (r *Router) checkDisabledProviders() {
 				return
 			}
 
-			// Provider is healthy again, re-enable it
+			// Provider is healthy again, re-enable and fetch its models
 			r.EnableProvider(name)
 			r.logger.Info("provider recovered and re-enabled", "provider", name)
-
-			// Trigger a model refresh to add back this provider's models
-			go func() {
-				refreshCtx, refreshCancel := context.WithTimeout(context.Background(), 30*time.Second)
-				defer refreshCancel()
-				if err := r.RefreshModels(refreshCtx); err != nil {
-					r.logger.WithError(err).Error("failed to refresh models after provider recovery", "provider", name)
-				}
-			}()
+			provider.Fetching.Store(false) // reset so RefreshModels can pick it up
+			r.RefreshModels(context.Background())
 		}(providerName)
 	}
 

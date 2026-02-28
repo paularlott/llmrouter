@@ -17,6 +17,7 @@ var AskCmd = &cli.Command{
 	Name:        "ask",
 	Usage:       "Ask a model a question",
 	Description: "Send a question to a specific model and display the JSON response",
+	MaxArgs:     cli.UnlimitedArgs,
 	Arguments: []cli.Argument{
 		&cli.StringArg{
 			Name:     "model",
