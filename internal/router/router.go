@@ -144,6 +144,7 @@ func NewRouter(config *types.Config, logger Logger) (*Router, error) {
 		sr, err := newSmartRouter(
 			config.SmartRouting.Script,
 			config.SmartRouting.DefaultModel,
+			config.SmartRouting.Vars,
 			router,
 			logger,
 		)

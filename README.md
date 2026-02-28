@@ -118,6 +118,10 @@ When a client requests the model name `auto`, the router runs a [Scriptling](htt
 enabled = true
 script = "router.py"  # Scriptling script for routing decisions
 default_model = "mistralai/ministral-3-3b"
+
+[smart_routing.vars]  # Optional key-value pairs exposed to the script
+openai_key = "sk-..."
+my_endpoint = "https://api.example.com"
 ```
 
 The `auto` model appears in `/v1/models` so clients can discover it.
@@ -174,6 +178,44 @@ if models:
 ```
 
 See [docs/scriptling-router-library.md](docs/scriptling-router-library.md) for the full script API reference.
+
+#### Script Libraries
+
+Every routing script has access to all Scriptling standard libraries (`json`, `re`, `math`, `random`, `hashlib`, `base64`, `uuid`, `datetime`, `time`, `urllib`, etc.) plus the following extended and Scriptling-specific libraries:
+
+| Library | Description |
+|---------|-------------|
+| `requests` | HTTP client |
+| `secrets` | Cryptographically strong random numbers |
+| `html.parser` | HTML/XHTML parser |
+| `logging` | Logging to the router log |
+| `yaml` | YAML parsing |
+| `toml` | TOML parsing |
+| `sys` | System parameters |
+| `scriptling.ai` | AI/LLM client for OpenAI-compatible APIs |
+| `scriptling.ai.agent` | Agentic AI loop with automatic tool execution |
+| `scriptling.mcp` | MCP tool interaction |
+| `scriptling.toon` | TOON encoding/decoding |
+| `scriptling.fuzzy` | Fuzzy string matching |
+| `scriptling.runtime` | Background tasks, KV store, sync primitives |
+
+Filesystem access (`os`, `pathlib`, `glob`), subprocess execution, and `wait_for` are not available in routing scripts.
+
+#### Script Variables
+
+Use `[smart_routing.vars]` to pass tokens or other config to the script without hard-coding them:
+
+```toml
+[smart_routing.vars]
+openai_key = "sk-..."
+```
+
+```python
+import vars
+import scriptling.ai as ai
+
+client = ai.Client("", api_key=vars.openai_key)
+```
 
 ### Weight-Based Load Balancing
 

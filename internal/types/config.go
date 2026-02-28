@@ -61,7 +61,8 @@ type ConversationsConfig struct {
 }
 
 type SmartRoutingConfig struct {
-	Enabled      bool   `json:"enabled"`
-	Script       string `json:"script,omitempty"`
-	DefaultModel string `json:"default_model,omitempty"`
+	Enabled      bool              `json:"enabled"`
+	Script       string            `json:"script,omitempty"`
+	DefaultModel string            `json:"default_model,omitempty"`
+	Vars         map[string]string `json:"vars,omitempty"` // key-value pairs exposed to routing scripts
 }

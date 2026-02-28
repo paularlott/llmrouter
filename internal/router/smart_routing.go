@@ -9,6 +9,12 @@ import (
 
 	"github.com/fsnotify/fsnotify"
 	scriptling "github.com/paularlott/scriptling"
+	"github.com/paularlott/scriptling/extlibs"
+	"github.com/paularlott/scriptling/extlibs/agent"
+	"github.com/paularlott/scriptling/extlibs/ai"
+	"github.com/paularlott/scriptling/extlibs/fuzzy"
+	"github.com/paularlott/scriptling/extlibs/mcp"
+	"github.com/paularlott/scriptling/object"
 	"github.com/paularlott/scriptling/stdlib"
 )
 
@@ -21,6 +27,7 @@ const (
 type SmartRouter struct {
 	scriptPath   string
 	defaultModel string
+	vars         map[string]string
 	router       *Router
 	logger       Logger
 
@@ -30,10 +37,11 @@ type SmartRouter struct {
 	stopCh    chan struct{}
 }
 
-func newSmartRouter(scriptPath, defaultModel string, r *Router, logger Logger) (*SmartRouter, error) {
+func newSmartRouter(scriptPath, defaultModel string, vars map[string]string, r *Router, logger Logger) (*SmartRouter, error) {
 	sr := &SmartRouter{
 		scriptPath:   scriptPath,
 		defaultModel: defaultModel,
+		vars:         vars,
 		router:       r,
 		logger:       logger,
 		stopCh:       make(chan struct{}),
@@ -155,6 +163,32 @@ func (sr *SmartRouter) route(ctx context.Context, chatReq *ChatCompletionRequest
 	var selectedModel, providerHint string
 	vm := scriptling.New()
 	stdlib.RegisterAll(vm)
+	extlibs.RegisterRequestsLibrary(vm)
+	extlibs.RegisterSecretsLibrary(vm)
+	extlibs.RegisterHTMLParserLibrary(vm)
+	extlibs.RegisterLoggingLibraryDefault(vm)
+	extlibs.RegisterYAMLLibrary(vm)
+	extlibs.RegisterTOMLLibrary(vm)
+	extlibs.RegisterRuntimeLibrary(vm)
+	extlibs.RegisterRuntimeKVLibrary(vm)
+	extlibs.RegisterRuntimeSyncLibrary(vm)
+	ai.Register(vm)
+	if err := agent.Register(vm); err != nil {
+		sr.logger.Warn("failed to register scriptling.ai.agent", "error", err)
+	}
+	mcp.Register(vm)
+	mcp.RegisterToon(vm)
+	fuzzy.Register(vm)
+
+	// Expose configured vars to the script
+	if len(sr.vars) > 0 {
+		pairs := make(map[string]object.Object, len(sr.vars))
+		for k, v := range sr.vars {
+			pairs[k] = &object.String{Value: v}
+		}
+		vm.RegisterLibrary(object.NewLibrary("vars", nil, pairs, "User-defined variables from smart_routing config"))
+	}
+
 	var msgs []Message
 	if chatReq != nil {
 		msgs = chatReq.Messages

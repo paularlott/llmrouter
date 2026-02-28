@@ -9,9 +9,15 @@ The `router` library is automatically available in routing scripts. It exposes l
 enabled = true
 script = "router.scriptling"
 default_model = "mistralai/ministral-3-3b"
+
+[smart_routing.vars]
+openai_key = "sk-..."
+my_endpoint = "https://api.example.com"
 ```
 
 Smart routing activates when a client requests the model name `auto`. The script picks a provider and model. On any failure or empty result, `default_model` is used. The `auto` model is injected into `/v1/models` so clients can discover it.
+
+`vars` is an optional map of key-value string pairs made available to the script as the `vars` library (see [Script Variables](#script-variables)).
 
 ### Provider Tags
 
@@ -43,44 +49,117 @@ tags = ["capable", "expensive"]
 
 ---
 
+## Available Libraries
+
+The following libraries are pre-registered and available for `import` in every routing script.
+
+### Standard Libraries
+
+All Scriptling standard libraries are available without any configuration:
+
+| Library                   | Description                             |
+| ------------------------- | --------------------------------------- |
+| `base64`                  | Base64 encoding/decoding                |
+| `collections`             | Specialised container datatypes         |
+| `contextlib`              | Utilities for the `with` statement      |
+| `datetime`                | Date and time formatting                |
+| `difflib`                 | Sequence comparison and diff generation |
+| `functools`               | Higher-order functions                  |
+| `hashlib`                 | Secure hash algorithms                  |
+| `html`                    | HTML escaping/unescaping                |
+| `io`                      | In-memory I/O streams                   |
+| `itertools`               | Iterator functions                      |
+| `json`                    | JSON parsing and generation             |
+| `math`                    | Mathematical functions and constants    |
+| `platform`                | Platform identifying data               |
+| `random`                  | Random number generation                |
+| `re`                      | Regular expression operations           |
+| `statistics`              | Statistical functions                   |
+| `string`                  | String constants                        |
+| `textwrap`                | Text wrapping and filling               |
+| `time`                    | Time access and conversions             |
+| `urllib` / `urllib.parse` | URL handling                            |
+| `uuid`                    | UUID generation                         |
+
+### Extended Libraries
+
+The following extended libraries are enabled. Filesystem access (`os`, `os.path`, `pathlib`, `glob`), subprocess execution (`subprocess`), and async resource waiting (`wait_for`) are **not** available.
+
+| Library       | Description                             |
+| ------------- | --------------------------------------- |
+| `requests`    | HTTP client (GET, POST, etc.)           |
+| `secrets`     | Cryptographically strong random numbers |
+| `html.parser` | HTML/XHTML parser                       |
+| `logging`     | Logging to the router log               |
+| `yaml`        | YAML parsing and generation             |
+| `toml`        | TOML parsing and generation             |
+| `sys`         | System parameters (argv, stdin)         |
+
+### Scriptling Libraries
+
+| Library                   | Description                                    |
+| ------------------------- | ---------------------------------------------- |
+| `scriptling.ai`           | AI/LLM client for OpenAI-compatible APIs       |
+| `scriptling.ai.agent`     | Agentic AI loop with automatic tool execution  |
+| `scriptling.mcp`          | MCP (Model Context Protocol) tool interaction  |
+| `scriptling.toon`         | TOON encoding/decoding                         |
+| `scriptling.fuzzy`        | Fuzzy string matching                          |
+| `scriptling.runtime`      | Background tasks                               |
+| `scriptling.runtime.kv`   | Thread-safe key-value store                    |
+| `scriptling.runtime.sync` | Named cross-environment concurrency primitives |
+
+### Script Variables
+
+Key-value pairs defined in `[smart_routing.vars]` are exposed as the `vars` library:
+
+```python
+import vars
+
+client = scriptling.ai.Client("", api_key=vars.openai_key)
+```
+
+All values are strings. Use this to pass tokens, endpoints, or other configuration to the script without hard-coding them.
+
+---
+
 ## Function Reference
 
-| Function | Signature | Returns | Description |
-|----------|-----------|---------|-------------|
-| `router.set_model` | `set_model(model_id, hint=provider)` | — | Set the model to route to; `hint` optionally suggests a provider (ignored if overloaded) |
-| `router.get_request` | `get_request()` | `dict` | Current routing request (`type`, `messages`, `tools`) |
-| `router.is_chat_completion` | `is_chat_completion()` | `bool` | True if this is a `/v1/chat/completions` request |
-| `router.is_responses` | `is_responses()` | `bool` | True if this is a `/v1/responses` request |
-| `router.providers` | `providers(**kwargs)` | `list[dict]` | Healthy providers. Optional `tag=str` to filter by provider tag |
-| `router.models_for_provider` | `models_for_provider(name, **kwargs)` | `list[str]` | Model IDs for a provider. Optional `tag=str` to filter by model tag |
-| `router.models_by_tag` | `models_by_tag(tag)` | `list[str]` | All model IDs that have the given tag |
-| `router.model_tags` | `model_tags(model_id)` | `list[str]` | Tags assigned to a model |
-| `router.has_model` | `has_model(model_id)` | `bool` | True if the model is available from any provider |
-| `router.provider_load` | `provider_load(name)` | `int` | Active completions for a provider (`-1` if not found) |
-| `router.message_content_types` | `message_content_types()` | `list[str]` | Unique content part types across all messages (e.g. `"text"`, `"image_url"`) |
-| `router.total_tokens_estimate` | `total_tokens_estimate()` | `int` | Estimated prompt token count across all messages (accounts for content parts, images, tool calls) |
-| `router.models_by_tags` | `models_by_tags(tags)` | `list[str]` | Model IDs that have ALL of the given tags |
-| `router.providers_for_model` | `providers_for_model(model_id)` | `list[dict]` | All healthy providers serving a model, each with `name`, `type`, `load`, `weight`, `tags` |
-| `router.random_model` | `random_model(tag)` | `str` | Weighted random model with the given tag (`""` if none) |
-| `router.provider_healthy` | `provider_healthy(name)` | `bool` | True if the provider exists, is enabled, and is healthy |
-| `router.has_provider` | `has_provider(name)` | `bool` | True if the provider exists in config (regardless of health) |
-| `router.model_load` | `model_load(model_id)` | `int` | Total active completions across all healthy providers serving the model |
-| `router.system_prompt` | `system_prompt()` | `str` | Content of the system message, or `""` if none |
-| `router.last_message` | `last_message()` | `str` | Content of the last user message, or `""` if none |
-| `router.conversation_turns` | `conversation_turns()` | `int` | Number of user turns in the conversation |
+| Function                       | Signature                             | Returns      | Description                                                                                       |
+| ------------------------------ | ------------------------------------- | ------------ | ------------------------------------------------------------------------------------------------- |
+| `router.set_model`             | `set_model(model_id, hint=provider)`  | —            | Set the model to route to; `hint` optionally suggests a provider (ignored if overloaded)          |
+| `router.get_request`           | `get_request()`                       | `dict`       | Current routing request (`type`, `messages`, `tools`)                                             |
+| `router.is_chat_completion`    | `is_chat_completion()`                | `bool`       | True if this is a `/v1/chat/completions` request                                                  |
+| `router.is_responses`          | `is_responses()`                      | `bool`       | True if this is a `/v1/responses` request                                                         |
+| `router.providers`             | `providers(**kwargs)`                 | `list[dict]` | Healthy providers. Optional `tag=str` to filter by provider tag                                   |
+| `router.models_for_provider`   | `models_for_provider(name, **kwargs)` | `list[str]`  | Model IDs for a provider. Optional `tag=str` to filter by model tag                               |
+| `router.models_by_tag`         | `models_by_tag(tag)`                  | `list[str]`  | All model IDs that have the given tag                                                             |
+| `router.model_tags`            | `model_tags(model_id)`                | `list[str]`  | Tags assigned to a model                                                                          |
+| `router.has_model`             | `has_model(model_id)`                 | `bool`       | True if the model is available from any provider                                                  |
+| `router.provider_load`         | `provider_load(name)`                 | `int`        | Active completions for a provider (`-1` if not found)                                             |
+| `router.message_content_types` | `message_content_types()`             | `list[str]`  | Unique content part types across all messages (e.g. `"text"`, `"image_url"`)                      |
+| `router.total_tokens_estimate` | `total_tokens_estimate()`             | `int`        | Estimated prompt token count across all messages (accounts for content parts, images, tool calls) |
+| `router.models_by_tags`        | `models_by_tags(tags)`                | `list[str]`  | Model IDs that have ALL of the given tags                                                         |
+| `router.providers_for_model`   | `providers_for_model(model_id)`       | `list[dict]` | All healthy providers serving a model, each with `name`, `type`, `load`, `weight`, `tags`         |
+| `router.random_model`          | `random_model(tag)`                   | `str`        | Weighted random model with the given tag (`""` if none)                                           |
+| `router.provider_healthy`      | `provider_healthy(name)`              | `bool`       | True if the provider exists, is enabled, and is healthy                                           |
+| `router.has_provider`          | `has_provider(name)`                  | `bool`       | True if the provider exists in config (regardless of health)                                      |
+| `router.model_load`            | `model_load(model_id)`                | `int`        | Total active completions across all healthy providers serving the model                           |
+| `router.system_prompt`         | `system_prompt()`                     | `str`        | Content of the system message, or `""` if none                                                    |
+| `router.last_message`          | `last_message()`                      | `str`        | Content of the last user message, or `""` if none                                                 |
+| `router.conversation_turns`    | `conversation_turns()`                | `int`        | Number of user turns in the conversation                                                          |
 
 ### Provider dict fields
 
 Each item returned by `providers()` contains:
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `name` | `str` | Provider name from config |
-| `type` | `str` | `openai` \| `claude` \| `gemini` \| `ollama` \| `mistral` \| `zai` |
-| `load` | `int` | Active completions count |
-| `weight` | `float` | Configured weight (0.0–2.0) |
-| `tags` | `list[str]` | Provider-level tags |
-| `models` | `list[str]` | Model IDs available from this provider |
+| Field    | Type        | Description                                                        |
+| -------- | ----------- | ------------------------------------------------------------------ |
+| `name`   | `str`       | Provider name from config                                          |
+| `type`   | `str`       | `openai` \| `claude` \| `gemini` \| `ollama` \| `mistral` \| `zai` |
+| `load`   | `int`       | Active completions count                                           |
+| `weight` | `float`     | Configured weight (0.0–2.0)                                        |
+| `tags`   | `list[str]` | Provider-level tags                                                |
+| `models` | `list[str]` | Model IDs available from this provider                             |
 
 ---
 
@@ -321,11 +400,11 @@ if models:
 
 ## Fallback Behaviour
 
-| Condition | Result |
-|-----------|--------|
+| Condition                                                    | Result                                                    |
+| ------------------------------------------------------------ | --------------------------------------------------------- |
 | Script calls `router.set_model(model_id)` with a valid model | Route to that model; hint provider used if not overloaded |
-| Script sets `output_model` variable | Route to that model (provider auto-selected) |
-| Script returns without setting a model | Use `default_model` |
-| Script errors or times out (5s limit) | Use `default_model` |
-| Model not found in any provider | Use `default_model` |
-| `default_model` also not found | Return error to client |
+| Script sets `output_model` variable                          | Route to that model (provider auto-selected)              |
+| Script returns without setting a model                       | Use `default_model`                                       |
+| Script errors or times out (5s limit)                        | Use `default_model`                                       |
+| Model not found in any provider                              | Use `default_model`                                       |
+| `default_model` also not found                               | Return error to client                                    |
