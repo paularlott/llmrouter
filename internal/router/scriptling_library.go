@@ -41,11 +41,11 @@ func buildRouterLibraryForRequest(r *Router, reqJSON string, reqType string, msg
 		return tc.GetUsage().PromptTokens
 	}, "total_tokens_estimate() -> int - Estimated prompt token count across all messages")
 
-	b.FunctionWithHelp("models_by_tags", func(tags []string) []string {
+	b.FunctionWithHelp("models_by_tags", func(tags []string) []interface{} {
 		r.ModelMapMu.RLock()
 		defer r.ModelMapMu.RUnlock()
 
-		var result []string
+		var result []interface{}
 		outer:
 		for modelID, modelTags := range r.ModelTags {
 			for _, tag := range tags {
@@ -58,15 +58,15 @@ func buildRouterLibraryForRequest(r *Router, reqJSON string, reqType string, msg
 		return result
 	}, "models_by_tags(tags) -> list - Model IDs that have ALL of the given tags")
 
-	b.FunctionWithHelp("providers_for_model", func(modelID string) []map[string]interface{} {
+	b.FunctionWithHelp("providers_for_model", func(modelID string) []interface{} {
 		r.ModelMapMu.RLock()
 		defer r.ModelMapMu.RUnlock()
 
 		names, ok := r.ModelMap[modelID]
 		if !ok {
-			return []map[string]interface{}{}
+			return []interface{}{}
 		}
-		result := make([]map[string]interface{}, 0, len(names))
+		result := make([]interface{}, 0, len(names))
 		for _, name := range names {
 			p, ok := r.Providers[name]
 			if !ok || !p.Enabled || !p.Healthy {
@@ -124,7 +124,7 @@ func buildRouterLibraryForRequest(r *Router, reqJSON string, reqType string, msg
 		return pool[len(pool)-1].modelID
 	}, "random_model(tag) -> str - Weighted random model with the given tag (empty string if none)")
 
-	b.FunctionWithHelp("providers", func(kwargs object.Kwargs) []map[string]interface{} {
+	b.FunctionWithHelp("providers", func(kwargs object.Kwargs) []interface{} {
 		filterTag := kwargs.MustGetString("tag", "")
 
 		r.ModelMapMu.RLock()
@@ -137,7 +137,7 @@ func buildRouterLibraryForRequest(r *Router, reqJSON string, reqType string, msg
 			}
 		}
 
-		result := make([]map[string]interface{}, 0, len(r.Providers))
+		result := make([]interface{}, 0, len(r.Providers))
 		for name, p := range r.Providers {
 			if !p.Enabled || !p.Healthy {
 				continue
@@ -161,14 +161,14 @@ func buildRouterLibraryForRequest(r *Router, reqJSON string, reqType string, msg
 		return result
 	}, "providers(**kwargs) -> list - Healthy providers. Optional: tag=str to filter by provider tag")
 
-	b.FunctionWithHelp("models_for_provider", func(kwargs object.Kwargs, providerName string) []string {
+	b.FunctionWithHelp("models_for_provider", func(kwargs object.Kwargs, providerName string) []interface{} {
 		filterTag := kwargs.MustGetString("tag", "")
 
 		r.ModelMapMu.RLock()
 		defer r.ModelMapMu.RUnlock()
 
 		p := r.Providers[providerName]
-		var result []string
+		var result []interface{}
 		for modelID, names := range r.ModelMap {
 			for _, name := range names {
 				if name != providerName {
@@ -193,11 +193,11 @@ func buildRouterLibraryForRequest(r *Router, reqJSON string, reqType string, msg
 		return result
 	}, "models_for_provider(name, **kwargs) -> list - Models for a provider. Optional: tag=str to filter by model tag")
 
-	b.FunctionWithHelp("models_by_tag", func(tag string) []string {
+	b.FunctionWithHelp("models_by_tag", func(tag string) []interface{} {
 		r.ModelMapMu.RLock()
 		defer r.ModelMapMu.RUnlock()
 
-		var result []string
+		var result []interface{}
 		for modelID, tags := range r.ModelTags {
 			if hasTag(tags, tag) {
 				result = append(result, modelID)
@@ -206,13 +206,13 @@ func buildRouterLibraryForRequest(r *Router, reqJSON string, reqType string, msg
 		return result
 	}, "models_by_tag(tag) -> list - Returns model IDs that have the given tag")
 
-	b.FunctionWithHelp("model_tags", func(modelID string) []string {
+	b.FunctionWithHelp("model_tags", func(modelID string) []interface{} {
 		r.ModelMapMu.RLock()
 		defer r.ModelMapMu.RUnlock()
 		if tags, ok := r.ModelTags[modelID]; ok {
-			return tags
+			return toAnySlice(tags)
 		}
-		return []string{}
+		return []interface{}{}
 	}, "model_tags(model_id) -> list - Returns tags for a model")
 
 	b.FunctionWithHelp("has_model", func(modelID string) bool {
