@@ -31,8 +31,9 @@ func buildRouterLibraryForRequest(r *Router, reqJSON string, reqType string, msg
 		return reqType == reqTypeResponses
 	}, "is_responses() -> bool - True if this is a responses API request")
 
-	b.FunctionWithHelp("message_content_types", func() []string {
-		return messageContentTypes(msgs)
+	b.FunctionWithHelp("message_content_types", func() []interface{} {
+		types := messageContentTypes(msgs)
+		return toAnySlice(types)
 	}, "message_content_types() -> list - Unique content part types across all messages (e.g. 'text', 'image_url')")
 
 	b.FunctionWithHelp("total_tokens_estimate", func() int {

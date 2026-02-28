@@ -378,3 +378,262 @@ router.set_model("model-b", hint="p2")
 	// Verify p2b (not p2) handled the request by checking its load incremented
 	// (CreateChatCompletion increments then defers decrement, so after return it's back to 0 — just check no error)
 }
+
+// --- Scriptling library function tests ---
+
+// runScript executes a script against the smart test router and returns the RouteResult.
+func runScript(t *testing.T, script string) RouteResult {
+	t.Helper()
+	_, sr := newSmartTestRouter(t, script)
+	return sr.Route(context.Background(), &ChatCompletionRequest{Model: "auto"})
+}
+
+func TestScriptLib_HasModel(t *testing.T) {
+	result := runScript(t, `
+import router
+if router.has_model("model-a"):
+    router.set_model("model-a")
+`)
+	if result.Model != "model-a" {
+		t.Fatalf("want model-a, got %q", result.Model)
+	}
+}
+
+func TestScriptLib_HasModel_Missing(t *testing.T) {
+	result := runScript(t, `
+import router
+if router.has_model("ghost"):
+    router.set_model("ghost")
+else:
+    router.set_model("model-a")
+`)
+	if result.Model != "model-a" {
+		t.Fatalf("want model-a, got %q", result.Model)
+	}
+}
+
+func TestScriptLib_ProviderLoad(t *testing.T) {
+	r, sr := newSmartTestRouter(t, `
+import router
+load = router.provider_load("p1")
+if load == 3:
+    router.set_model("model-b")
+else:
+    router.set_model("model-a")
+`)
+	r.Providers["p1"].ActiveCompletions.Store(3)
+	result := sr.Route(context.Background(), &ChatCompletionRequest{Model: "auto"})
+	if result.Model != "model-b" {
+		t.Fatalf("want model-b (load==3), got %q", result.Model)
+	}
+}
+
+func TestScriptLib_ProviderLoad_NotFound(t *testing.T) {
+	result := runScript(t, `
+import router
+load = router.provider_load("ghost")
+if load == -1:
+    router.set_model("model-a")
+`)
+	if result.Model != "model-a" {
+		t.Fatalf("want model-a, got %q", result.Model)
+	}
+}
+
+func TestScriptLib_IsChatCompletion(t *testing.T) {
+	result := runScript(t, `
+import router
+if router.is_chat_completion():
+    router.set_model("model-b")
+`)
+	if result.Model != "model-b" {
+		t.Fatalf("want model-b, got %q", result.Model)
+	}
+}
+
+func TestScriptLib_IsResponses(t *testing.T) {
+	_, sr := newSmartTestRouter(t, `
+import router
+if router.is_responses():
+    router.set_model("model-b")
+`)
+	result := sr.RouteResponse(context.Background(), &CreateResponseRequest{Model: "auto"})
+	if result.Model != "model-b" {
+		t.Fatalf("want model-b, got %q", result.Model)
+	}
+}
+
+func TestScriptLib_MessageContentTypes_TextOnly(t *testing.T) {
+	_, sr := newSmartTestRouter(t, `
+import router
+types = router.message_content_types()
+if "text" in types and "image_url" not in types:
+    router.set_model("model-a")
+`)
+	result := sr.Route(context.Background(), &ChatCompletionRequest{
+		Model:    "auto",
+		Messages: []Message{{Role: "user", Content: "hello"}},
+	})
+	if result.Model != "model-a" {
+		t.Fatalf("want model-a, got %q", result.Model)
+	}
+}
+
+func TestScriptLib_MessageContentTypes_WithImage(t *testing.T) {
+	_, sr := newSmartTestRouter(t, `
+import router
+types = router.message_content_types()
+if "image_url" in types:
+    router.set_model("model-b")
+`)
+	result := sr.Route(context.Background(), &ChatCompletionRequest{
+		Model: "auto",
+		Messages: []Message{{
+			Role: "user",
+			Content: []any{
+				map[string]any{"type": "image_url", "image_url": map[string]any{"url": "http://example.com/img.png"}},
+			},
+		}},
+	})
+	if result.Model != "model-b" {
+		t.Fatalf("want model-b (image detected), got %q", result.Model)
+	}
+}
+
+func TestScriptLib_TotalTokensEstimate(t *testing.T) {
+	_, sr := newSmartTestRouter(t, `
+import router
+tokens = router.total_tokens_estimate()
+if tokens > 0:
+    router.set_model("model-b")
+`)
+	result := sr.Route(context.Background(), &ChatCompletionRequest{
+		Model:    "auto",
+		Messages: []Message{{Role: "user", Content: "hello world"}},
+	})
+	if result.Model != "model-b" {
+		t.Fatalf("want model-b (tokens > 0), got %q", result.Model)
+	}
+}
+
+func TestScriptLib_ModelsByTags_MultiTag(t *testing.T) {
+	r, sr := newSmartTestRouter(t, `
+import router
+models = router.models_by_tags(["capable", "fast"])
+if models:
+    router.set_model(models[0])
+`)
+	r.ModelTags["model-b"] = []string{"capable", "fast"}
+	result := sr.Route(context.Background(), &ChatCompletionRequest{Model: "auto"})
+	if result.Model != "model-b" {
+		t.Fatalf("want model-b (capable+fast), got %q", result.Model)
+	}
+}
+
+func TestScriptLib_ModelsByTags_NoMatch(t *testing.T) {
+	// model-a is cheap but not capable; model-b is capable but not cheap — no match
+	result := runScript(t, `
+import router
+models = router.models_by_tags(["capable", "cheap"])
+if not models:
+    router.set_model("model-a")
+`)
+	if result.Model != "model-a" {
+		t.Fatalf("want model-a (no multi-tag match), got %q", result.Model)
+	}
+}
+
+func TestScriptLib_ModelsForProvider(t *testing.T) {
+	result := runScript(t, `
+import router
+models = router.models_for_provider("p1")
+if models and models[0] == "model-a":
+    router.set_model("model-b")
+`)
+	if result.Model != "model-b" {
+		t.Fatalf("want model-b, got %q", result.Model)
+	}
+}
+
+func TestScriptLib_ModelsForProvider_WithTagFilter(t *testing.T) {
+	r, sr := newSmartTestRouter(t, `
+import router
+models = router.models_for_provider("p1", tag="cheap")
+if models:
+    router.set_model("model-b")
+else:
+    router.set_model("model-a")
+`)
+	r.Providers["p1"].ModelTags = map[string][]string{"model-a": {"cheap"}}
+	result := sr.Route(context.Background(), &ChatCompletionRequest{Model: "auto"})
+	if result.Model != "model-b" {
+		t.Fatalf("want model-b (tag filter matched), got %q", result.Model)
+	}
+}
+
+func TestScriptLib_Providers_All(t *testing.T) {
+	result := runScript(t, `
+import router
+ps = router.providers()
+if len(ps) == 2:
+    router.set_model("model-b")
+`)
+	if result.Model != "model-b" {
+		t.Fatalf("want model-b (2 providers), got %q", result.Model)
+	}
+}
+
+func TestScriptLib_Providers_TagFilter(t *testing.T) {
+	r, sr := newSmartTestRouter(t, `
+import router
+ps = router.providers(tag="local")
+if len(ps) == 1 and ps[0]["name"] == "p1":
+    router.set_model("model-b")
+`)
+	r.Providers["p1"].Tags = []string{"local"}
+	result := sr.Route(context.Background(), &ChatCompletionRequest{Model: "auto"})
+	if result.Model != "model-b" {
+		t.Fatalf("want model-b (tag-filtered provider), got %q", result.Model)
+	}
+}
+
+func TestScriptLib_RandomModel(t *testing.T) {
+	// only model-a has tag "cheap"
+	result := runScript(t, `
+import router
+m = router.random_model("cheap")
+if m:
+    router.set_model(m)
+`)
+	if result.Model != "model-a" {
+		t.Fatalf("want model-a (only cheap model), got %q", result.Model)
+	}
+}
+
+func TestScriptLib_ModelTags(t *testing.T) {
+	result := runScript(t, `
+import router
+tags = router.model_tags("model-b")
+if "capable" in tags:
+    router.set_model("model-b")
+`)
+	if result.Model != "model-b" {
+		t.Fatalf("want model-b, got %q", result.Model)
+	}
+}
+
+func TestScriptLib_GetRequest_Tools(t *testing.T) {
+	_, sr := newSmartTestRouter(t, `
+import router
+req = router.get_request()
+if req["type"] == "chat" and len(req["tools"]) == 1:
+    router.set_model("model-b")
+`)
+	result := sr.Route(context.Background(), &ChatCompletionRequest{
+		Model: "auto",
+		Tools: []Tool{{Type: "function", Function: ToolFunction{Name: "my_tool"}}},
+	})
+	if result.Model != "model-b" {
+		t.Fatalf("want model-b (tool present), got %q", result.Model)
+	}
+}
