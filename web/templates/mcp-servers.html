@@ -8,70 +8,43 @@
     <script type="module" src="{{.JSFile}}"></script>
   </head>
   <body class="min-h-screen bg-slate-100 dark:bg-slate-950 transition-colors duration-300">
-    <div class="flex min-h-screen" x-data="mcpServers()">
-      <!-- Sidebar -->
-      <aside class="w-64 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col">
-        <!-- Logo -->
-        <div class="p-6 border-b border-slate-200 dark:border-slate-800">
-          <div class="flex items-center gap-3">
-            <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-blue-500/25">
-              <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <div x-data="mcpServers()">
+      <!-- Top nav -->
+      <header class="sticky top-0 z-40 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shadow-sm">
+        <div class="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
+          <a href="/admin/" class="flex items-center gap-3">
+            <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow shadow-blue-500/25">
+              <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
               </svg>
             </div>
-            <div>
-              <h1 class="font-bold text-slate-900 dark:text-white">LLM Router</h1>
-              <p class="text-xs text-slate-500 dark:text-slate-400">Admin Dashboard</p>
-            </div>
-          </div>
+            <span class="font-bold text-slate-900 dark:text-white">LLM Router</span>
+          </a>
+          <nav class="flex items-center gap-1">
+            <a href="/admin/" class="nav-link">Dashboard</a>
+            <a href="/admin/models" class="nav-link">Models</a>
+            <a href="/admin/mcp-servers" class="nav-link nav-link-active">MCP Servers</a>
+            <div class="w-px h-5 bg-slate-200 dark:bg-slate-700 mx-2"></div>
+            <button @click="$store.darkMode.toggle()" class="nav-link cursor-pointer" title="Toggle dark mode">
+              <svg x-show="!$store.darkMode.value" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+              </svg>
+              <svg x-show="$store.darkMode.value" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+              </svg>
+            </button>
+            <button @click="logout" class="nav-link cursor-pointer text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+              </svg>
+              Logout
+            </button>
+          </nav>
         </div>
-
-        <!-- Navigation -->
-        <nav class="flex-1 p-4 space-y-1">
-          <a href="/admin/" class="nav-link">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-            </svg>
-            <span>Dashboard</span>
-          </a>
-          <a href="/admin/models" class="nav-link">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-            </svg>
-            <span>Models</span>
-          </a>
-          <a href="/admin/mcp-servers" class="nav-link nav-link-active">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01" />
-            </svg>
-            <span>MCP Servers</span>
-          </a>
-
-        </nav>
-
-        <!-- Footer actions -->
-        <div class="p-4 border-t border-slate-200 dark:border-slate-800 space-y-2">
-          <button @click="$store.darkMode.toggle()" class="w-full nav-link justify-start">
-            <svg x-show="!$store.darkMode.value" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
-            </svg>
-            <svg x-show="$store.darkMode.value" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
-            </svg>
-            <span x-text="$store.darkMode.value ? 'Light Mode' : 'Dark Mode'"></span>
-          </button>
-          <button @click="logout" class="w-full nav-link justify-start text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-            </svg>
-            <span>Logout</span>
-          </button>
-        </div>
-      </aside>
+      </header>
 
       <!-- Main content -->
-      <main class="flex-1 p-8">
-        <div class="max-w-6xl mx-auto">
+      <main class="max-w-7xl mx-auto px-6 py-8">
           <!-- Header -->
           <div class="flex justify-between items-center mb-8">
             <div>
@@ -173,7 +146,6 @@
               </div>
             </template>
           </div>
-        </div>
       </main>
 
       <!-- Add/Edit Modal -->

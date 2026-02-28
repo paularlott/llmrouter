@@ -5,19 +5,24 @@ VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev
 BUILD_TIME := $(shell date -u '+%Y-%m-%d_%H:%M:%S')
 LDFLAGS := -s -w -X main.Version=$(VERSION) -X main.BuildTime=$(BUILD_TIME)
 
-.PHONY: all clean test lint build-all release dev
+.PHONY: all clean test lint assets build build-all release dev
+
+# Build frontend assets
+assets:
+	cd web && npm run build
 
 # Default target
 all: build
 
 # Build for the current platform
-build:
+build: assets
 	go build -ldflags "$(LDFLAGS)" -o $(BINARY_NAME) .
 
 # Clean build artifacts
 clean:
 	rm -rf dist/
 	rm -f $(BINARY_NAME)
+	rm -rf web/dist/
 
 # Run tests
 test:
@@ -27,7 +32,7 @@ test:
 lint:
 	golangci-lint run
 
-# Individual platform builds
+# Individual platform builds (assets already built by build-all)
 build-linux-amd64:
 	GOOS=linux GOARCH=amd64 go build -ldflags "$(LDFLAGS)" -o dist/$(BINARY_NAME)-linux-amd64 .
 
@@ -47,7 +52,7 @@ build-windows-arm64:
 	GOOS=windows GOARCH=arm64 go build -ldflags "$(LDFLAGS)" -o dist/$(BINARY_NAME)-windows-arm64.exe .
 
 # Build all platforms (sequential, use Taskfile for parallel)
-build-all: clean
+build-all: clean assets
 	@mkdir -p dist
 	$(MAKE) build-linux-amd64
 	$(MAKE) build-linux-arm64
