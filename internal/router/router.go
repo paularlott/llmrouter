@@ -51,9 +51,9 @@ func NewRouter(config *types.Config, logger Logger) (*Router, error) {
 			providerType = "openai"
 		}
 		isStatic := providerType == "claude" && len(providerConfig.Models) > 0
-		var whitelist []string
+		var allowlist []string
 		if !isStatic {
-			whitelist = providerConfig.Models
+			allowlist = providerConfig.Models
 		}
 
 		provider := &Provider{
@@ -63,7 +63,8 @@ func NewRouter(config *types.Config, logger Logger) (*Router, error) {
 			Healthy:        true,
 			Client:         client,
 			StaticModels:   isStatic,
-			ModelWhitelist: whitelist,
+			ModelAllowlist: allowlist,
+			ModelDenylist:  providerConfig.ModelDenylist,
 			Weight:         weight,
 			Tags:           providerConfig.Tags,
 			ModelTags:      providerConfig.ModelTags,
@@ -239,7 +240,10 @@ func (r *Router) addProviderModels(providerName string, modelIDs []string, p *Pr
 		if !shouldIncludeModel(modelID) {
 			continue
 		}
-		if len(p.ModelWhitelist) > 0 && !inSlice(modelID, p.ModelWhitelist) {
+		if len(p.ModelAllowlist) > 0 && !inSlice(modelID, p.ModelAllowlist) {
+			continue
+		}
+		if len(p.ModelDenylist) > 0 && inSlice(modelID, p.ModelDenylist) {
 			continue
 		}
 		r.ModelMap[modelID] = append(r.ModelMap[modelID], providerName)

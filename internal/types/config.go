@@ -31,9 +31,10 @@ type ProviderConfig struct {
 	Token    string            `json:"token"`
 	Enabled  bool              `json:"enabled"`
 	Weight   float64           `json:"weight,omitempty"`   // 0.0-2.0, default 1.0; higher = preferred
-	Models   []string          `json:"models,omitempty"`   // empty = auto-discover; required for claude
-	Tags     []string          `json:"tags,omitempty"`     // arbitrary tags for routing scripts
-	ModelTags map[string][]string `json:"model_tags,omitempty"` // model_id -> tags
+	Models        []string            `json:"model_allowlist,omitempty"` // empty = auto-discover; required for claude
+	Tags          []string            `json:"tags,omitempty"`            // arbitrary tags for routing scripts
+	ModelTags     map[string][]string `json:"model_tags,omitempty"`      // model_id -> tags
+	ModelDenylist []string            `json:"model_denylist,omitempty"` // models to exclude from auto-discovery
 }
 
 type MCPConfig struct {

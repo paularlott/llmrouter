@@ -59,7 +59,7 @@ name = "anthropic"
 provider = "claude"
 token = "sk-ant-..."
 enabled = true
-models = ["claude-opus-4-5", "claude-sonnet-4-5"]  # Required for Claude
+model_allowlist = ["claude-opus-4-5", "claude-sonnet-4-5"]  # Required for Claude
 tags = ["capable"]
 
 [providers.model_tags]
@@ -71,7 +71,7 @@ name = "google"
 provider = "gemini"
 token = "your-google-key"
 enabled = true
-models = ["gemini-2.5-flash-lite"]  # Optional: restrict to specific models
+model_allowlist = ["gemini-2.5-flash-lite"]  # Optional: restrict to specific models
 
 [[providers]]
 name = "local"
@@ -104,6 +104,10 @@ tool_visibility = "native"    # native | discoverable
 | `zai`     | https://api.z.ai/api/paas/v4/                 | Yes        | Auto             |
 
 `base_url` is optional — each provider has a built-in default. Set it to override (e.g. local LM Studio).
+
+`model_allowlist` restricts the provider to only the listed models. For Claude this is required (no discovery API). For other providers it is optional.
+
+`model_denylist` excludes specific models from auto-discovery. Ignored when `model_allowlist` is set.
 
 ### Smart Routing
 

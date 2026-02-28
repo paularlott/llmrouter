@@ -25,7 +25,8 @@ type Provider struct {
 	ActiveCompletions atomic.Int64
 	Fetching          atomic.Bool
 	StaticModels      bool
-	ModelWhitelist    []string
+	ModelAllowlist    []string
+	ModelDenylist     []string
 	Weight            float64
 	Tags              []string            // provider-level tags
 	ModelTags         map[string][]string // model_id -> tags
