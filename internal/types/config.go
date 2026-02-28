@@ -65,4 +65,5 @@ type SmartRoutingConfig struct {
 	Script       string            `json:"script,omitempty"`
 	DefaultModel string            `json:"default_model,omitempty"`
 	Vars         map[string]string `json:"vars,omitempty"` // key-value pairs exposed to routing scripts
+	LibDir       string            `json:"libdir,omitempty"` // directory of .py script libraries auto-loaded into every VM
 }

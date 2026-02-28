@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -26,29 +28,39 @@ const (
 )
 
 // SmartRouter runs the routing script using a pool of pre-warmed VMs.
-// The pool is rebuilt when the script changes on disk.
+// The pool is rebuilt when the script or any library in libdir changes on disk.
 type SmartRouter struct {
 	scriptPath   string
 	defaultModel string
 	vars         map[string]string
+	libDir       string
 	router       *Router
 	logger       Logger
 
 	mu        sync.RWMutex
 	scriptSrc string
+	scriptLibs map[string]string // name -> source, loaded from libdir
 	pool      chan *scriptling.Scriptling // buffered channel as VM pool
 	watcher   *fsnotify.Watcher
 	stopCh    chan struct{}
 }
 
-func newSmartRouter(scriptPath, defaultModel string, vars map[string]string, r *Router, logger Logger) (*SmartRouter, error) {
+func newSmartRouter(scriptPath, defaultModel string, vars map[string]string, libDir string, r *Router, logger Logger) (*SmartRouter, error) {
 	sr := &SmartRouter{
 		scriptPath:   scriptPath,
 		defaultModel: defaultModel,
 		vars:         vars,
+		libDir:       libDir,
 		router:       r,
 		logger:       logger,
+		scriptLibs:   make(map[string]string),
 		stopCh:       make(chan struct{}),
+	}
+
+	if libDir != "" {
+		if err := sr.loadLibDir(); err != nil {
+			logger.Warn("smart routing libdir load failed", "error", err)
+		}
 	}
 
 	if err := sr.loadScript(); err != nil {
@@ -66,9 +78,40 @@ func newSmartRouter(scriptPath, defaultModel string, vars map[string]string, r *
 			logger.Warn("could not watch routing script", "path", scriptPath, "error", err)
 		}
 	}
+	if libDir != "" {
+		if err := watcher.Add(libDir); err != nil {
+			logger.Warn("could not watch routing libdir", "path", libDir, "error", err)
+		}
+	}
 
 	go sr.watchLoop()
 	return sr, nil
+}
+
+// loadLibDir reads all .py files from libdir and stores them as named script libraries.
+func (sr *SmartRouter) loadLibDir() error {
+	entries, err := os.ReadDir(sr.libDir)
+	if err != nil {
+		return err
+	}
+	libs := make(map[string]string)
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".py") {
+			continue
+		}
+		data, err := os.ReadFile(filepath.Join(sr.libDir, e.Name()))
+		if err != nil {
+			sr.logger.Warn("failed to read script library", "file", e.Name(), "error", err)
+			continue
+		}
+		name := strings.TrimSuffix(e.Name(), ".py")
+		libs[name] = string(data)
+	}
+	sr.mu.Lock()
+	sr.scriptLibs = libs
+	sr.mu.Unlock()
+	sr.logger.Info("routing script libraries loaded", "path", sr.libDir, "count", len(libs))
+	return nil
 }
 
 // newVM creates and fully initialises a single Scriptling VM with all libraries registered.
@@ -101,6 +144,13 @@ func (sr *SmartRouter) newVM() *scriptling.Scriptling {
 	}
 
 	vm.RegisterLibrary(buildRouterLibrary(sr.router))
+
+	for name, src := range sr.scriptLibs {
+		if err := vm.RegisterScriptLibrary(name, src); err != nil {
+			sr.logger.Warn("failed to register script library", "name", name, "error", err)
+		}
+	}
+
 	return vm
 }
 
@@ -141,10 +191,18 @@ func (sr *SmartRouter) watchLoop() {
 			if !ok {
 				return
 			}
-			if event.Has(fsnotify.Write) || event.Has(fsnotify.Create) {
+			if event.Has(fsnotify.Write) || event.Has(fsnotify.Create) || event.Has(fsnotify.Remove) {
 				debounce = time.After(100 * time.Millisecond)
 			}
 		case <-debounce:
+			// Reload libdir first (if configured and the changed file is in it)
+			if sr.libDir != "" {
+				if err := sr.loadLibDir(); err != nil {
+					sr.logger.Warn("routing libdir reload failed", "error", err)
+				} else {
+					sr.logger.Debug("routing libdir reloaded", "path", sr.libDir)
+				}
+			}
 			if err := sr.loadScript(); err != nil {
 				sr.logger.Warn("routing script reload failed", "error", err)
 			} else {

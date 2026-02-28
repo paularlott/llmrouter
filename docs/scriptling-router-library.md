@@ -9,6 +9,7 @@ The `router` library is automatically available in routing scripts. It exposes l
 enabled = true
 script = "router.scriptling"
 default_model = "mistralai/ministral-3-3b"
+libdir = "./router_libs"  # Optional: directory of .py script libraries
 
 [smart_routing.vars]
 openai_key = "sk-..."
@@ -208,7 +209,41 @@ Return nothing or don't call `set_model` to fall back to `default_model`.
 
 ## Hot Reload
 
-The routing script is watched with a filesystem watcher. Changes are picked up within ~100ms — no restart required.
+The routing script and any libraries in `libdir` are watched with a filesystem watcher. Changes are picked up within ~100ms — no restart required. When any file in `libdir` changes, all VM pools are rebuilt with the updated libraries.
+
+---
+
+## Script Libraries (`libdir`)
+
+Set `libdir` to a directory of `.py` files to make shared libraries available to routing scripts. Each file is registered as a script library named after the file (without the `.py` extension).
+
+```toml
+[smart_routing]
+enabled = true
+script = "router.py"
+libdir = "./router_libs"
+```
+
+Given `./router_libs/utils.py`:
+
+```python
+def pick_cheapest(models):
+    return models[0] if models else ""
+```
+
+The routing script can then import it:
+
+```python
+import router
+import utils
+
+models = router.models_by_tag("cheap")
+model = utils.pick_cheapest(models)
+if model:
+    router.set_model(model)
+```
+
+Libraries are hot-reloaded alongside the routing script — any change to a file in `libdir` triggers a full pool rebuild.
 
 ---
 

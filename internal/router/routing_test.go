@@ -77,6 +77,7 @@ func newSmartRouterFromSource(src, defaultModel string, r *Router, logger Logger
 		defaultModel: defaultModel,
 		router:       r,
 		logger:       logger,
+		scriptLibs:   make(map[string]string),
 		stopCh:       make(chan struct{}),
 	}
 	sr.scriptSrc = src

@@ -145,6 +145,7 @@ func NewRouter(config *types.Config, logger Logger) (*Router, error) {
 			config.SmartRouting.Script,
 			config.SmartRouting.DefaultModel,
 			config.SmartRouting.Vars,
+			config.SmartRouting.LibDir,
 			router,
 			logger,
 		)

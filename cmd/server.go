@@ -60,6 +60,11 @@ var ServerCmd = &cli.Command{
 			ConfigPath: []string{"smart_routing.script"},
 		},
 		&cli.StringFlag{
+			Name:       "router-libdir",
+			Usage:      "Directory of .py script libraries auto-loaded into every routing VM",
+			ConfigPath: []string{"smart_routing.libdir"},
+		},
+		&cli.StringFlag{
 			Name:       "router-default-model",
 			Usage:      "Default model when smart routing returns nothing",
 			ConfigPath: []string{"smart_routing.default_model"},

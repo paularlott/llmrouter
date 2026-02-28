@@ -177,7 +177,7 @@ func TestPool_FileWatchRebuildsPool(t *testing.T) {
 	scriptFile.WriteString(`import router; router.set_model("model-a")`)
 	scriptFile.Close()
 
-	sr, err := newSmartRouter(scriptFile.Name(), "model-a", nil, r, &testLogger{})
+	sr, err := newSmartRouter(scriptFile.Name(), "model-a", nil, "", r, &testLogger{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -274,5 +274,141 @@ else:
 	}
 	if r2.Model != "model-a" {
 		t.Fatalf("without tool: want model-a, got %q", r2.Model)
+	}
+}
+
+// TestLibDir_LibraryAvailableInScript verifies that a .py file in libdir is importable
+// by the routing script.
+func TestLibDir_LibraryAvailableInScript(t *testing.T) {
+	r, _ := newSmartTestRouter(t, "") // router only
+
+	dir := t.TempDir()
+	if err := os.WriteFile(dir+"/mylib.py", []byte(`
+def pick():
+    return "model-b"
+`), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	scriptFile, err := os.CreateTemp(t.TempDir(), "router-*.py")
+	if err != nil {
+		t.Fatal(err)
+	}
+	scriptFile.WriteString(`
+import router
+import mylib
+router.set_model(mylib.pick())
+`)
+	scriptFile.Close()
+
+	sr, err := newSmartRouter(scriptFile.Name(), "model-a", nil, dir, r, &testLogger{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sr.Stop()
+
+	result := sr.Route(context.Background(), &ChatCompletionRequest{Model: "auto"})
+	if result.Model != "model-b" {
+		t.Fatalf("want model-b (from libdir library), got %q", result.Model)
+	}
+}
+
+// TestLibDir_WatchRebuildsPool verifies that modifying a library file in libdir
+// triggers a pool rebuild.
+func TestLibDir_WatchRebuildsPool(t *testing.T) {
+	r, _ := newSmartTestRouter(t, "")
+
+	dir := t.TempDir()
+	if err := os.WriteFile(dir+"/mylib.py", []byte(`
+def pick():
+    return "model-a"
+`), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	scriptFile, err := os.CreateTemp(t.TempDir(), "router-*.py")
+	if err != nil {
+		t.Fatal(err)
+	}
+	scriptFile.WriteString(`
+import router
+import mylib
+router.set_model(mylib.pick())
+`)
+	scriptFile.Close()
+
+	sr, err := newSmartRouter(scriptFile.Name(), "model-a", nil, dir, r, &testLogger{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sr.Stop()
+
+	result := sr.Route(context.Background(), &ChatCompletionRequest{Model: "auto"})
+	if result.Model != "model-a" {
+		t.Fatalf("before lib change: want model-a, got %q", result.Model)
+	}
+
+	sr.mu.RLock()
+	oldPool := sr.pool
+	sr.mu.RUnlock()
+
+	// Update the library to return model-b
+	if err := os.WriteFile(dir+"/mylib.py", []byte(`
+def pick():
+    return "model-b"
+`), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Wait for debounce + reload
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		sr.mu.RLock()
+		newPool := sr.pool
+		sr.mu.RUnlock()
+		if newPool != oldPool {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+
+	sr.mu.RLock()
+	rebuilt := sr.pool != oldPool
+	sr.mu.RUnlock()
+	if !rebuilt {
+		t.Fatal("pool was not rebuilt after libdir file change")
+	}
+
+	result = sr.Route(context.Background(), &ChatCompletionRequest{Model: "auto"})
+	if result.Model != "model-b" {
+		t.Fatalf("after lib change: want model-b, got %q", result.Model)
+	}
+}
+
+// TestLibDir_NoLibDirNoWatcher verifies that omitting libdir leaves scriptLibs empty
+// and does not panic.
+func TestLibDir_NoLibDirNoWatcher(t *testing.T) {
+	r, _ := newSmartTestRouter(t, "")
+
+	scriptFile, err := os.CreateTemp(t.TempDir(), "router-*.py")
+	if err != nil {
+		t.Fatal(err)
+	}
+	scriptFile.WriteString(`import router; router.set_model("model-a")`)
+	scriptFile.Close()
+
+	sr, err := newSmartRouter(scriptFile.Name(), "model-a", nil, "", r, &testLogger{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sr.Stop()
+
+	if len(sr.scriptLibs) != 0 {
+		t.Fatalf("want empty scriptLibs with no libdir, got %d entries", len(sr.scriptLibs))
+	}
+
+	result := sr.Route(context.Background(), &ChatCompletionRequest{Model: "auto"})
+	if result.Model != "model-a" {
+		t.Fatalf("want model-a, got %q", result.Model)
 	}
 }

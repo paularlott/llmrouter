@@ -83,6 +83,7 @@ enabled = true
 enabled = false
 script = "router.py"  # Scriptling script for routing decisions
 default_model = "mistralai/ministral-3-3b"  # Fallback if script returns nothing
+libdir = "./router_libs"  # Optional: directory of .py script libraries
 
 [mcp]
 [[mcp.remote_servers]]
@@ -112,6 +113,8 @@ tool_visibility = "native"    # native | discoverable
 ### Smart Routing
 
 When a client requests the model name `auto`, the router runs a [Scriptling](https://github.com/paularlott/scriptling) script to pick the best provider and model. If the script returns nothing or fails, `default_model` is used.
+
+`libdir` is an optional directory of `.py` files. Each file is registered as a script library (named after the file without the `.py` extension) and is available for `import` in the routing script. The directory is watched for changes — any modification triggers a full VM pool rebuild.
 
 ```toml
 [smart_routing]
