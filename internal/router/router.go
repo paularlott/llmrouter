@@ -336,7 +336,7 @@ func inSlice(s string, slice []string) bool {
 	return false
 }
 
-func (r *Router) GetProviderForModel(model string) (string, error) {
+func (r *Router) GetProviderForModel(model string, hint string) (string, error) {
 	r.ModelMapMu.RLock()
 	providers, exists := r.ModelMap[model]
 	r.ModelMapMu.RUnlock()
@@ -372,6 +372,21 @@ func (r *Router) GetProviderForModel(model string) (string, error) {
 
 	if selectedProvider == "" {
 		return "", fmt.Errorf("no enabled provider found for model %s", model)
+	}
+
+	// Honour the hint if the hinted provider is healthy and its score is within
+	// bestScore + 1.0 (one extra active completion adjusted for weight).
+	if hint != "" && hint != selectedProvider {
+		if p, ok := r.Providers[hint]; ok && p.Enabled && p.Healthy {
+			w := p.Weight
+			if w <= 0 {
+				w = 1.0
+			}
+			hintScore := float64(p.ActiveCompletions.Load()) / w
+			if hintScore <= bestScore+1.0 {
+				selectedProvider = hint
+			}
+		}
 	}
 
 	return selectedProvider, nil
@@ -450,15 +465,17 @@ func (r *Router) ListModelsAnthropic() anthropicModelsResponse {
 }
 
 func (r *Router) CreateChatCompletion(ctx context.Context, req *ChatCompletionRequest) (*ChatCompletionResponse, error) {
+	providerHint := ""
 	if req.Model == "auto" && r.smartRouter != nil {
-		resolved := r.smartRouter.Route(ctx, req)
-		if resolved == "" {
+		result := r.smartRouter.Route(ctx, req)
+		if result.Model == "" {
 			return nil, fmt.Errorf("model auto not found in any provider")
 		}
-		req.Model = resolved
+		req.Model = result.Model
+		providerHint = result.ProviderHint
 	}
 
-	providerName, err := r.GetProviderForModel(req.Model)
+	providerName, err := r.GetProviderForModel(req.Model, providerHint)
 	if err != nil {
 		return nil, err
 	}
@@ -481,7 +498,7 @@ func (r *Router) CreateChatCompletion(ctx context.Context, req *ChatCompletionRe
 }
 
 func (r *Router) CreateEmbedding(ctx context.Context, req *EmbeddingRequest) (*EmbeddingResponse, error) {
-	providerName, err := r.GetProviderForModel(req.Model)
+	providerName, err := r.GetProviderForModel(req.Model, "")
 	if err != nil {
 		return nil, err
 	}
@@ -644,15 +661,30 @@ func (r *Router) handleStreamingChatCompletion(w http.ResponseWriter, req *http.
 
 	// Resolve "auto" model before streaming
 	if completionReq.Model == "auto" && r.smartRouter != nil {
-		resolved := r.smartRouter.Route(ctx, completionReq)
-		if resolved == "" {
+		result := r.smartRouter.Route(ctx, completionReq)
+		if result.Model == "" {
 			http.Error(w, "auto routing failed: no model available", http.StatusServiceUnavailable)
 			return
 		}
-		completionReq.Model = resolved
+		completionReq.Model = result.Model
+		// stash hint for GetProviderForModel below
+		providerName, err := r.GetProviderForModel(completionReq.Model, result.ProviderHint)
+		if err != nil {
+			r.logger.WithError(err).Error("streaming chat completion failed")
+			if strings.Contains(err.Error(), "not found") {
+				http.Error(w, err.Error(), http.StatusNotFound)
+			} else {
+				http.Error(w, "Internal server error", http.StatusInternalServerError)
+			}
+			return
+		}
+		stream := r.streamChatCompletion(ctx, providerName, completionReq)
+		defer r.decrementActiveCompletions(providerName)
+		r.writeStream(w, stream, completionReq.Model, providerName)
+		return
 	}
 
-	providerName, err := r.GetProviderForModel(completionReq.Model)
+	providerName, err := r.GetProviderForModel(completionReq.Model, "")
 	if err != nil {
 		r.logger.WithError(err).Error("streaming chat completion failed")
 		if strings.Contains(err.Error(), "not found") {
@@ -727,15 +759,17 @@ func (r *Router) createChatCompletionWithHeaders(ctx context.Context, req *ChatC
 		return r.CreateChatCompletion(ctx, req)
 	}
 
+	providerHint := ""
 	if req.Model == "auto" && r.smartRouter != nil {
-		resolved := r.smartRouter.Route(ctx, req)
-		if resolved == "" {
+		result := r.smartRouter.Route(ctx, req)
+		if result.Model == "" {
 			return nil, fmt.Errorf("model auto not found in any provider")
 		}
-		req.Model = resolved
+		req.Model = result.Model
+		providerHint = result.ProviderHint
 	}
 
-	providerName, err := r.GetProviderForModel(req.Model)
+	providerName, err := r.GetProviderForModel(req.Model, providerHint)
 	if err != nil {
 		return nil, err
 	}
@@ -967,7 +1001,7 @@ func (r *Router) HandleCreateResponse(w http.ResponseWriter, req *http.Request) 
 		return
 	}
 
-	providerName, err := r.GetProviderForModel(createReq.Model)
+	providerName, err := r.GetProviderForModel(createReq.Model, "")
 	if err != nil {
 		r.logger.WithError(err).Error("no provider for model")
 		http.Error(w, err.Error(), http.StatusNotFound)

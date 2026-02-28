@@ -47,7 +47,7 @@ tags = ["capable", "expensive"]
 
 | Function | Signature | Returns | Description |
 |----------|-----------|---------|-------------|
-| `router.set_model` | `set_model(model_id)` | — | Set the model to route to; provider selected automatically |
+| `router.set_model` | `set_model(model_id, hint=provider)` | — | Set the model to route to; `hint` optionally suggests a provider (ignored if overloaded) |
 | `router.get_request` | `get_request()` | `dict` | Current routing request (`type`, `messages`, `tools`) |
 | `router.is_chat_completion` | `is_chat_completion()` | `bool` | True if this is a `/v1/chat/completions` request |
 | `router.is_responses` | `is_responses()` | `bool` | True if this is a `/v1/responses` request |
@@ -104,13 +104,16 @@ elif router.is_responses():
 
 ### Output
 
-Call `router.set_model(model_id)` to select the model. The router then picks the best provider automatically using load-balanced routing. Alternatively set the `output_model` variable:
+Call `router.set_model(model_id)` to select the model. Pass `hint=provider_name` to suggest a specific provider — the router honours the hint unless another provider has a significantly lower load (score more than 1.0 better). Alternatively set the `output_model` variable:
 
 ```python
-# Preferred: use set_model
+# Provider auto-selected by load balancing
 router.set_model("mistralai/ministral-3-3b")
 
-# Alternative: set variable
+# Suggest a specific provider (hint ignored if it's overloaded)
+router.set_model("mistralai/ministral-3-3b", hint="mistral-eu")
+
+# Alternative: set variable (no hint support)
 output_model = "mistralai/ministral-3-3b"
 ```
 
@@ -251,7 +254,7 @@ if model:
 
 | Condition | Result |
 |-----------|--------|
-| Script calls `router.set_model(model_id)` with a valid model | Route to that model (provider auto-selected) |
+| Script calls `router.set_model(model_id)` with a valid model | Route to that model; hint provider used if not overloaded |
 | Script sets `output_model` variable | Route to that model (provider auto-selected) |
 | Script returns without setting a model | Use `default_model` |
 | Script errors or times out (5s limit) | Use `default_model` |

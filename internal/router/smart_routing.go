@@ -108,25 +108,29 @@ func (sr *SmartRouter) Stop() {
 	close(sr.stopCh)
 }
 
-// Route runs the routing script and returns the resolved model name.
-// Provider selection is left to the normal load-balanced routing.
-// Falls back to defaultModel on any failure or empty result.
-func (sr *SmartRouter) Route(ctx context.Context, req *ChatCompletionRequest) string {
+// RouteResult holds the model and optional provider hint from the routing script.
+type RouteResult struct {
+	Model        string
+	ProviderHint string
+}
+
+// Route runs the routing script and returns the resolved model and optional provider hint.
+func (sr *SmartRouter) Route(ctx context.Context, req *ChatCompletionRequest) RouteResult {
 	return sr.route(ctx, req, nil)
 }
 
 // RouteResponse is like Route but for a Responses API request.
-func (sr *SmartRouter) RouteResponse(ctx context.Context, req *CreateResponseRequest) string {
+func (sr *SmartRouter) RouteResponse(ctx context.Context, req *CreateResponseRequest) RouteResult {
 	return sr.route(ctx, nil, req)
 }
 
-func (sr *SmartRouter) route(ctx context.Context, chatReq *ChatCompletionRequest, respReq *CreateResponseRequest) string {
+func (sr *SmartRouter) route(ctx context.Context, chatReq *ChatCompletionRequest, respReq *CreateResponseRequest) RouteResult {
 	sr.mu.RLock()
 	src := sr.scriptSrc
 	sr.mu.RUnlock()
 
 	if src == "" {
-		return sr.defaultModel
+		return RouteResult{Model: sr.defaultModel}
 	}
 
 	var reqType string
@@ -147,21 +151,22 @@ func (sr *SmartRouter) route(ctx context.Context, chatReq *ChatCompletionRequest
 	}
 	reqJSON, _ := json.Marshal(inputData)
 
-	// selectedModel is set by router.set_model() inside the script
-	var selectedModel string
+	// selectedModel and providerHint are set by router.set_model() inside the script
+	var selectedModel, providerHint string
 	vm := scriptling.New()
 	stdlib.RegisterAll(vm)
 	var msgs []Message
 	if chatReq != nil {
 		msgs = chatReq.Messages
 	}
-	vm.RegisterLibrary(buildRouterLibraryForRequest(sr.router, string(reqJSON), reqType, msgs, func(m string) {
+	vm.RegisterLibrary(buildRouterLibraryForRequest(sr.router, string(reqJSON), reqType, msgs, func(m, hint string) {
 		selectedModel = m
+		providerHint = hint
 	}))
 
 	if err := vm.SetVar("request_json", string(reqJSON)); err != nil {
 		sr.logger.Warn("smart routing: failed to set request", "error", err)
-		return sr.defaultModel
+		return RouteResult{Model: sr.defaultModel}
 	}
 
 	timeoutCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
@@ -169,7 +174,7 @@ func (sr *SmartRouter) route(ctx context.Context, chatReq *ChatCompletionRequest
 
 	if _, err := vm.EvalWithContext(timeoutCtx, src); err != nil {
 		sr.logger.Warn("smart routing script error", "error", err)
-		return sr.defaultModel
+		return RouteResult{Model: sr.defaultModel}
 	}
 
 	// set_model() takes priority; fall back to output_model variable
@@ -182,7 +187,7 @@ func (sr *SmartRouter) route(ctx context.Context, chatReq *ChatCompletionRequest
 	}
 
 	if selectedModel == "" {
-		return sr.defaultModel
+		return RouteResult{Model: sr.defaultModel}
 	}
 
 	// Validate model exists
@@ -192,11 +197,11 @@ func (sr *SmartRouter) route(ctx context.Context, chatReq *ChatCompletionRequest
 
 	if !ok {
 		sr.logger.Warn("smart routing returned unknown model, using default", "model", selectedModel)
-		return sr.defaultModel
+		return RouteResult{Model: sr.defaultModel}
 	}
 
-	sr.logger.Debug("smart routing resolved", "model", selectedModel)
-	return selectedModel
+	sr.logger.Debug("smart routing resolved", "model", selectedModel, "provider_hint", providerHint)
+	return RouteResult{Model: selectedModel, ProviderHint: providerHint}
 }
 
 func messageContentTypes(msgs []Message) []string {

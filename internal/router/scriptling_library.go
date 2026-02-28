@@ -9,13 +9,13 @@ import (
 )
 
 // buildRouterLibraryForRequest creates the library bound to a specific request.
-// setModel is called when the script calls router.set_model(model_id).
-func buildRouterLibraryForRequest(r *Router, reqJSON string, reqType string, msgs []Message, setModel func(string)) *object.Library {
+// setModel is called when the script calls router.set_model(model_id, hint=provider).
+func buildRouterLibraryForRequest(r *Router, reqJSON string, reqType string, msgs []Message, setModel func(string, string)) *object.Library {
 	b := object.NewLibraryBuilder("router", "LLM Router - provider and model data for routing scripts")
 
-	b.FunctionWithHelp("set_model", func(modelID string) {
-		setModel(modelID)
-	}, "set_model(model_id) - Set the model to route to; provider selected automatically")
+	b.FunctionWithHelp("set_model", func(kwargs object.Kwargs, modelID string) {
+		setModel(modelID, kwargs.MustGetString("hint", ""))
+	}, "set_model(model_id, hint=provider) - Set the model to route to; hint optionally suggests a provider")
 
 	b.FunctionWithHelp("get_request", func() map[string]interface{} {
 		var m map[string]interface{}
