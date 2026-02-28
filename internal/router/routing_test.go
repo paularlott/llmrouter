@@ -71,7 +71,7 @@ func newTestRouter(entries []struct {
 	return r
 }
 
-// newSmartRouterFromSource creates a SmartRouter with an inline script (no file).
+// newSmartRouterFromSource creates a SmartRouter with an inline script (no file) and a pre-warmed pool.
 func newSmartRouterFromSource(src, defaultModel string, r *Router, logger Logger) *SmartRouter {
 	sr := &SmartRouter{
 		defaultModel: defaultModel,
@@ -80,6 +80,7 @@ func newSmartRouterFromSource(src, defaultModel string, r *Router, logger Logger
 		stopCh:       make(chan struct{}),
 	}
 	sr.scriptSrc = src
+	sr.pool = sr.buildPool()
 	return sr
 }
 

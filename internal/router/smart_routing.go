@@ -21,9 +21,12 @@ import (
 const (
 	reqTypeChat      = "chat"
 	reqTypeResponses = "responses"
+
+	vmPoolSize = 5
 )
 
-// SmartRouter runs the routing script and hot-reloads it on file changes.
+// SmartRouter runs the routing script using a pool of pre-warmed VMs.
+// The pool is rebuilt when the script changes on disk.
 type SmartRouter struct {
 	scriptPath   string
 	defaultModel string
@@ -33,6 +36,7 @@ type SmartRouter struct {
 
 	mu        sync.RWMutex
 	scriptSrc string
+	pool      chan *scriptling.Scriptling // buffered channel as VM pool
 	watcher   *fsnotify.Watcher
 	stopCh    chan struct{}
 }
@@ -67,6 +71,48 @@ func newSmartRouter(scriptPath, defaultModel string, vars map[string]string, r *
 	return sr, nil
 }
 
+// newVM creates and fully initialises a single Scriptling VM with all libraries registered.
+func (sr *SmartRouter) newVM() *scriptling.Scriptling {
+	vm := scriptling.New()
+	stdlib.RegisterAll(vm)
+	extlibs.RegisterRequestsLibrary(vm)
+	extlibs.RegisterSecretsLibrary(vm)
+	extlibs.RegisterHTMLParserLibrary(vm)
+	extlibs.RegisterLoggingLibraryDefault(vm)
+	extlibs.RegisterYAMLLibrary(vm)
+	extlibs.RegisterTOMLLibrary(vm)
+	extlibs.RegisterRuntimeLibrary(vm)
+	extlibs.RegisterRuntimeKVLibrary(vm)
+	extlibs.RegisterRuntimeSyncLibrary(vm)
+	ai.Register(vm)
+	if err := agent.Register(vm); err != nil {
+		sr.logger.Warn("failed to register scriptling.ai.agent", "error", err)
+	}
+	mcp.Register(vm)
+	mcp.RegisterToon(vm)
+	fuzzy.Register(vm)
+
+	if len(sr.vars) > 0 {
+		pairs := make(map[string]object.Object, len(sr.vars))
+		for k, v := range sr.vars {
+			pairs[k] = &object.String{Value: v}
+		}
+		vm.RegisterLibrary(object.NewLibrary("vars", nil, pairs, "User-defined variables from smart_routing config"))
+	}
+
+	vm.RegisterLibrary(buildRouterLibrary(sr.router))
+	return vm
+}
+
+// buildPool creates a fresh pool of vmPoolSize pre-warmed VMs.
+func (sr *SmartRouter) buildPool() chan *scriptling.Scriptling {
+	pool := make(chan *scriptling.Scriptling, vmPoolSize)
+	for i := 0; i < vmPoolSize; i++ {
+		pool <- sr.newVM()
+	}
+	return pool
+}
+
 func (sr *SmartRouter) loadScript() error {
 	if sr.scriptPath == "" {
 		return nil
@@ -75,8 +121,10 @@ func (sr *SmartRouter) loadScript() error {
 	if err != nil {
 		return err
 	}
+	newPool := sr.buildPool()
 	sr.mu.Lock()
 	sr.scriptSrc = string(data)
+	sr.pool = newPool
 	sr.mu.Unlock()
 	sr.logger.Info("routing script loaded", "path", sr.scriptPath)
 	return nil
@@ -100,7 +148,7 @@ func (sr *SmartRouter) watchLoop() {
 			if err := sr.loadScript(); err != nil {
 				sr.logger.Warn("routing script reload failed", "error", err)
 			} else {
-				sr.logger.Debug("routing script content loaded", "path", sr.scriptPath, "bytes", len(sr.scriptSrc))
+				sr.logger.Debug("routing script reloaded", "path", sr.scriptPath)
 			}
 			debounce = nil
 		case err, ok := <-sr.watcher.Errors:
@@ -122,12 +170,10 @@ type RouteResult struct {
 	ProviderHint string
 }
 
-// Route runs the routing script and returns the resolved model and optional provider hint.
 func (sr *SmartRouter) Route(ctx context.Context, req *ChatCompletionRequest) RouteResult {
 	return sr.route(ctx, req, nil)
 }
 
-// RouteResponse is like Route but for a Responses API request.
 func (sr *SmartRouter) RouteResponse(ctx context.Context, req *CreateResponseRequest) RouteResult {
 	return sr.route(ctx, nil, req)
 }
@@ -135,6 +181,7 @@ func (sr *SmartRouter) RouteResponse(ctx context.Context, req *CreateResponseReq
 func (sr *SmartRouter) route(ctx context.Context, chatReq *ChatCompletionRequest, respReq *CreateResponseRequest) RouteResult {
 	sr.mu.RLock()
 	src := sr.scriptSrc
+	pool := sr.pool
 	sr.mu.RUnlock()
 
 	if src == "" {
@@ -159,72 +206,41 @@ func (sr *SmartRouter) route(ctx context.Context, chatReq *ChatCompletionRequest
 	}
 	reqJSON, _ := json.Marshal(inputData)
 
-	// selectedModel and providerHint are set by router.set_model() inside the script
-	var selectedModel, providerHint string
-	vm := scriptling.New()
-	stdlib.RegisterAll(vm)
-	extlibs.RegisterRequestsLibrary(vm)
-	extlibs.RegisterSecretsLibrary(vm)
-	extlibs.RegisterHTMLParserLibrary(vm)
-	extlibs.RegisterLoggingLibraryDefault(vm)
-	extlibs.RegisterYAMLLibrary(vm)
-	extlibs.RegisterTOMLLibrary(vm)
-	extlibs.RegisterRuntimeLibrary(vm)
-	extlibs.RegisterRuntimeKVLibrary(vm)
-	extlibs.RegisterRuntimeSyncLibrary(vm)
-	ai.Register(vm)
-	if err := agent.Register(vm); err != nil {
-		sr.logger.Warn("failed to register scriptling.ai.agent", "error", err)
-	}
-	mcp.Register(vm)
-	mcp.RegisterToon(vm)
-	fuzzy.Register(vm)
-
-	// Expose configured vars to the script
-	if len(sr.vars) > 0 {
-		pairs := make(map[string]object.Object, len(sr.vars))
-		for k, v := range sr.vars {
-			pairs[k] = &object.String{Value: v}
-		}
-		vm.RegisterLibrary(object.NewLibrary("vars", nil, pairs, "User-defined variables from smart_routing config"))
-	}
-
-	var msgs []Message
-	if chatReq != nil {
-		msgs = chatReq.Messages
-	}
-	vm.RegisterLibrary(buildRouterLibraryForRequest(sr.router, string(reqJSON), reqType, msgs, func(m, hint string) {
-		selectedModel = m
-		providerHint = hint
-	}))
-
-	if err := vm.SetVar("request_json", string(reqJSON)); err != nil {
-		sr.logger.Warn("smart routing: failed to set request", "error", err)
+	// Borrow a VM from the pool (block until one is available or ctx is done)
+	var vm *scriptling.Scriptling
+	select {
+	case vm = <-pool:
+	case <-ctx.Done():
 		return RouteResult{Model: sr.defaultModel}
 	}
+
+	// Inject per-request data as variables
+	_ = vm.SetVar("request_json", string(reqJSON))
 
 	timeoutCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
-	if _, err := vm.EvalWithContext(timeoutCtx, src); err != nil {
-		sr.logger.Warn("smart routing script error", "error", err)
+	_, evalErr := vm.EvalWithContext(timeoutCtx, src)
+
+	// Read output before reset
+	selectedModel, _ := vm.GetVarAsString("output_model")
+	providerHint, _ := vm.GetVarAsString("output_provider")
+
+	// Reset env: keep only import builtin and registered lib dicts
+	vm.ResetEnv("vars", "router")
+
+	// Return VM to pool
+	pool <- vm
+
+	if evalErr != nil {
+		sr.logger.Warn("smart routing script error", "error", evalErr)
 		return RouteResult{Model: sr.defaultModel}
 	}
 
-	// set_model() takes priority; fall back to output_model variable
-	if selectedModel == "" {
-		if m, _ := vm.GetVar("output_model"); m != nil {
-			if s, ok := m.(string); ok {
-				selectedModel = s
-			}
-		}
-	}
-
 	if selectedModel == "" {
 		return RouteResult{Model: sr.defaultModel}
 	}
 
-	// Validate model exists
 	sr.router.ModelMapMu.RLock()
 	_, ok := sr.router.ModelMap[selectedModel]
 	sr.router.ModelMapMu.RUnlock()

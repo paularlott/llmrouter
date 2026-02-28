@@ -1,53 +1,132 @@
 package router
 
 import (
+	"context"
 	"encoding/json"
 	"math/rand"
 
 	"github.com/paularlott/mcp/ai/openai"
+	"github.com/paularlott/scriptling/evaluator"
 	"github.com/paularlott/scriptling/object"
 )
 
-// buildRouterLibraryForRequest creates the library bound to a specific request.
-// setModel is called when the script calls router.set_model(model_id, hint=provider).
-func buildRouterLibraryForRequest(r *Router, reqJSON string, reqType string, msgs []Message, setModel func(string, string)) *object.Library {
+// buildRouterLibrary creates a stateless router library.
+// Per-request data is read from the "request_json" env var set before eval.
+// Output is written to "output_model" / "output_provider" env vars read after eval.
+func buildRouterLibrary(r *Router) *object.Library {
 	b := object.NewLibraryBuilder("router", "LLM Router - provider and model data for routing scripts")
 
-	b.FunctionWithHelp("set_model", func(kwargs object.Kwargs, modelID string) {
-		setModel(modelID, kwargs.MustGetString("hint", ""))
+	// reqData reads and parses request_json from the script environment.
+	reqData := func(ctx context.Context) map[string]interface{} {
+		env := evaluator.GetEnvFromContext(ctx)
+		if env == nil {
+			return nil
+		}
+		obj, ok := env.Get("request_json")
+		if !ok {
+			return nil
+		}
+		s, ok := obj.(*object.String)
+		if !ok {
+			return nil
+		}
+		var m map[string]interface{}
+		_ = json.Unmarshal([]byte(s.Value), &m)
+		return m
+	}
+
+	reqMsgs := func(ctx context.Context) []Message {
+		m := reqData(ctx)
+		if m == nil {
+			return nil
+		}
+		raw, _ := json.Marshal(m["messages"])
+		var msgs []Message
+		_ = json.Unmarshal(raw, &msgs)
+		return msgs
+	}
+
+	b.FunctionWithHelp("set_model", func(ctx context.Context, kwargs object.Kwargs, modelID string) {
+		env := evaluator.GetEnvFromContext(ctx)
+		if env == nil {
+			return
+		}
+		env.Set("output_model", &object.String{Value: modelID})
+		if hint := kwargs.MustGetString("hint", ""); hint != "" {
+			env.Set("output_provider", &object.String{Value: hint})
+		}
 	}, "set_model(model_id, hint=provider) - Set the model to route to; hint optionally suggests a provider")
 
-	b.FunctionWithHelp("get_request", func() map[string]interface{} {
-		var m map[string]interface{}
-		_ = json.Unmarshal([]byte(reqJSON), &m)
-		return m
+	b.FunctionWithHelp("get_request", func(ctx context.Context) map[string]interface{} {
+		return reqData(ctx)
 	}, "get_request() -> dict - Returns the current routing request (type, messages, tools)")
 
-	b.FunctionWithHelp("is_chat_completion", func() bool {
-		return reqType == reqTypeChat
+	b.FunctionWithHelp("is_chat_completion", func(ctx context.Context) bool {
+		m := reqData(ctx)
+		if m == nil {
+			return false
+		}
+		t, _ := m["type"].(string)
+		return t == reqTypeChat
 	}, "is_chat_completion() -> bool - True if this is a chat completions request")
 
-	b.FunctionWithHelp("is_responses", func() bool {
-		return reqType == reqTypeResponses
+	b.FunctionWithHelp("is_responses", func(ctx context.Context) bool {
+		m := reqData(ctx)
+		if m == nil {
+			return false
+		}
+		t, _ := m["type"].(string)
+		return t == reqTypeResponses
 	}, "is_responses() -> bool - True if this is a responses API request")
 
-	b.FunctionWithHelp("message_content_types", func() []interface{} {
-		types := messageContentTypes(msgs)
-		return toAnySlice(types)
-	}, "message_content_types() -> list - Unique content part types across all messages (e.g. 'text', 'image_url')")
+	b.FunctionWithHelp("message_content_types", func(ctx context.Context) []interface{} {
+		return toAnySlice(messageContentTypes(reqMsgs(ctx)))
+	}, "message_content_types() -> list - Unique content part types across all messages")
 
-	b.FunctionWithHelp("total_tokens_estimate", func() int {
+	b.FunctionWithHelp("total_tokens_estimate", func(ctx context.Context) int {
 		tc := openai.NewTokenCounter()
-		tc.AddPromptTokensFromMessages(msgs)
+		tc.AddPromptTokensFromMessages(reqMsgs(ctx))
 		return tc.GetUsage().PromptTokens
 	}, "total_tokens_estimate() -> int - Estimated prompt token count across all messages")
+
+	b.FunctionWithHelp("system_prompt", func(ctx context.Context) string {
+		for _, m := range reqMsgs(ctx) {
+			if m.Role == "system" {
+				if s, ok := m.Content.(string); ok {
+					return s
+				}
+			}
+		}
+		return ""
+	}, "system_prompt() -> str - Content of the system message, or empty string if none")
+
+	b.FunctionWithHelp("last_message", func(ctx context.Context) string {
+		msgs := reqMsgs(ctx)
+		for i := len(msgs) - 1; i >= 0; i-- {
+			if msgs[i].Role == "user" {
+				if s, ok := msgs[i].Content.(string); ok {
+					return s
+				}
+			}
+		}
+		return ""
+	}, "last_message() -> str - Content of the last user message, or empty string if none")
+
+	b.FunctionWithHelp("conversation_turns", func(ctx context.Context) int {
+		turns := 0
+		for _, m := range reqMsgs(ctx) {
+			if m.Role == "user" {
+				turns++
+			}
+		}
+		return turns
+	}, "conversation_turns() -> int - Number of user turns in the conversation")
 
 	b.FunctionWithHelp("models_by_tags", func(tags []string) []interface{} {
 		r.ModelMapMu.RLock()
 		defer r.ModelMapMu.RUnlock()
-
 		var result []interface{}
-		outer:
+	outer:
 		for modelID, modelTags := range r.ModelTags {
 			for _, tag := range tags {
 				if !hasTag(modelTags, tag) {
@@ -62,7 +141,6 @@ func buildRouterLibraryForRequest(r *Router, reqJSON string, reqType string, msg
 	b.FunctionWithHelp("providers_for_model", func(modelID string) []interface{} {
 		r.ModelMapMu.RLock()
 		defer r.ModelMapMu.RUnlock()
-
 		names, ok := r.ModelMap[modelID]
 		if !ok {
 			return []interface{}{}
@@ -82,12 +160,11 @@ func buildRouterLibraryForRequest(r *Router, reqJSON string, reqType string, msg
 			})
 		}
 		return result
-	}, "providers_for_model(model_id) -> list[dict] - Healthy providers serving a model, each with name/type/load/weight/tags")
+	}, "providers_for_model(model_id) -> list[dict] - Healthy providers serving a model")
 
 	b.FunctionWithHelp("random_model", func(tag string) string {
 		r.ModelMapMu.RLock()
 		defer r.ModelMapMu.RUnlock()
-
 		type candidate struct {
 			modelID string
 			weight  float64
@@ -123,21 +200,18 @@ func buildRouterLibraryForRequest(r *Router, reqJSON string, reqType string, msg
 			}
 		}
 		return pool[len(pool)-1].modelID
-	}, "random_model(tag) -> str - Weighted random model with the given tag (empty string if none)")
+	}, "random_model(tag) -> str - Weighted random model with the given tag")
 
 	b.FunctionWithHelp("providers", func(kwargs object.Kwargs) []interface{} {
 		filterTag := kwargs.MustGetString("tag", "")
-
 		r.ModelMapMu.RLock()
 		defer r.ModelMapMu.RUnlock()
-
 		providerModels := make(map[string][]string)
 		for modelID, names := range r.ModelMap {
 			for _, name := range names {
 				providerModels[name] = append(providerModels[name], modelID)
 			}
 		}
-
 		result := make([]interface{}, 0, len(r.Providers))
 		for name, p := range r.Providers {
 			if !p.Enabled || !p.Healthy {
@@ -164,10 +238,8 @@ func buildRouterLibraryForRequest(r *Router, reqJSON string, reqType string, msg
 
 	b.FunctionWithHelp("models_for_provider", func(kwargs object.Kwargs, providerName string) []interface{} {
 		filterTag := kwargs.MustGetString("tag", "")
-
 		r.ModelMapMu.RLock()
 		defer r.ModelMapMu.RUnlock()
-
 		p := r.Providers[providerName]
 		var result []interface{}
 		for modelID, names := range r.ModelMap {
@@ -197,7 +269,6 @@ func buildRouterLibraryForRequest(r *Router, reqJSON string, reqType string, msg
 	b.FunctionWithHelp("models_by_tag", func(tag string) []interface{} {
 		r.ModelMapMu.RLock()
 		defer r.ModelMapMu.RUnlock()
-
 		var result []interface{}
 		for modelID, tags := range r.ModelTags {
 			if hasTag(tags, tag) {
@@ -252,38 +323,6 @@ func buildRouterLibraryForRequest(r *Router, reqJSON string, reqType string, msg
 		}
 		return total
 	}, "model_load(model_id) -> int - Total active completions across all healthy providers serving the model")
-
-	b.FunctionWithHelp("system_prompt", func() string {
-		for _, m := range msgs {
-			if m.Role == "system" {
-				if s, ok := m.Content.(string); ok {
-					return s
-				}
-			}
-		}
-		return ""
-	}, "system_prompt() -> str - Content of the system message, or empty string if none")
-
-	b.FunctionWithHelp("last_message", func() string {
-		for i := len(msgs) - 1; i >= 0; i-- {
-			if msgs[i].Role == "user" {
-				if s, ok := msgs[i].Content.(string); ok {
-					return s
-				}
-			}
-		}
-		return ""
-	}, "last_message() -> str - Content of the last user message, or empty string if none")
-
-	b.FunctionWithHelp("conversation_turns", func() int {
-		turns := 0
-		for _, m := range msgs {
-			if m.Role == "user" {
-				turns++
-			}
-		}
-		return turns
-	}, "conversation_turns() -> int - Number of user turns in the conversation")
 
 	return b.Build()
 }

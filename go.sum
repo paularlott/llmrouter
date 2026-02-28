@@ -42,8 +42,8 @@ github.com/paularlott/logger v0.3.0 h1:QwVUoxmlEFkfHI25y5dn56OJvK4Bpe3OvoJu4GZM7
 github.com/paularlott/logger v0.3.0/go.mod h1:vjAOY1vUvYigmJxxQ0eMclryIjDS6VWNK6FprtTMce0=
 github.com/paularlott/mcp v0.12.10 h1:wqdvjQtDCkjAGOt5DiaU8ny1BwbjwyKBWvJ0KJkbAfA=
 github.com/paularlott/mcp v0.12.10/go.mod h1:RHtwyZchcdC4oiz0fEaTBDEWNP0YHL7qMFhbmm/l7WI=
-github.com/paularlott/scriptling v0.2.6 h1:Mx7zDVan1lR1mhliXFOw2pZ+zYmHUQkVSBT+kNFmFAc=
-github.com/paularlott/scriptling v0.2.6/go.mod h1:hs4vF5IpPmnqfAsyyyfU04sJFf3lHb9qMTRo/y7g9Iw=
+github.com/paularlott/scriptling v0.2.7 h1:q/nx62Nilht6SqivQnuvKqo/hY6/D34hOd3QSa13Ypk=
+github.com/paularlott/scriptling v0.2.7/go.mod h1:hs4vF5IpPmnqfAsyyyfU04sJFf3lHb9qMTRo/y7g9Iw=
 github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/power-devops/perfstat v0.0.0-20240221224432-82ca36839d55 h1:o4JXh1EVt9k/+g42oCprj/FisM4qX9L3sZB3upGN2ZU=

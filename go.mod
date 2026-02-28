@@ -9,7 +9,7 @@ require (
 	github.com/paularlott/cli v0.7.11
 	github.com/paularlott/logger v0.3.0
 	github.com/paularlott/mcp v0.12.10
-	github.com/paularlott/scriptling v0.2.6
+	github.com/paularlott/scriptling v0.2.7
 )
 
 require (
@@ -36,7 +36,6 @@ require (
 	golang.org/x/net v0.51.0 // indirect
 	golang.org/x/oauth2 v0.35.0 // indirect
 	golang.org/x/sys v0.41.0 // indirect
-	golang.org/x/term v0.40.0 // indirect
 	golang.org/x/text v0.34.0 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
