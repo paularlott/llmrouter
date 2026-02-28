@@ -60,7 +60,7 @@ tags = ["capable", "expensive"]
 | `router.message_content_types` | `message_content_types()` | `list[str]` | Unique content part types across all messages (e.g. `"text"`, `"image_url"`) |
 | `router.total_tokens_estimate` | `total_tokens_estimate()` | `int` | Estimated prompt token count across all messages (accounts for content parts, images, tool calls) |
 | `router.models_by_tags` | `models_by_tags(tags)` | `list[str]` | Model IDs that have ALL of the given tags |
-| `router.provider_for_model` | `provider_for_model(model_id)` | `str` | Provider name for a model (first if multiple, `""` if not found) |
+| `router.providers_for_model` | `providers_for_model(model_id)` | `list[dict]` | All healthy providers serving a model, each with `name`, `type`, `load`, `weight`, `tags` |
 | `router.random_model` | `random_model(tag)` | `str` | Weighted random model with the given tag (`""` if none) |
 
 ### Provider dict fields
@@ -209,6 +209,30 @@ for p in router.providers():
 
 if best:
     router.set_model(best["models"][0])
+```
+
+### Pick model with free capacity, fall back to least-loaded alternative
+
+```python
+import router
+
+def has_free_capacity(model_id, max_load=2):
+    return any(p["load"] < max_load for p in router.providers_for_model(model_id))
+
+# Try preferred models in order; pick first with free capacity
+for model in router.models_by_tag("capable"):
+    if has_free_capacity(model):
+        router.set_model(model)
+        break
+else:
+    # All capable models busy — fall back to least-loaded cheap model
+    best_model, best_load = None, None
+    for model in router.models_by_tag("cheap"):
+        load = min((p["load"] for p in router.providers_for_model(model)), default=None)
+        if load is not None and (best_load is None or load < best_load):
+            best_model, best_load = model, load
+    if best_model:
+        router.set_model(best_model)
 ```
 
 ### Weighted random selection

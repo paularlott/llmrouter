@@ -58,14 +58,30 @@ func buildRouterLibraryForRequest(r *Router, reqJSON string, reqType string, msg
 		return result
 	}, "models_by_tags(tags) -> list - Model IDs that have ALL of the given tags")
 
-	b.FunctionWithHelp("provider_for_model", func(modelID string) string {
+	b.FunctionWithHelp("providers_for_model", func(modelID string) []map[string]interface{} {
 		r.ModelMapMu.RLock()
 		defer r.ModelMapMu.RUnlock()
-		if names, ok := r.ModelMap[modelID]; ok && len(names) > 0 {
-			return names[0]
+
+		names, ok := r.ModelMap[modelID]
+		if !ok {
+			return []map[string]interface{}{}
 		}
-		return ""
-	}, "provider_for_model(model_id) -> str - Provider name for a model (first if multiple, empty if not found)")
+		result := make([]map[string]interface{}, 0, len(names))
+		for _, name := range names {
+			p, ok := r.Providers[name]
+			if !ok || !p.Enabled || !p.Healthy {
+				continue
+			}
+			result = append(result, map[string]interface{}{
+				"name":   name,
+				"type":   p.ProviderType,
+				"load":   p.ActiveCompletions.Load(),
+				"weight": p.Weight,
+				"tags":   toAnySlice(p.Tags),
+			})
+		}
+		return result
+	}, "providers_for_model(model_id) -> list[dict] - Healthy providers serving a model, each with name/type/load/weight/tags")
 
 	b.FunctionWithHelp("random_model", func(tag string) string {
 		r.ModelMapMu.RLock()
