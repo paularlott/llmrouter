@@ -33,6 +33,11 @@ var ServerCmd = &cli.Command{
 			ConfigPath: []string{"server.token"},
 		},
 		&cli.StringFlag{
+			Name:       "admin-password",
+			Usage:      "Password for admin UI (if set, enables admin UI at /admin)",
+			ConfigPath: []string{"server.admin_password"},
+		},
+		&cli.StringFlag{
 			Name:       "storage-path",
 			Usage:      "Path for persistent storage (omit for memory-only)",
 			ConfigPath: []string{"storage.path"},

@@ -1,0 +1,39 @@
+@import "tailwindcss";
+@variant dark (&:where(.dark, .dark *));
+
+/* Custom component styles */
+@layer components {
+  .btn-primary {
+    @apply bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200;
+  }
+
+  .btn-secondary {
+    @apply bg-gray-600 hover:bg-gray-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200;
+  }
+
+  .btn-danger {
+    @apply bg-red-600 hover:bg-red-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200;
+  }
+
+  .input-field {
+    @apply w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none bg-white dark:bg-slate-700/60 dark:border-slate-600 dark:text-white;
+  }
+
+  /* Dark hierarchy:
+     page bg:    slate-950
+     sidebar:    slate-900
+     card:       slate-800
+     inset/row:  slate-700/50
+  */
+  .card {
+    @apply bg-white dark:bg-slate-800 rounded-xl shadow-md border border-slate-200 dark:border-slate-700 p-6;
+  }
+
+  .nav-link {
+    @apply flex items-center gap-3 px-4 py-3 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors;
+  }
+
+  .nav-link-active {
+    @apply bg-blue-50 dark:bg-blue-500/20 text-blue-700 dark:text-blue-300;
+  }
+}

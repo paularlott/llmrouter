@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/paularlott/llmrouter/internal/admin"
 	"github.com/paularlott/llmrouter/internal/conversations"
 	"github.com/paularlott/llmrouter/internal/responses"
 	"github.com/paularlott/llmrouter/internal/storage"
@@ -163,6 +164,13 @@ func NewRouter(config *types.Config, logger Logger) (*Router, error) {
 	if router.mcpServer != nil {
 		router.mux.HandleFunc("/mcp", auth(router.HandleMCP))
 		logger.Info("MCP server endpoint available at /mcp (use X-MCP-Tool-Mode: discovery header for discovery mode)")
+	}
+
+	// Initialize admin UI if password is configured
+	router.admin = admin.New(config, router.getStats, router.getProviders, router.getMCPServers, router.getMCPTools, router.getModels)
+	if router.admin.Enabled() {
+		router.admin.RegisterRoutes(router.mux)
+		logger.Info("admin UI enabled at /admin")
 	}
 
 	// Add catch-all handler for unmatched routes (must be last)
@@ -975,6 +983,93 @@ func (r *Router) checkDisabledProviders() {
 // ServeHTTP implements http.Handler
 func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	r.mux.ServeHTTP(w, req)
+}
+
+// getStats returns statistics for the admin UI
+func (r *Router) getStats() *admin.Stats {
+	r.ModelMapMu.RLock()
+	modelCount := len(r.ModelMap)
+	r.ModelMapMu.RUnlock()
+
+	mcpServerCount := 0
+	if r.mcpServer != nil {
+		mcpServerCount = len(r.config.MCP.RemoteServers)
+	}
+
+	return &admin.Stats{
+		Providers:      len(r.Providers),
+		Models:         modelCount,
+		MCPServers:     mcpServerCount,
+		ActiveRequests: 0, // TODO: track active requests
+	}
+}
+
+// getProviders returns provider information for the admin UI
+func (r *Router) getProviders() []admin.ProviderInfo {
+	providers := make([]admin.ProviderInfo, 0, len(r.Providers))
+	for name, p := range r.Providers {
+		modelCount := 0
+		r.ModelMapMu.RLock()
+		for _, providerNames := range r.ModelMap {
+			for _, pn := range providerNames {
+				if pn == name {
+					modelCount++
+				}
+			}
+		}
+		r.ModelMapMu.RUnlock()
+
+		providers = append(providers, admin.ProviderInfo{
+			Name:       name,
+			Type:       p.ProviderType,
+			Healthy:    p.Healthy,
+			ModelCount: modelCount,
+			Weight:     p.Weight,
+		})
+	}
+	sort.Slice(providers, func(i, j int) bool { return providers[i].Name < providers[j].Name })
+	return providers
+}
+
+// getMCPServers returns MCP server information for the admin UI
+func (r *Router) getMCPServers() []admin.MCPServerInfo {
+	servers := make([]admin.MCPServerInfo, 0, len(r.config.MCP.RemoteServers))
+	for _, s := range r.config.MCP.RemoteServers {
+		servers = append(servers, admin.MCPServerInfo{
+			Namespace:      s.Namespace,
+			URL:            s.URL,
+			ToolVisibility: s.ToolVisibility,
+		})
+	}
+	sort.Slice(servers, func(i, j int) bool { return servers[i].Namespace < servers[j].Namespace })
+	return servers
+}
+
+// getMCPTools returns tools for an MCP server
+func (r *Router) getMCPTools(namespace string) ([]admin.ToolInfo, error) {
+	if r.mcpServer == nil {
+		return nil, fmt.Errorf("MCP server not available")
+	}
+	return r.mcpServer.GetToolsForAdmin(namespace)
+}
+
+// getModels returns model information for the admin UI
+func (r *Router) getModels() []admin.ModelInfo {
+	r.ModelMapMu.RLock()
+	defer r.ModelMapMu.RUnlock()
+
+	models := make([]admin.ModelInfo, 0, len(r.ModelMap))
+	for modelID, providers := range r.ModelMap {
+		providersCopy := make([]string, len(providers))
+		copy(providersCopy, providers)
+		sort.Strings(providersCopy)
+		models = append(models, admin.ModelInfo{
+			ID:        modelID,
+			Providers: providersCopy,
+		})
+	}
+	sort.Slice(models, func(i, j int) bool { return models[i].ID < models[j].ID })
+	return models
 }
 
 // Shutdown gracefully shuts down the router

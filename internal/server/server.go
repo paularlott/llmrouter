@@ -20,9 +20,10 @@ import (
 func RunServer(ctx context.Context, cmd *cli.Command) error {
 	config := &types.Config{
 		Server: types.ServerConfig{
-			Host:  cmd.GetString("host"),
-			Port:  cmd.GetInt("port"),
-			Token: cmd.GetString("token"),
+			Host:          cmd.GetString("host"),
+			Port:          cmd.GetInt("port"),
+			Token:         cmd.GetString("token"),
+			AdminPassword: cmd.GetString("admin-password"),
 		},
 		Logging: types.LoggingConfig{
 			Level:  cmd.GetString("log-level"),

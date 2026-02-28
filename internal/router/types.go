@@ -5,6 +5,7 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/paularlott/llmrouter/internal/admin"
 	"github.com/paularlott/llmrouter/internal/conversations"
 	"github.com/paularlott/llmrouter/internal/responses"
 	"github.com/paularlott/llmrouter/internal/storage"
@@ -48,6 +49,7 @@ type Router struct {
 	responsesService     *responses.Service
 	conversationsService *conversations.Service
 	smartRouter          *SmartRouter
+	admin                *admin.Admin
 }
 
 type (
