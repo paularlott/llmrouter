@@ -230,6 +230,61 @@ func buildRouterLibraryForRequest(r *Router, reqJSON string, reqType string, msg
 		return -1
 	}, "provider_load(name) -> int - Active completions for a provider (-1 if not found)")
 
+	b.FunctionWithHelp("provider_healthy", func(providerName string) bool {
+		p, ok := r.Providers[providerName]
+		return ok && p.Enabled && p.Healthy
+	}, "provider_healthy(name) -> bool - True if the provider exists, is enabled, and is healthy")
+
+	b.FunctionWithHelp("has_provider", func(providerName string) bool {
+		_, ok := r.Providers[providerName]
+		return ok
+	}, "has_provider(name) -> bool - True if the provider exists in config (regardless of health)")
+
+	b.FunctionWithHelp("model_load", func(modelID string) int64 {
+		r.ModelMapMu.RLock()
+		names := r.ModelMap[modelID]
+		r.ModelMapMu.RUnlock()
+		var total int64
+		for _, name := range names {
+			if p, ok := r.Providers[name]; ok && p.Enabled && p.Healthy {
+				total += p.ActiveCompletions.Load()
+			}
+		}
+		return total
+	}, "model_load(model_id) -> int - Total active completions across all healthy providers serving the model")
+
+	b.FunctionWithHelp("system_prompt", func() string {
+		for _, m := range msgs {
+			if m.Role == "system" {
+				if s, ok := m.Content.(string); ok {
+					return s
+				}
+			}
+		}
+		return ""
+	}, "system_prompt() -> str - Content of the system message, or empty string if none")
+
+	b.FunctionWithHelp("last_message", func() string {
+		for i := len(msgs) - 1; i >= 0; i-- {
+			if msgs[i].Role == "user" {
+				if s, ok := msgs[i].Content.(string); ok {
+					return s
+				}
+			}
+		}
+		return ""
+	}, "last_message() -> str - Content of the last user message, or empty string if none")
+
+	b.FunctionWithHelp("conversation_turns", func() int {
+		turns := 0
+		for _, m := range msgs {
+			if m.Role == "user" {
+				turns++
+			}
+		}
+		return turns
+	}, "conversation_turns() -> int - Number of user turns in the conversation")
+
 	return b.Build()
 }
 

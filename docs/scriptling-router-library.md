@@ -62,6 +62,12 @@ tags = ["capable", "expensive"]
 | `router.models_by_tags` | `models_by_tags(tags)` | `list[str]` | Model IDs that have ALL of the given tags |
 | `router.providers_for_model` | `providers_for_model(model_id)` | `list[dict]` | All healthy providers serving a model, each with `name`, `type`, `load`, `weight`, `tags` |
 | `router.random_model` | `random_model(tag)` | `str` | Weighted random model with the given tag (`""` if none) |
+| `router.provider_healthy` | `provider_healthy(name)` | `bool` | True if the provider exists, is enabled, and is healthy |
+| `router.has_provider` | `has_provider(name)` | `bool` | True if the provider exists in config (regardless of health) |
+| `router.model_load` | `model_load(model_id)` | `int` | Total active completions across all healthy providers serving the model |
+| `router.system_prompt` | `system_prompt()` | `str` | Content of the system message, or `""` if none |
+| `router.last_message` | `last_message()` | `str` | Content of the last user message, or `""` if none |
+| `router.conversation_turns` | `conversation_turns()` | `int` | Number of user turns in the conversation |
 
 ### Provider dict fields
 
@@ -246,6 +252,69 @@ import router
 model = router.random_model("cheap")
 if model:
     router.set_model(model)
+```
+
+### Route based on system prompt content
+
+```python
+import router
+
+prompt = router.system_prompt()
+if "code" in prompt or "programming" in prompt:
+    models = router.models_by_tag("capable")
+else:
+    models = router.models_by_tag("cheap")
+
+if models:
+    router.set_model(models[0])
+```
+
+### Route long conversations to a large-context model
+
+```python
+import router
+
+if router.conversation_turns() > 10 or router.total_tokens_estimate() > 4000:
+    models = router.models_by_tag("large_context")
+else:
+    models = router.models_by_tag("cheap")
+
+if models:
+    router.set_model(models[0])
+```
+
+### Skip busy models, route to least-loaded alternative
+
+```python
+import router
+
+preferred = "gpt-4o"
+if router.model_load(preferred) < 3 and router.has_model(preferred):
+    router.set_model(preferred)
+else:
+    # fall back to least-loaded capable model
+    best, best_load = None, None
+    for m in router.models_by_tag("capable"):
+        load = router.model_load(m)
+        if best_load is None or load < best_load:
+            best, best_load = m, load
+    if best:
+        router.set_model(best)
+```
+
+### Route based on last message keyword
+
+```python
+import router
+
+msg = router.last_message().lower()
+if any(w in msg for w in ["image", "photo", "picture", "diagram"]):
+    models = router.models_by_tag("vision")
+else:
+    models = router.models_by_tag("cheap")
+
+if models:
+    router.set_model(models[0])
 ```
 
 ---

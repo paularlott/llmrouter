@@ -698,3 +698,214 @@ func TestModelNoFilter_AllVisible(t *testing.T) {
 		}
 	}
 }
+
+// --- provider_healthy, model_load, system_prompt, last_message, conversation_turns ---
+
+func TestScriptLib_ProviderHealthy_True(t *testing.T) {
+	result := runScript(t, `
+import router
+if router.provider_healthy("p1"):
+    router.set_model("model-b")
+`)
+	if result.Model != "model-b" {
+		t.Fatalf("want model-b, got %q", result.Model)
+	}
+}
+
+func TestScriptLib_ProviderHealthy_Unhealthy(t *testing.T) {
+	r, sr := newSmartTestRouter(t, `
+import router
+if not router.provider_healthy("p1"):
+    router.set_model("model-b")
+`)
+	r.Providers["p1"].Healthy = false
+	result := sr.Route(context.Background(), &ChatCompletionRequest{Model: "auto"})
+	if result.Model != "model-b" {
+		t.Fatalf("want model-b (p1 unhealthy), got %q", result.Model)
+	}
+}
+
+func TestScriptLib_ProviderHealthy_Unknown(t *testing.T) {
+	result := runScript(t, `
+import router
+if not router.provider_healthy("ghost"):
+    router.set_model("model-a")
+`)
+	if result.Model != "model-a" {
+		t.Fatalf("want model-a, got %q", result.Model)
+	}
+}
+
+func TestScriptLib_HasProvider_Exists(t *testing.T) {
+	result := runScript(t, `
+import router
+if router.has_provider("p1"):
+    router.set_model("model-b")
+`)
+	if result.Model != "model-b" {
+		t.Fatalf("want model-b, got %q", result.Model)
+	}
+}
+
+func TestScriptLib_HasProvider_Missing(t *testing.T) {
+	result := runScript(t, `
+import router
+if not router.has_provider("ghost"):
+    router.set_model("model-a")
+`)
+	if result.Model != "model-a" {
+		t.Fatalf("want model-a, got %q", result.Model)
+	}
+}
+
+func TestScriptLib_HasProvider_UnhealthyStillExists(t *testing.T) {
+	r, sr := newSmartTestRouter(t, `
+import router
+if router.has_provider("p1") and not router.provider_healthy("p1"):
+    router.set_model("model-b")
+`)
+	r.Providers["p1"].Healthy = false
+	result := sr.Route(context.Background(), &ChatCompletionRequest{Model: "auto"})
+	if result.Model != "model-b" {
+		t.Fatalf("want model-b (exists but unhealthy), got %q", result.Model)
+	}
+}
+
+func TestScriptLib_ModelLoad_Zero(t *testing.T) {
+	result := runScript(t, `
+import router
+if router.model_load("model-a") == 0:
+    router.set_model("model-b")
+`)
+	if result.Model != "model-b" {
+		t.Fatalf("want model-b, got %q", result.Model)
+	}
+}
+
+func TestScriptLib_ModelLoad_Busy(t *testing.T) {
+	r, sr := newSmartTestRouter(t, `
+import router
+if router.model_load("model-a") > 2:
+    router.set_model("model-b")
+`)
+	r.Providers["p1"].ActiveCompletions.Store(5)
+	result := sr.Route(context.Background(), &ChatCompletionRequest{Model: "auto"})
+	if result.Model != "model-b" {
+		t.Fatalf("want model-b (model-a busy), got %q", result.Model)
+	}
+}
+
+func TestScriptLib_ModelLoad_MultiProvider(t *testing.T) {
+	r, sr := newSmartTestRouter(t, `
+import router
+if router.model_load("model-b") == 7:
+    router.set_model("model-a")
+`)
+	// Add second provider for model-b
+	r.Providers["p2b"] = &Provider{
+		Name: "p2b", ProviderType: "openai",
+		Client: &mockClient{"p2b"}, Enabled: true, Healthy: true, Weight: 1.0,
+	}
+	r.ModelMap["model-b"] = append(r.ModelMap["model-b"], "p2b")
+	r.Providers["p2"].ActiveCompletions.Store(3)
+	r.Providers["p2b"].ActiveCompletions.Store(4)
+	result := sr.Route(context.Background(), &ChatCompletionRequest{Model: "auto"})
+	if result.Model != "model-a" {
+		t.Fatalf("want model-a (combined load 7), got %q", result.Model)
+	}
+}
+
+func TestScriptLib_SystemPrompt_Present(t *testing.T) {
+	_, sr := newSmartTestRouter(t, `
+import router
+if "coding" in router.system_prompt():
+    router.set_model("model-b")
+`)
+	result := sr.Route(context.Background(), &ChatCompletionRequest{
+		Model: "auto",
+		Messages: []Message{
+			{Role: "system", Content: "you are a coding assistant"},
+			{Role: "user", Content: "hello"},
+		},
+	})
+	if result.Model != "model-b" {
+		t.Fatalf("want model-b, got %q", result.Model)
+	}
+}
+
+func TestScriptLib_SystemPrompt_Absent(t *testing.T) {
+	_, sr := newSmartTestRouter(t, `
+import router
+if router.system_prompt() == "":
+    router.set_model("model-a")
+`)
+	result := sr.Route(context.Background(), &ChatCompletionRequest{
+		Model:    "auto",
+		Messages: []Message{{Role: "user", Content: "hello"}},
+	})
+	if result.Model != "model-a" {
+		t.Fatalf("want model-a, got %q", result.Model)
+	}
+}
+
+func TestScriptLib_LastMessage(t *testing.T) {
+	_, sr := newSmartTestRouter(t, `
+import router
+if "image" in router.last_message():
+    router.set_model("model-b")
+`)
+	result := sr.Route(context.Background(), &ChatCompletionRequest{
+		Model: "auto",
+		Messages: []Message{
+			{Role: "user", Content: "hello"},
+			{Role: "assistant", Content: "hi"},
+			{Role: "user", Content: "describe this image"},
+		},
+	})
+	if result.Model != "model-b" {
+		t.Fatalf("want model-b, got %q", result.Model)
+	}
+}
+
+func TestScriptLib_LastMessage_Empty(t *testing.T) {
+	result := runScript(t, `
+import router
+if router.last_message() == "":
+    router.set_model("model-a")
+`)
+	if result.Model != "model-a" {
+		t.Fatalf("want model-a, got %q", result.Model)
+	}
+}
+
+func TestScriptLib_ConversationTurns(t *testing.T) {
+	_, sr := newSmartTestRouter(t, `
+import router
+if router.conversation_turns() >= 3:
+    router.set_model("model-b")
+`)
+	result := sr.Route(context.Background(), &ChatCompletionRequest{
+		Model: "auto",
+		Messages: []Message{
+			{Role: "user", Content: "msg1"},
+			{Role: "assistant", Content: "resp1"},
+			{Role: "user", Content: "msg2"},
+			{Role: "assistant", Content: "resp2"},
+			{Role: "user", Content: "msg3"},
+		},
+	})
+	if result.Model != "model-b" {
+		t.Fatalf("want model-b (3 turns), got %q", result.Model)
+	}
+}
+
+func TestScriptLib_ConversationTurns_Zero(t *testing.T) {
+	result := runScript(t, `
+import router
+if router.conversation_turns() == 0:
+    router.set_model("model-a")
+`)
+	if result.Model != "model-a" {
+		t.Fatalf("want model-a, got %q", result.Model)
+	}
+}
