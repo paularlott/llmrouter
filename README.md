@@ -7,7 +7,7 @@ A unified gateway that aggregates multiple LLM providers behind a single endpoin
 - **Multi-Provider**: OpenAI, Claude, Gemini, Ollama, Mistral, ZAi — configure once, route by model name
 - **Protocol Translation**: Clients speak OpenAI or Messages (Claude) format; the gateway translates as needed
 - **Weight-Based Load Balancing**: Distribute load across providers with configurable weights
-- **Smart Routing**: Request the `auto` model and a Scriptling script picks the best provider/model based on tags, load, and request content
+- **Smart Routing**: Request the `auto` model and a [Scriptling](https://scriptling.dev/) script picks the best provider/model based on tags, load, and request content
 - **MCP Aggregator**: Aggregate tools from multiple remote MCP servers with namespace isolation
 - **Responses API**: OpenAI-compatible responses storage (emulated for all providers)
 - **Conversations API**: n8n-compatible conversation management
@@ -114,7 +114,7 @@ tool_denylist = ["delete"]           # Optional: these tools are disabled
 
 ### Smart Routing
 
-When a client requests the model name `auto`, the router runs a [Scriptling](https://github.com/paularlott/scriptling) script to pick the best provider and model. If the script returns nothing or fails, `default_model` is used.
+When a client requests the model name `auto`, the router runs a [Scriptling](https://scriptling.dev/) script to pick the best provider and model. If the script returns nothing or fails, `default_model` is used.
 
 `libdir` is an optional directory of `.py` files. Each file is registered as a script library (named after the file without the `.py` extension) and is available for `import` in the routing script. The directory is watched for changes — any modification triggers a full VM pool rebuild.
 
