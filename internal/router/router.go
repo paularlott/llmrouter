@@ -171,11 +171,22 @@ func NewRouter(config *types.Config, logger Logger) (*Router, error) {
 	}
 
 	// Initialize admin UI if password is configured
-	router.admin = admin.New(config, router.getStats, router.getProviders, router.getMCPServers, router.getMCPTools, router.getModels)
+	var mcpStorage storage.MCPStorage
+	var mcpStorageWritable bool
+	if sharedStore != nil {
+		mcpStorage = sharedStore.NewMCPStorage()
+		mcpStorageWritable = !sharedStore.IsMemory()
+	}
+	router.mcpStorage = mcpStorage
+
+	router.admin = admin.New(config, router.getStats, router.getProviders, router.getMCPServers, router.getMCPTools, router.getModels, mcpStorage, mcpStorageWritable, router.reloadMCPServers)
 	if router.admin.Enabled() {
 		router.admin.RegisterRoutes(router.mux)
 		logger.Info("admin UI enabled at /admin")
 	}
+
+	// Load storage-based MCP servers on startup
+	router.reloadMCPServers()
 
 	// Add catch-all handler for unmatched routes (must be last)
 	router.mux.HandleFunc("/", router.HandleCatchAll)
@@ -1038,6 +1049,8 @@ func (r *Router) getProviders() []admin.ProviderInfo {
 // getMCPServers returns MCP server information for the admin UI
 func (r *Router) getMCPServers() []admin.MCPServerInfo {
 	servers := make([]admin.MCPServerInfo, 0, len(r.config.MCP.RemoteServers))
+
+	// Add static servers from config
 	for _, s := range r.config.MCP.RemoteServers {
 		servers = append(servers, admin.MCPServerInfo{
 			Namespace:      s.Namespace,
@@ -1045,9 +1058,27 @@ func (r *Router) getMCPServers() []admin.MCPServerInfo {
 			ToolVisibility: s.ToolVisibility,
 			ToolAllowlist:  s.ToolAllowlist,
 			ToolDenylist:   s.ToolDenylist,
-			StaticServer:   s.StaticServer,
+			StaticServer:   true,
 		})
 	}
+
+	// Add dynamic servers from storage
+	if r.mcpStorage != nil {
+		storageServers, err := r.mcpStorage.List(context.Background())
+		if err == nil {
+			for _, s := range storageServers {
+				servers = append(servers, admin.MCPServerInfo{
+					Namespace:      s.Namespace,
+					URL:            s.URL,
+					ToolVisibility: s.ToolVisibility,
+					ToolAllowlist:  s.ToolAllowlist,
+					ToolDenylist:   s.ToolDenylist,
+					StaticServer:   false,
+				})
+			}
+		}
+	}
+
 	sort.Slice(servers, func(i, j int) bool { return servers[i].Namespace < servers[j].Namespace })
 	return servers
 }
@@ -1057,7 +1088,42 @@ func (r *Router) getMCPTools(namespace string) ([]admin.ToolInfo, error) {
 	if r.mcpServer == nil {
 		return nil, fmt.Errorf("MCP server not available")
 	}
+
+	// First check if this is a storage-based server
+	if r.mcpStorage != nil {
+		server, err := r.mcpStorage.Get(context.Background(), namespace)
+		if err == nil && server != nil {
+			// It's a storage-based server, get tools with disabled state
+			return r.mcpServer.GetStorageServerTools(namespace, server)
+		}
+	}
+
+	// Fall back to config-based server
 	return r.mcpServer.GetToolsForAdmin(namespace)
+}
+
+// reloadMCPServers reloads MCP servers from storage
+// This is called when servers are added/updated/deleted via the admin UI
+func (r *Router) reloadMCPServers() {
+	if r.mcpServer == nil {
+		return
+	}
+
+	r.logger.Info("reloading MCP servers")
+
+	// Get all storage-based servers
+	var servers []*storage.MCPServerConfig
+	if r.mcpStorage != nil {
+		var err error
+		servers, err = r.mcpStorage.List(context.Background())
+		if err != nil {
+			r.logger.Warn("failed to list MCP servers from storage", "error", err)
+			return
+		}
+	}
+
+	// Atomically reload all servers (static + storage-based)
+	r.mcpServer.ReloadAllServers(servers)
 }
 
 // getModels returns model information for the admin UI

@@ -56,3 +56,10 @@ func (s *Store) NewConversationStorage() ConversationStorage {
 	}
 	return NewSnapshotConversationStorage(s.db, s.convTTL)
 }
+
+func (s *Store) NewMCPStorage() MCPStorage {
+	if s.memory {
+		return NewMemoryMCPStorage()
+	}
+	return NewSnapshotMCPStorage(s.db)
+}

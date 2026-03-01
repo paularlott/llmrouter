@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/paularlott/llmrouter/internal/storage"
 	"github.com/paularlott/llmrouter/internal/types"
 	"github.com/paularlott/llmrouter/web"
 )
@@ -20,15 +21,22 @@ type Session struct {
 
 // Admin handles admin UI requests
 type Admin struct {
-	password      string
-	sessions      map[string]*Session
-	sessionsMu    sync.RWMutex
-	templates     *TemplateRenderer
-	getStats      func() *Stats
-	getProviders  func() []ProviderInfo
+	password     string
+	sessions     map[string]*Session
+	sessionsMu   sync.RWMutex
+	templates    *TemplateRenderer
+	getStats     func() *Stats
+	getProviders func() []ProviderInfo
+	getModels    func() []ModelInfo
+
+	// MCP callbacks (for read-only display of config-based servers)
 	getMCPServers func() []MCPServerInfo
 	getMCPTools   func(namespace string) ([]ToolInfo, error)
-	getModels     func() []ModelInfo
+
+	// MCP storage (for dynamic server management)
+	mcpStorage         storage.MCPStorage
+	mcpStorageWritable bool // true if storage is persistent (not memory-only)
+	onMCPServerChange  func()
 }
 
 // Stats represents dashboard statistics
@@ -73,20 +81,23 @@ type ToolInfo struct {
 }
 
 // New creates a new Admin handler
-func New(config *types.Config, getStats func() *Stats, getProviders func() []ProviderInfo, getMCPServers func() []MCPServerInfo, getMCPTools func(string) ([]ToolInfo, error), getModels func() []ModelInfo) *Admin {
+func New(config *types.Config, getStats func() *Stats, getProviders func() []ProviderInfo, getMCPServers func() []MCPServerInfo, getMCPTools func(string) ([]ToolInfo, error), getModels func() []ModelInfo, mcpStorage storage.MCPStorage, mcpStorageWritable bool, onMCPServerChange func()) *Admin {
 	if config.Server.AdminPassword == "" {
 		return nil
 	}
 
 	return &Admin{
-		password:      config.Server.AdminPassword,
-		sessions:      make(map[string]*Session),
-		templates:     NewTemplateRenderer(web.Templates),
-		getStats:      getStats,
-		getProviders:  getProviders,
-		getMCPServers: getMCPServers,
-		getMCPTools:   getMCPTools,
-		getModels:     getModels,
+		password:           config.Server.AdminPassword,
+		sessions:           make(map[string]*Session),
+		templates:          NewTemplateRenderer(web.Templates),
+		getStats:           getStats,
+		getProviders:       getProviders,
+		getMCPServers:      getMCPServers,
+		getMCPTools:        getMCPTools,
+		getModels:          getModels,
+		mcpStorage:         mcpStorage,
+		mcpStorageWritable: mcpStorageWritable,
+		onMCPServerChange:  onMCPServerChange,
 	}
 }
 

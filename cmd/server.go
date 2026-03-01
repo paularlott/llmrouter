@@ -40,7 +40,7 @@ var ServerCmd = &cli.Command{
 		&cli.StringFlag{
 			Name:       "storage-path",
 			Usage:      "Path for persistent storage (omit for memory-only)",
-			ConfigPath: []string{"storage.path"},
+			ConfigPath: []string{"server.storage_path"},
 		},
 		&cli.IntFlag{
 			Name:         "responses-ttl",

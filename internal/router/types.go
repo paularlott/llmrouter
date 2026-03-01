@@ -50,6 +50,7 @@ type Router struct {
 	conversationsService *conversations.Service
 	smartRouter          *SmartRouter
 	admin                *admin.Admin
+	mcpStorage           storage.MCPStorage
 }
 
 type (

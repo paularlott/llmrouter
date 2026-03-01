@@ -25,8 +25,8 @@ github.com/paularlott/cli v0.7.11 h1:19B1Xto4ulm6bz3y3C91qPEWr79UKHv2UHiMzTrNbbI
 github.com/paularlott/cli v0.7.11/go.mod h1:ZSHKSCzhS4y0I4PWCAWo+++plYEocRdsZPBy6OBOKHs=
 github.com/paularlott/logger v0.3.0 h1:QwVUoxmlEFkfHI25y5dn56OJvK4Bpe3OvoJu4GZM7ng=
 github.com/paularlott/logger v0.3.0/go.mod h1:vjAOY1vUvYigmJxxQ0eMclryIjDS6VWNK6FprtTMce0=
-github.com/paularlott/mcp v0.12.10 h1:wqdvjQtDCkjAGOt5DiaU8ny1BwbjwyKBWvJ0KJkbAfA=
-github.com/paularlott/mcp v0.12.10/go.mod h1:RHtwyZchcdC4oiz0fEaTBDEWNP0YHL7qMFhbmm/l7WI=
+github.com/paularlott/mcp v0.12.11 h1:doHWf9tSZ1+aApFtXVwP8c8E3nEi2+6lpcyB/dxAUhU=
+github.com/paularlott/mcp v0.12.11/go.mod h1:RHtwyZchcdC4oiz0fEaTBDEWNP0YHL7qMFhbmm/l7WI=
 github.com/paularlott/scriptling v0.2.7 h1:q/nx62Nilht6SqivQnuvKqo/hY6/D34hOd3QSa13Ypk=
 github.com/paularlott/scriptling v0.2.7/go.mod h1:hs4vF5IpPmnqfAsyyyfU04sJFf3lHb9qMTRo/y7g9Iw=
 github.com/pkg/diff v0.0.0-20210226163009-20ebb0f2a09e/go.mod h1:pJLUxLENpZxwdsKMEsNbx1VGcRFpLqf3715MtcvvzbA=

@@ -135,6 +135,7 @@ Alpine.data("mcpServers", () => ({
   saving: false,
   deleting: false,
   formError: null,
+  storageWritable: false,
   form: {
     namespace: "",
     url: "",
@@ -143,7 +144,20 @@ Alpine.data("mcpServers", () => ({
   },
 
   async init() {
-    await this.loadServers();
+    await Promise.all([this.loadServers(), this.checkStorageStatus()]);
+  },
+
+  async checkStorageStatus() {
+    try {
+      const response = await fetch("/admin/api/mcp-storage-status");
+      if (response.ok) {
+        const data = await response.json();
+        this.storageWritable = data.writable;
+      }
+    } catch (err) {
+      // If we can't check status, assume not writable
+      this.storageWritable = false;
+    }
   },
 
   async loadServers() {
@@ -285,6 +299,38 @@ Alpine.data("mcpServers", () => ({
       this.toolsError = err.message;
     } finally {
       this.loadingTools = false;
+    }
+  },
+
+  async toggleTool(tool) {
+    const newEnabled = !tool.enabled;
+
+    try {
+      const response = await fetch(
+        `/admin/api/mcp-servers/${this.toolsServer.namespace}/tools/toggle`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            tool_name: tool.name,
+            enabled: newEnabled,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || "Failed to toggle tool");
+      }
+
+      // Update local state on success
+      tool.enabled = newEnabled;
+    } catch (err) {
+      // Revert on error - the UI will show the old state
+      console.error("Failed to toggle tool:", err);
+      this.toolsError = err.message;
+      // Reload tools to get correct state
+      this.loadTools();
     }
   },
 
