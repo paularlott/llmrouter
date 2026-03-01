@@ -5,7 +5,23 @@ VERSION := $(shell go run ./tools/getversion)
 BUILD_DATE := $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 LDFLAGS := -ldflags="-s -w -X github.com/paularlott/llmrouter/build.BuildDate=$(BUILD_DATE)"
 
-.PHONY: all clean test lint assets build build-all release dev
+# Container build settings
+REGISTRY ?= paularlott
+HUB ?= registry-1.docker.io/
+PLATFORM_ARG := --platform linux/amd64,linux/arm64
+
+# Detect container runtime (docker preferred over podman)
+ifeq ($(BUILD_WITH),)
+	ifneq ($(shell command -v docker 2>/dev/null),)
+		BUILD_WITH := docker
+	else ifneq ($(shell command -v podman 2>/dev/null),)
+		BUILD_WITH := podman
+	else
+		BUILD_WITH := none
+	endif
+endif
+
+.PHONY: all clean test lint assets build build-all release dev container container-local tag
 
 # Build frontend assets
 assets:
@@ -80,6 +96,13 @@ help:
 	@echo "  make build-all    - Build for all platforms"
 	@echo "  make release      - Build all platforms with checksums"
 	@echo "  make dev          - Run server in development mode"
+	@echo "  make container    - Build and push multi-arch container image"
+	@echo "  make container-local - Build container image locally (no push)"
+	@echo "  make tag          - Tag version and push to GitHub"
+	@echo ""
+	@echo "Container settings (override with environment variables):"
+	@echo "  REGISTRY=$(REGISTRY)"
+	@echo "  BUILD_WITH=$(BUILD_WITH)"
 	@echo ""
 	@echo "Individual platform builds:"
 	@echo "  make build-linux-amd64"
@@ -88,3 +111,43 @@ help:
 	@echo "  make build-darwin-arm64"
 	@echo "  make build-windows-amd64"
 	@echo "  make build-windows-arm64"
+
+# Build and push multi-arch container image
+container:
+	@echo "Detected container runtime: $(BUILD_WITH)"
+	@echo "Building for platforms: $(PLATFORM_ARG)"
+	@if [ "$(BUILD_WITH)" = "podman" ]; then \
+		podman manifest create $(REGISTRY)/llmrouter:$(VERSION); \
+		podman build $(PLATFORM_ARG) --manifest $(REGISTRY)/llmrouter:$(VERSION) --build-arg VERSION=$(VERSION) --build-arg DOCKER_HUB=$(HUB) .; \
+		podman tag $(REGISTRY)/llmrouter:$(VERSION) $(REGISTRY)/llmrouter:latest; \
+		podman manifest push $(REGISTRY)/llmrouter:$(VERSION); \
+		podman manifest push $(REGISTRY)/llmrouter:latest; \
+	elif [ "$(BUILD_WITH)" = "docker" ]; then \
+		docker buildx build $(PLATFORM_ARG) --tag $(REGISTRY)/llmrouter:$(VERSION) --tag $(REGISTRY)/llmrouter:latest --build-arg VERSION=$(VERSION) --build-arg DOCKER_HUB=$(HUB) --push .; \
+	else \
+		echo "Error: No container runtime detected. Install docker or podman."; \
+		exit 1; \
+	fi
+
+# Build container image locally (no push, current platform only)
+container-local:
+	@echo "Detected container runtime: $(BUILD_WITH)"
+	@echo "Building for local platform only"
+	@if [ "$(BUILD_WITH)" = "podman" ]; then \
+		podman build --tag $(REGISTRY)/llmrouter:$(VERSION) --tag $(REGISTRY)/llmrouter:latest --build-arg VERSION=$(VERSION) --build-arg DOCKER_HUB=$(HUB) .; \
+	elif [ "$(BUILD_WITH)" = "docker" ]; then \
+		docker build --tag $(REGISTRY)/llmrouter:$(VERSION) --tag $(REGISTRY)/llmrouter:latest --build-arg VERSION=$(VERSION) --build-arg DOCKER_HUB=$(HUB) .; \
+	else \
+		echo "Error: No container runtime detected. Install docker or podman."; \
+		exit 1; \
+	fi
+
+# Tag the current code with version and push to GitHub
+tag:
+	@if git tag -l v$(VERSION) | grep -q v$(VERSION); then \
+		echo "Tag v$(VERSION) already exists"; \
+	else \
+		echo "Creating tag v$(VERSION)"; \
+		git tag -a v$(VERSION) -m "Release $(VERSION)"; \
+		git push origin v$(VERSION); \
+	fi

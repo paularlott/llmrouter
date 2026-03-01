@@ -4,6 +4,20 @@ vars:
   BINARY_NAME: llmrouter
   VERSION:
     sh: go run ./tools/getversion
+  REGISTRY: '{{.REGISTRY | default "paularlott"}}'
+  HUB: '{{.HUB | default "registry-1.docker.io/"}}'
+  BUILD_WITH:
+    sh: |
+      if [ -n "${BUILD_WITH}" ]; then
+        echo "${BUILD_WITH}"
+      elif command -v docker >/dev/null 2>&1; then
+        echo "docker"
+      elif command -v podman >/dev/null 2>&1; then
+        echo "podman"
+      else
+        echo "none"
+      fi
+  PLATFORM_ARG: "--platform linux/amd64,linux/arm64"
   LDFLAGS: -ldflags="-s -w -X github.com/paularlott/llmrouter/build.BuildDate=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
 tasks:
@@ -106,3 +120,65 @@ tasks:
           go build {{.LDFLAGS}} -o {{.BINARY_NAME}} .
           echo "Rebuilt at $(date)"
         done
+
+  container:
+    desc: Build the docker image and push to Docker Hub
+    method: none
+    cmds:
+      - |
+        echo "Detected container runtime: {{.BUILD_WITH}}"
+        echo "Building for platforms: {{.PLATFORM_ARG}}"
+
+        if [ "{{.BUILD_WITH}}" = "podman" ]; then
+          podman manifest create {{.REGISTRY}}/llmrouter:{{.VERSION}}
+          podman build \
+            {{.PLATFORM_ARG}} \
+            --manifest {{.REGISTRY}}/llmrouter:{{.VERSION}} \
+            --build-arg VERSION={{.VERSION}} \
+            --build-arg DOCKER_HUB={{.HUB}} \
+            .
+          podman tag {{.REGISTRY}}/llmrouter:{{.VERSION}} {{.REGISTRY}}/llmrouter:latest
+          podman manifest push {{.REGISTRY}}/llmrouter:{{.VERSION}}
+          podman manifest push {{.REGISTRY}}/llmrouter:latest
+        else
+          docker buildx build \
+          {{.PLATFORM_ARG}} \
+          --tag {{.REGISTRY}}/llmrouter:{{.VERSION}} \
+          --tag {{.REGISTRY}}/llmrouter:latest \
+          --build-arg VERSION={{.VERSION}} \
+          --build-arg DOCKER_HUB={{.HUB}} \
+          --push \
+          .
+        fi
+
+  container-local:
+    desc: Build the docker image locally (no push)
+    method: none
+    cmds:
+      - |
+        echo "Detected container runtime: {{.BUILD_WITH}}"
+        echo "Building for local platform only"
+
+        if [ "{{.BUILD_WITH}}" = "podman" ]; then
+          podman build \
+            --tag {{.REGISTRY}}/llmrouter:{{.VERSION}} \
+            --tag {{.REGISTRY}}/llmrouter:latest \
+            --build-arg VERSION={{.VERSION}} \
+            --build-arg DOCKER_HUB={{.HUB}} \
+            .
+        else
+          docker build \
+            --tag {{.REGISTRY}}/llmrouter:{{.VERSION}} \
+            --tag {{.REGISTRY}}/llmrouter:latest \
+            --build-arg VERSION={{.VERSION}} \
+            --build-arg DOCKER_HUB={{.HUB}} \
+            .
+        fi
+
+  tag:
+    desc: Tag the current code with the version and push to GitHub
+    cmds:
+      - git tag -a v{{.VERSION}} -m "Release {{.VERSION}}"
+      - git push origin v{{.VERSION}}
+    status:
+      - git tag -l v{{.VERSION}}
