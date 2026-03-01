@@ -26,16 +26,17 @@ type LoggingConfig struct {
 }
 
 type ProviderConfig struct {
-	Name     string            `json:"name"`
-	Provider string            `json:"provider"`           // openai | claude | gemini | ollama | mistral | zai
-	BaseURL  string            `json:"base_url,omitempty"` // optional override
-	Token    string            `json:"token"`
-	Enabled  bool              `json:"enabled"`
-	Weight   float64           `json:"weight,omitempty"`   // 0.0-2.0, default 1.0; higher = preferred
-	Models        []string            `json:"model_allowlist,omitempty"` // empty = auto-discover; required for claude
-	Tags          []string            `json:"tags,omitempty"`            // arbitrary tags for routing scripts
-	ModelTags     map[string][]string `json:"model_tags,omitempty"`      // model_id -> tags
-	ModelDenylist []string            `json:"model_denylist,omitempty"` // models to exclude from auto-discovery
+	Name     string            `json:"name" toml:"name"`
+	Provider string            `json:"provider" toml:"provider"`           // openai | claude | gemini | ollama | mistral | zai
+	BaseURL  string            `json:"base_url,omitempty" toml:"base_url"` // optional override
+	Token    string            `json:"token" toml:"token"`
+	Enabled  bool              `json:"enabled" toml:"enabled"`
+	Weight   float64           `json:"weight,omitempty" toml:"weight"`     // 0.0-2.0, default 1.0; higher = preferred
+	Models        []string            `json:"models,omitempty" toml:"models"`                    // if set, use these models instead of querying the provider
+	ModelAllowlist []string           `json:"model_allowlist,omitempty" toml:"model_allowlist"`  // if set, only these models are used from auto-discovery
+	Tags          []string            `json:"tags,omitempty" toml:"tags"`                        // arbitrary tags for routing scripts
+	ModelTags     map[string][]string `json:"model_tags,omitempty" toml:"model_tags"`            // model_id -> tags
+	ModelDenylist []string            `json:"model_denylist,omitempty" toml:"model_denylist"`    // models to exclude from auto-discovery
 }
 
 type MCPConfig struct {

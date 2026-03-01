@@ -72,6 +72,7 @@ provider = "gemini"
 token = "your-google-key"
 enabled = true
 model_allowlist = ["gemini-2.5-flash-lite"]  # Optional: restrict to specific models
+models = ["gemini-2.5-flash-lite"]           # Optional: override model list entirely (still health-checks the API)
 
 [[providers]]
 name = "local"
@@ -111,6 +112,8 @@ tool_denylist = ["delete"]           # Optional: these tools are disabled
 `model_allowlist` restricts the provider to only the listed models. For Claude this is required (no discovery API). For other providers it is optional.
 
 `model_denylist` excludes specific models from auto-discovery. Ignored when `model_allowlist` is set.
+
+`models` overrides the model list entirely — the provider's `/models` API is still called (for health checks) but its response is discarded and the configured list is used instead. Useful for providers that return no models or an incomplete list.
 
 ### Smart Routing
 

@@ -51,20 +51,14 @@ func NewRouter(config *types.Config, logger Logger) (*Router, error) {
 		if providerType == "" {
 			providerType = "openai"
 		}
-		isStatic := providerType == "claude" && len(providerConfig.Models) > 0
-		var allowlist []string
-		if !isStatic {
-			allowlist = providerConfig.Models
-		}
-
 		provider := &Provider{
 			Name:           providerConfig.Name,
 			ProviderType:   providerType,
 			Enabled:        providerConfig.Enabled,
 			Healthy:        true,
 			Client:         client,
-			StaticModels:   isStatic,
-			ModelAllowlist: allowlist,
+			Models:         providerConfig.Models,
+			ModelAllowlist: providerConfig.ModelAllowlist,
 			ModelDenylist:  providerConfig.ModelDenylist,
 			Weight:         weight,
 			Tags:           providerConfig.Tags,
@@ -201,18 +195,8 @@ func (r *Router) RefreshModels(ctx context.Context) error {
 		if !provider.Enabled {
 			continue
 		}
-		if provider.StaticModels {
-			for _, providerConfig := range r.config.Providers {
-				if providerConfig.Name == providerName {
-					r.addProviderModels(providerName, providerConfig.Models, provider)
-					r.logger.Info("using static models from config", "provider", providerName, "count", len(providerConfig.Models))
-					break
-				}
-			}
-			continue
-		}
 		if !provider.Healthy {
-			r.logger.Debug("skipping provider", "provider", providerName, "enabled", provider.Enabled, "healthy", provider.Healthy, "static_models", provider.StaticModels)
+			r.logger.Debug("skipping provider", "provider", providerName, "enabled", provider.Enabled, "healthy", provider.Healthy)
 			continue
 		}
 		if !provider.Fetching.CompareAndSwap(false, true) {
@@ -230,11 +214,17 @@ func (r *Router) RefreshModels(ctx context.Context) error {
 				r.DisableProvider(name, fmt.Sprintf("model fetch failed: %v", err))
 				return
 			}
-			modelIDs := make([]string, 0, len(modelsResp.Data))
-			for _, model := range modelsResp.Data {
-				modelIDs = append(modelIDs, model.ID)
+			var modelIDs []string
+			if len(p.Models) > 0 {
+				modelIDs = p.Models
+				r.logger.Info("using static models from config", "provider", name, "count", len(modelIDs))
+			} else {
+				modelIDs = make([]string, 0, len(modelsResp.Data))
+				for _, model := range modelsResp.Data {
+					modelIDs = append(modelIDs, model.ID)
+				}
+				r.logger.Debug("fetched models from provider", "provider", name, "count", len(modelsResp.Data), "models", modelIDs)
 			}
-			r.logger.Debug("fetched models from provider", "provider", name, "count", len(modelsResp.Data), "models", modelIDs)
 			r.addProviderModels(name, modelIDs, p)
 		}(providerName, provider)
 	}
@@ -301,14 +291,7 @@ func (r *Router) DisableProvider(providerName, reason string) {
 
 	provider.Healthy = false
 
-	if provider.StaticModels {
-		r.logger.Warn("static model provider disabled",
-			"provider", providerName,
-			"reason", reason,
-			"static_models", true)
-	} else {
-		r.logger.Warn("provider disabled", "provider", providerName, "reason", reason)
-	}
+	r.logger.Warn("provider disabled", "provider", providerName, "reason", reason)
 
 	// Remove all models from this provider
 	modelsToRemove := make([]string, 0)
@@ -609,8 +592,8 @@ func (r *Router) isConnectionError(err error) bool {
 
 	// Also detect fatal API errors that indicate a broken provider/model
 	fatalAPIPatterns := []string{
-		"missing tensor",                    // Corrupted GGUF file (Ollama)
-		"llama runner process has terminated", // Model loading failure (Ollama)
+		"missing tensor",                        // Corrupted GGUF file (Ollama)
+		"llama runner process has terminated",   // Model loading failure (Ollama)
 		"model runner has unexpectedly stopped", // Ollama model runtime failure
 	}
 
@@ -738,8 +721,30 @@ func (r *Router) HandleMessages(w http.ResponseWriter, req *http.Request) {
 	}
 
 	openaiReq := claude.MessagesRequestToOpenAI(&messagesReq)
-
 	ctx := req.Context()
+
+	if messagesReq.Stream {
+		providerName, err := r.GetProviderForModel(openaiReq.Model, "")
+		if err != nil {
+			r.logger.WithError(err).Error("messages stream request failed")
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.Header().Set("Cache-Control", "no-cache")
+		w.Header().Set("Connection", "keep-alive")
+		stream := r.streamChatCompletion(ctx, providerName, &openaiReq)
+		flush := func() {
+			if f, ok := w.(http.Flusher); ok {
+				f.Flush()
+			}
+		}
+		if err := claude.StreamOpenAIToMessages(w, flush, stream, openaiReq.Model); err != nil {
+			r.logger.WithError(err).Error("messages stream error")
+		}
+		return
+	}
+
 	resp, err := r.createChatCompletionWithHeaders(ctx, &openaiReq, passthroughHeaders(req))
 	if err != nil {
 		r.logger.WithError(err).Error("messages request failed")
@@ -759,12 +764,12 @@ func (r *Router) HandleMessages(w http.ResponseWriter, req *http.Request) {
 
 // passthroughHeaders returns headers from the incoming request, excluding auth and hop-by-hop headers.
 var skipHeaders = map[string]bool{
-	"authorization":    true,
-	"x-api-key":        true,
-	"content-length":   true,
-	"content-type":     true,
-	"host":             true,
-	"connection":       true,
+	"authorization":     true,
+	"x-api-key":         true,
+	"content-length":    true,
+	"content-type":      true,
+	"host":              true,
+	"connection":        true,
 	"transfer-encoding": true,
 }
 
@@ -953,7 +958,7 @@ func (r *Router) checkDisabledProviders() {
 
 	// Find unhealthy providers (skip static model providers)
 	for name, provider := range r.Providers {
-		if provider.Enabled && !provider.Healthy && !provider.StaticModels {
+		if provider.Enabled && !provider.Healthy && len(provider.Models) == 0 {
 			unhealthyProviders = append(unhealthyProviders, name)
 		}
 	}

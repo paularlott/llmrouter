@@ -67,8 +67,9 @@ func RunServer(ctx context.Context, cmd *cli.Command) error {
 				Token:         pc.GetString("token"),
 				Enabled:       pc.GetBool("enabled"),
 				Weight:        pc.GetFloat64("weight"),
-				Models:        pc.GetStringSlice("model_allowlist"),
-				ModelDenylist: pc.GetStringSlice("model_denylist"),
+				Models:         pc.GetStringSlice("models"),
+				ModelAllowlist: pc.GetStringSlice("model_allowlist"),
+				ModelDenylist:  pc.GetStringSlice("model_denylist"),
 				Tags:          pc.GetStringSlice("tags"),
 			}
 			if mtObj := pc.GetObject("model_tags"); mtObj != nil {

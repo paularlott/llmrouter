@@ -25,7 +25,7 @@ type Provider struct {
 	Healthy           bool
 	ActiveCompletions atomic.Int64
 	Fetching          atomic.Bool
-	StaticModels      bool
+	Models            []string // static model list; if set, overrides provider API discovery
 	ModelAllowlist    []string
 	ModelDenylist     []string
 	Weight            float64
