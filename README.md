@@ -12,6 +12,7 @@ A unified gateway that aggregates multiple LLM providers behind a single endpoin
 - **Responses API**: OpenAI-compatible responses storage (emulated for all providers)
 - **Conversations API**: n8n-compatible conversation management
 - **Optional Auth**: Bearer token protection for all endpoints
+- **Admin UI**: Optional web interface for monitoring providers, models, and MCP servers
 
 ## Quick Start
 
@@ -28,13 +29,12 @@ go build -o llmrouter .
 host = "0.0.0.0"
 port = 12345
 token = "your-secret-token"   # Optional bearer token
+admin_password = "admin123"   # Optional: enables admin UI at /admin
+storage_path = "./data"  # Omit for memory-only storage (under [server])
 
 [logging]
 level = "info"    # trace | debug | info | warn | error
 format = "console" # console | json
-
-[storage]
-# path = "./data"  # Omit for memory-only storage
 
 [responses]
 ttl_days = 30
@@ -264,6 +264,21 @@ tool_visibility = "native"
 tool_denylist = ["delete_message", "ban_user"]  # All tools enabled except these 2
 ```
 
+### MCP OAuth Authentication
+
+For MCP servers that require OAuth authentication, configure the OAuth fields instead of `token`:
+
+```toml
+[[mcp.remote_servers]]
+namespace = "my-oauth-service"
+url = "https://api.example.com/mcp"
+auth_type = "oauth"
+oauth_client_id = "your-client-id"
+oauth_token_url = "https://auth.example.com/token"
+oauth_access_token = "current-access-token"
+oauth_refresh_token = "refresh-token"  # Optional: for token refresh
+```
+
 ## API Endpoints
 
 ### Chat & Models
@@ -306,6 +321,15 @@ DELETE /v1/conversations/{conversation_id}/items/{item_id}
 POST /mcp    # MCP protocol — aggregates tools from all configured remote servers
 ```
 
+### Admin UI
+
+When `server.admin_password` is set, a web-based admin interface is available at `/admin` for monitoring providers, models, and MCP servers.
+
+```bash
+GET /admin         # Admin UI (requires password login)
+GET /admin/login   # Login page
+```
+
 ### Authentication
 
 When `server.token` is set, all endpoints except `/health` require:
@@ -321,6 +345,8 @@ Authorization: Bearer your-secret-token
 ./llmrouter -config custom.toml server      # Custom config
 ./llmrouter server -port 8080               # Override port
 ./llmrouter server -token secret123         # Set bearer token
+./llmrouter models                          # List available models
+./llmrouter ask gpt-4o "What is 2+2?"       # Ask a model a question
 ./llmrouter tool calculator '{"op":"add","a":1,"b":2}'  # Execute MCP tool
 ```
 

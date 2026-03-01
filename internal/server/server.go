@@ -60,14 +60,15 @@ func RunServer(ctx context.Context, cmd *cli.Command) error {
 		typedConfig := cli.NewTypedConfigFile(cmd.ConfigFile)
 		for _, pc := range typedConfig.GetObjectSlice("providers") {
 			providerCfg := types.ProviderConfig{
-				Name:     pc.GetString("name"),
-				Provider: pc.GetString("provider"),
-				BaseURL:  strings.TrimSuffix(pc.GetString("base_url"), "/"),
-				Token:    pc.GetString("token"),
-				Enabled:  pc.GetBool("enabled"),
-				Weight:   pc.GetFloat64("weight"),
-				Models:   pc.GetStringSlice("models"),
-				Tags:     pc.GetStringSlice("tags"),
+				Name:          pc.GetString("name"),
+				Provider:      pc.GetString("provider"),
+				BaseURL:       strings.TrimSuffix(pc.GetString("base_url"), "/"),
+				Token:         pc.GetString("token"),
+				Enabled:       pc.GetBool("enabled"),
+				Weight:        pc.GetFloat64("weight"),
+				Models:        pc.GetStringSlice("model_allowlist"),
+				ModelDenylist: pc.GetStringSlice("model_denylist"),
+				Tags:          pc.GetStringSlice("tags"),
 			}
 			if mtObj := pc.GetObject("model_tags"); mtObj != nil {
 				providerCfg.ModelTags = make(map[string][]string)
