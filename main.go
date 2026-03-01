@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/paularlott/llmrouter/build"
 	"github.com/paularlott/llmrouter/cmd"
 	"github.com/paularlott/llmrouter/log"
 
@@ -18,7 +19,7 @@ var configFile = "config.toml"
 func main() {
 	rootCmd := &cli.Command{
 		Name:        "llmrouter",
-		Version:     "1.0.0",
+		Version:     build.Version,
 		Usage:       "LLM Routing Service",
 		Description: "Routes requests to different LLM providers based on configuration",
 		ConfigFile: cli_toml.NewConfigFile(&configFile, func() []string {

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/paularlott/cli"
+	"github.com/paularlott/llmrouter/build"
 	"github.com/paularlott/llmrouter/internal/router"
 	"github.com/paularlott/llmrouter/internal/types"
 	"github.com/paularlott/llmrouter/log"
@@ -46,7 +47,7 @@ func RunServer(ctx context.Context, cmd *cli.Command) error {
 
 	log.Configure(config.Logging.Level, config.Logging.Format)
 	logger := log.GetLogger()
-	logger.Info("starting LLM router", "version", "1.0.0")
+	logger.Info("starting LLM router", "version", build.Version)
 
 	pool.SetPoolConfig(&pool.PoolConfig{
 		MaxIdleConns:        100,
