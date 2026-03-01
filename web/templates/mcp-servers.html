@@ -337,10 +337,8 @@
                       <!-- Enable indicator (read-only for static servers) -->
                       <template x-if="toolsServer?.static_server">
                         <div class="flex items-center mt-0.5 shrink-0">
-                          <div class="w-9 h-5 rounded-full flex items-center after:content-[''] after:absolute after:top-0.5 after:start-0.5 after:bg-white after:rounded-full after:h-4 after:w-4" :class="tool.enabled ? 'bg-blue-500' : 'bg-slate-300 dark:bg-slate-600'">
-                            <div class="relative w-9 h-5 rounded-full" :class="tool.enabled ? 'bg-blue-500' : 'bg-slate-300 dark:bg-slate-600'">
-                              <div class="absolute top-0.5 w-4 h-4 bg-white rounded-full transition-all" :class="tool.enabled ? 'left-4' : 'left-0.5'"></div>
-                            </div>
+                          <div class="relative w-9 h-5 rounded-full" :class="tool.enabled ? 'bg-blue-500' : 'bg-slate-300 dark:bg-slate-600'">
+                            <div class="absolute top-0.5 w-4 h-4 bg-white rounded-full" :class="tool.enabled ? 'left-4' : 'left-0.5'"></div>
                           </div>
                         </div>
                       </template>
