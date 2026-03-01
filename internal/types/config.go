@@ -7,15 +7,17 @@ type Config struct {
 	Logging       LoggingConfig       `json:"logging"`
 	Providers     []ProviderConfig    `json:"providers"`
 	MCP           MCPConfig           `json:"mcp"`
-	Scriptling    ScriptlingConfig    `json:"scriptling"`
+	Storage       StorageConfig       `json:"storage"`
 	Responses     ResponsesConfig     `json:"responses"`
 	Conversations ConversationsConfig `json:"conversations"`
+	SmartRouting  SmartRoutingConfig  `json:"smart_routing"`
 }
 
 type ServerConfig struct {
-	Host  string `json:"host"`
-	Port  int    `json:"port"`
-	Token string `json:"token,omitempty"`
+	Host          string `json:"host" toml:"host"`
+	Port          int    `json:"port" toml:"port"`
+	Token         string `json:"token,omitempty" toml:"token"`
+	AdminPassword string `json:"admin_password,omitempty" toml:"admin_password"` // If set, enables admin UI
 }
 
 type LoggingConfig struct {
@@ -24,14 +26,16 @@ type LoggingConfig struct {
 }
 
 type ProviderConfig struct {
-	Name            string   `json:"name"`
-	BaseURL         string   `json:"base_url"`
-	Token           string   `json:"token"`
-	Enabled         bool     `json:"enabled"`
-	Models          []string `json:"models,omitempty"`
-	Allowlist       []string `json:"allowlist,omitempty"`
-	Denylist        []string `json:"denylist,omitempty"`
-	NativeResponses bool     `json:"native_responses,omitempty"`
+	Name     string            `json:"name"`
+	Provider string            `json:"provider"`           // openai | claude | gemini | ollama | mistral | zai
+	BaseURL  string            `json:"base_url,omitempty"` // optional override
+	Token    string            `json:"token"`
+	Enabled  bool              `json:"enabled"`
+	Weight   float64           `json:"weight,omitempty"`   // 0.0-2.0, default 1.0; higher = preferred
+	Models        []string            `json:"model_allowlist,omitempty"` // empty = auto-discover; required for claude
+	Tags          []string            `json:"tags,omitempty"`            // arbitrary tags for routing scripts
+	ModelTags     map[string][]string `json:"model_tags,omitempty"`      // model_id -> tags
+	ModelDenylist []string            `json:"model_denylist,omitempty"` // models to exclude from auto-discovery
 }
 
 type MCPConfig struct {
@@ -39,23 +43,36 @@ type MCPConfig struct {
 }
 
 type MCPRemoteServerConfig struct {
-	Namespace      string `json:"namespace"`
-	URL            string `json:"url"`
-	Token          string `json:"token,omitempty"`
-	ToolVisibility string `json:"tool_visibility,omitempty"` // "native" (default) or "ondemand"
+	Namespace           string   `json:"namespace" toml:"namespace"`
+	URL                 string   `json:"url" toml:"url"`
+	AuthType            string   `json:"auth_type,omitempty" toml:"auth_type"`
+	Token               string   `json:"token,omitempty" toml:"token"`
+	OAuthClientID       string   `json:"oauth_client_id,omitempty" toml:"oauth_client_id"`
+	OAuthTokenURL       string   `json:"oauth_token_url,omitempty" toml:"oauth_token_url"`
+	OAuthAccessToken    string   `json:"oauth_access_token,omitempty" toml:"oauth_access_token"`
+	OAuthRefreshToken   string   `json:"oauth_refresh_token,omitempty" toml:"oauth_refresh_token"`
+	ToolVisibility      string   `json:"tool_visibility,omitempty" toml:"tool_visibility"` // "native" (default) or "ondemand"
+	ToolAllowlist       []string `json:"tool_allowlist,omitempty" toml:"tool_allowlist"`   // If set, only these tools are enabled
+	ToolDenylist        []string `json:"tool_denylist,omitempty" toml:"tool_denylist"`     // If set, these tools are disabled
+	StaticServer        bool     `json:"static_server,omitempty" toml:"static_server"`     // If true, server is defined in config (read-only in UI)
 }
 
-type ScriptlingConfig struct {
-	ToolsPath     string `json:"tools_path,omitempty"`
-	LibrariesPath string `json:"libraries_path,omitempty"`
+type StorageConfig struct {
+	Path string `json:"path,omitempty"` // empty = memory-only
 }
 
 type ResponsesConfig struct {
-	StoragePath string `json:"storage_path,omitempty"`
-	TTLDays     int    `json:"ttl_days,omitempty"`
+	TTLDays int `json:"ttl_days,omitempty"`
 }
 
 type ConversationsConfig struct {
-	StoragePath string `json:"storage_path,omitempty"`
-	TTLDays     int    `json:"ttl_days,omitempty"`
+	TTLDays int `json:"ttl_days,omitempty"`
+}
+
+type SmartRoutingConfig struct {
+	Enabled      bool              `json:"enabled"`
+	Script       string            `json:"script,omitempty"`
+	DefaultModel string            `json:"default_model,omitempty"`
+	Vars         map[string]string `json:"vars,omitempty"` // key-value pairs exposed to routing scripts
+	LibDir       string            `json:"libdir,omitempty"` // directory of .py script libraries auto-loaded into every VM
 }

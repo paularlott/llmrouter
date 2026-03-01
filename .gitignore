@@ -1,4 +1,9 @@
 /llmrouter
 /config.toml
+/router.py
 /.claude/
 /dist/
+/node_modules/
+/web/dist/assets/
+/web/dist/.vite/
+/data/

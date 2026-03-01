@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en" x-data :class="{ 'dark': $store.darkMode.value }">
+  <head>
+    <script>(()=>{if(localStorage.getItem('darkMode')==='true')document.documentElement.classList.add('dark')})()</script>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Models - LLM Router Admin</title>
+    <link rel="stylesheet" href="{{.CSSFile}}" />
+    <script type="module" src="{{.JSFile}}"></script>
+  </head>
+  <body class="min-h-screen bg-slate-100 dark:bg-slate-950 transition-colors duration-300">
+    <div x-data="models()">
+      <!-- Top nav -->
+      <header class="sticky top-0 z-40 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shadow-sm">
+        <div class="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
+          <a href="/admin/" class="flex items-center gap-3">
+            <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow shadow-blue-500/25">
+              <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
+              </svg>
+            </div>
+            <span class="font-bold text-slate-900 dark:text-white">LLM Router</span>
+          </a>
+          <nav class="flex items-center gap-1">
+            <a href="/admin/" class="nav-link">Dashboard</a>
+            <a href="/admin/models" class="nav-link nav-link-active">Models</a>
+            <a href="/admin/mcp-servers" class="nav-link">MCP Servers</a>
+            <div class="w-px h-5 bg-slate-200 dark:bg-slate-700 mx-2"></div>
+            <button @click="$store.darkMode.toggle()" class="nav-link cursor-pointer" title="Toggle dark mode">
+              <svg x-show="!$store.darkMode.value" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+              </svg>
+              <svg x-show="$store.darkMode.value" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+              </svg>
+            </button>
+            <button @click="logout()" class="nav-link cursor-pointer text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+              </svg>
+              Logout
+            </button>
+          </nav>
+        </div>
+      </header>
+
+      <!-- Main content -->
+      <main class="max-w-7xl mx-auto px-6 py-8">
+        <div class="flex justify-between items-center mb-8">
+          <div>
+            <h2 class="text-2xl font-bold text-slate-900 dark:text-white">Models</h2>
+            <p class="text-slate-600 dark:text-slate-400 mt-1" x-show="!loading">
+              <span x-text="models.length"></span> models across all providers
+            </p>
+          </div>
+          <input type="search" x-model="search" placeholder="Filter models..." class="input-field w-64" />
+        </div>
+
+        <div x-show="loading" class="flex items-center justify-center py-16">
+          <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+        </div>
+
+        <div x-show="error && !loading" class="card bg-red-50 dark:bg-red-900/30 border-red-200 dark:border-red-800">
+          <p class="text-red-700 dark:text-red-400" x-text="error"></p>
+        </div>
+
+        <div x-show="!loading && !error" class="card p-0 overflow-hidden">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
+                <th class="text-left px-6 py-3 font-semibold text-slate-700 dark:text-slate-300">Model</th>
+                <th class="text-left px-6 py-3 font-semibold text-slate-700 dark:text-slate-300">Providers</th>
+                <th class="text-right px-6 py-3 font-semibold text-slate-700 dark:text-slate-300">Count</th>
+              </tr>
+            </thead>
+            <tbody>
+              <template x-for="model in filtered" :key="model.id">
+                <tr class="border-b border-slate-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors">
+                  <td class="px-6 py-3 font-mono text-slate-900 dark:text-white" x-text="model.id"></td>
+                  <td class="px-6 py-3">
+                    <div class="flex flex-wrap gap-1">
+                      <template x-for="(p, i) in (model.providers || [])" :key="model.id + '-' + i">
+                        <span class="px-2 py-0.5 text-xs rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300" x-text="p"></span>
+                      </template>
+                    </div>
+                  </td>
+                  <td class="px-6 py-3 text-right text-slate-500 dark:text-slate-400" x-text="(model.providers || []).length"></td>
+                </tr>
+              </template>
+              <tr x-show="filtered.length === 0">
+                <td colspan="3" class="px-6 py-8 text-center text-slate-500 dark:text-slate-400">No models found</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </main>
+    </div>
+  </body>
+</html>

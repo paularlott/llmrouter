@@ -1,4 +1,4 @@
-version: '3'
+version: "3"
 
 vars:
   BINARY_NAME: llmrouter
@@ -9,8 +9,15 @@ vars:
   LDFLAGS: -s -w -X main.Version={{.VERSION}} -X main.BuildTime={{.BUILD_TIME}}
 
 tasks:
+  assets:
+    desc: Build frontend assets
+    dir: web
+    cmds:
+      - npm run build
+
   default:
     desc: Build for the current platform
+    deps: [assets]
     cmds:
       - go build -ldflags "{{.LDFLAGS}}" -o {{.BINARY_NAME}} .
 
@@ -19,6 +26,7 @@ tasks:
     cmds:
       - rm -rf dist/
       - rm -f {{.BINARY_NAME}}
+      - rm -rf web/dist/
 
   test:
     desc: Run tests
@@ -33,31 +41,37 @@ tasks:
   # Individual platform builds
   build-linux-amd64:
     desc: Build for Linux AMD64
+    deps: [assets]
     cmds:
       - GOOS=linux GOARCH=amd64 go build -ldflags "{{.LDFLAGS}}" -o dist/{{.BINARY_NAME}}-linux-amd64 .
 
   build-linux-arm64:
     desc: Build for Linux ARM64
+    deps: [assets]
     cmds:
       - GOOS=linux GOARCH=arm64 go build -ldflags "{{.LDFLAGS}}" -o dist/{{.BINARY_NAME}}-linux-arm64 .
 
   build-darwin-amd64:
     desc: Build for macOS AMD64
+    deps: [assets]
     cmds:
       - GOOS=darwin GOARCH=amd64 go build -ldflags "{{.LDFLAGS}}" -o dist/{{.BINARY_NAME}}-darwin-amd64 .
 
   build-darwin-arm64:
     desc: Build for macOS ARM64
+    deps: [assets]
     cmds:
       - GOOS=darwin GOARCH=arm64 go build -ldflags "{{.LDFLAGS}}" -o dist/{{.BINARY_NAME}}-darwin-arm64 .
 
   build-windows-amd64:
     desc: Build for Windows AMD64
+    deps: [assets]
     cmds:
       - GOOS=windows GOARCH=amd64 go build -ldflags "{{.LDFLAGS}}" -o dist/{{.BINARY_NAME}}-windows-amd64.exe .
 
   build-windows-arm64:
     desc: Build for Windows ARM64
+    deps: [assets]
     cmds:
       - GOOS=windows GOARCH=arm64 go build -ldflags "{{.LDFLAGS}}" -o dist/{{.BINARY_NAME}}-windows-arm64.exe .
 
@@ -79,8 +93,9 @@ tasks:
       - task: build-all
       - cd dist && sha256sum * > checksums.txt
 
-  dev:
+  run-server:
     desc: Run the server in development mode
+    deps: [assets]
     cmds:
       - go run . server
 

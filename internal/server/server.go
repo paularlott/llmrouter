@@ -11,19 +11,19 @@ import (
 	"time"
 
 	"github.com/paularlott/cli"
+	"github.com/paularlott/llmrouter/internal/router"
 	"github.com/paularlott/llmrouter/internal/types"
 	"github.com/paularlott/llmrouter/log"
 	"github.com/paularlott/mcp/pool"
 )
 
-// RunServer runs the LLM router server with the given configuration
 func RunServer(ctx context.Context, cmd *cli.Command) error {
-	// Build configuration from CLI and config file
 	config := &types.Config{
 		Server: types.ServerConfig{
-			Host:  cmd.GetString("host"),
-			Port:  cmd.GetInt("port"),
-			Token: cmd.GetString("token"),
+			Host:          cmd.GetString("host"),
+			Port:          cmd.GetInt("port"),
+			Token:         cmd.GetString("token"),
+			AdminPassword: cmd.GetString("admin-password"),
 		},
 		Logging: types.LoggingConfig{
 			Level:  cmd.GetString("log-level"),
@@ -33,23 +33,21 @@ func RunServer(ctx context.Context, cmd *cli.Command) error {
 		MCP: types.MCPConfig{
 			RemoteServers: []types.MCPRemoteServerConfig{},
 		},
-		Scriptling: types.ScriptlingConfig{
-			ToolsPath:     cmd.GetString("tools-path"),
-			LibrariesPath: cmd.GetString("libs-path"),
+		Storage: types.StorageConfig{
+			Path: cmd.GetString("storage-path"),
 		},
 		Responses: types.ResponsesConfig{
-			StoragePath: cmd.GetString("responses-db"),
-			TTLDays:     cmd.GetInt("responses-ttl"),
+			TTLDays: cmd.GetInt("responses-ttl"),
+		},
+		Conversations: types.ConversationsConfig{
+			TTLDays: cmd.GetInt("conversations-ttl"),
 		},
 	}
 
-	// Setup logging first so we can log during provider loading
 	log.Configure(config.Logging.Level, config.Logging.Format)
 	logger := log.GetLogger()
 	logger.Info("starting LLM router", "version", "1.0.0")
 
-	// Configure the HTTP pool for all AI/MCP requests
-	// This must be done before any HTTP clients are created
 	pool.SetPoolConfig(&pool.PoolConfig{
 		MaxIdleConns:        100,
 		MaxIdleConnsPerHost: 10,
@@ -57,97 +55,76 @@ func RunServer(ctx context.Context, cmd *cli.Command) error {
 		Timeout:             30 * time.Second,
 		InsecureSkipVerify:  false,
 	})
-	logger.Debug("configured HTTP pool")
 
-	// Load providers from config file if available
 	if cmd.ConfigFile != nil {
 		typedConfig := cli.NewTypedConfigFile(cmd.ConfigFile)
-		providers := typedConfig.GetObjectSlice("providers")
-		for _, providerConfig := range providers {
-			provider := types.ProviderConfig{
-				Name:      providerConfig.GetString("name"),
-				BaseURL:   strings.TrimSuffix(providerConfig.GetString("base_url"), "/"),
-				Token:     providerConfig.GetString("token"),
-				Enabled:   providerConfig.GetBool("enabled"),
-				Models:    providerConfig.GetStringSlice("models"),
-				Allowlist: providerConfig.GetStringSlice("allowlist"),
-				Denylist:  providerConfig.GetStringSlice("denylist"),
+		for _, pc := range typedConfig.GetObjectSlice("providers") {
+			providerCfg := types.ProviderConfig{
+				Name:          pc.GetString("name"),
+				Provider:      pc.GetString("provider"),
+				BaseURL:       strings.TrimSuffix(pc.GetString("base_url"), "/"),
+				Token:         pc.GetString("token"),
+				Enabled:       pc.GetBool("enabled"),
+				Weight:        pc.GetFloat64("weight"),
+				Models:        pc.GetStringSlice("model_allowlist"),
+				ModelDenylist: pc.GetStringSlice("model_denylist"),
+				Tags:          pc.GetStringSlice("tags"),
 			}
-			config.Providers = append(config.Providers, provider)
-		}
-
-		// Load MCP config
-		mcpConfig := typedConfig.GetObject("mcp")
-		if mcpConfig != nil {
-			remoteServers := mcpConfig.GetObjectSlice("remote_servers")
-			for _, serverConfig := range remoteServers {
-				server := types.MCPRemoteServerConfig{
-					Namespace:      serverConfig.GetString("namespace"),
-					URL:            strings.TrimSuffix(serverConfig.GetString("url"), "/"),
-					Token:          serverConfig.GetString("token"),
-					ToolVisibility: serverConfig.GetString("tool_visibility"),
+			if mtObj := pc.GetObject("model_tags"); mtObj != nil {
+				providerCfg.ModelTags = make(map[string][]string)
+				for _, k := range mtObj.GetKeys("") {
+					providerCfg.ModelTags[k] = mtObj.GetStringSlice(k)
 				}
-				config.MCP.RemoteServers = append(config.MCP.RemoteServers, server)
 			}
+			config.Providers = append(config.Providers, providerCfg)
+		}
+		if mcpCfg := typedConfig.GetObject("mcp"); mcpCfg != nil {
+			for _, sc := range mcpCfg.GetObjectSlice("remote_servers") {
+				config.MCP.RemoteServers = append(config.MCP.RemoteServers, types.MCPRemoteServerConfig{
+					Namespace:      sc.GetString("namespace"),
+					URL:            strings.TrimSuffix(sc.GetString("url"), "/"),
+					Token:          sc.GetString("token"),
+					ToolVisibility: sc.GetString("tool_visibility"),
+					ToolAllowlist:  sc.GetStringSlice("tool_allowlist"),
+					ToolDenylist:   sc.GetStringSlice("tool_denylist"),
+					StaticServer:   true, // Servers from config file are static (read-only in UI)
+				})
+			}
+		}
+		if srCfg := typedConfig.GetObject("smart_routing"); srCfg != nil {
+			config.SmartRouting.Enabled = srCfg.GetBool("enabled")
+			config.SmartRouting.Script = srCfg.GetString("script")
+			config.SmartRouting.DefaultModel = srCfg.GetString("default_model")
+			config.SmartRouting.LibDir = srCfg.GetString("libdir")
 		}
 	}
 
 	logger.Info("loaded providers from config", "count", len(config.Providers))
 
-	// Create router - this will need to be imported from the router package
-	router, err := NewRouter(config, logger)
+	r, err := router.NewRouter(config, logger)
 	if err != nil {
 		logger.Error("failed to create router", "error", err)
 		return err
 	}
 
-	// Start background tasks
-	router.StartBackgroundTasks()
-	defer router.StopBackgroundTasks()
+	r.StartBackgroundTasks()
+	defer r.StopBackgroundTasks()
 
-	// Initial model refresh
-	if err := router.RefreshModels(ctx); err != nil {
-		logger.Warn("initial model refresh failed", "error", err)
-	}
+	r.RefreshModels(ctx)
 
-	// Setup signal handling for graceful shutdown
 	shutdownChan := make(chan os.Signal, 1)
 	signal.Notify(shutdownChan, syscall.SIGINT, syscall.SIGTERM)
 
-	// Start the server
-	serverErr := make(chan error, 1)
 	go func() {
 		logger.Info("server listening", "host", config.Server.Host, "port", config.Server.Port)
-		if err := http.ListenAndServe(fmt.Sprintf("%s:%d", config.Server.Host, config.Server.Port), router); err != nil {
-			serverErr <- err
+		if err := http.ListenAndServe(fmt.Sprintf("%s:%d", config.Server.Host, config.Server.Port), r); err != nil {
+			logger.Error("server error", "error", err)
 		}
 	}()
 
-	// Wait for shutdown signal
 	<-shutdownChan
 	logger.Info("shutting down server")
-
-	// Shutdown router
-	router.Shutdown()
-
+	r.Shutdown()
 	logger.Info("server stopped")
-
 	return nil
-}
-
-// Router interface - will be implemented by the router package
-type Router interface {
-	StartBackgroundTasks()
-	StopBackgroundTasks()
-	RefreshModels(ctx context.Context) error
-	Shutdown()
-	ServeHTTP(w http.ResponseWriter, r *http.Request)
-}
-
-// NewRouter function - will be set by main package
-var NewRouter func(config *types.Config, logger interface{}) (Router, error)
-
-// SetNewRouterFunc allows main package to set the NewRouter function
-func SetNewRouterFunc(fn func(config *types.Config, logger interface{}) (Router, error)) {
-	NewRouter = fn
 }

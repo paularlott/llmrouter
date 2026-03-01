@@ -1,464 +1,383 @@
 # LLM Router
 
-A powerful router for LLM services that supports the OpenAI protocol and provides a complete Model Context Protocol (MCP) server with Scriptling integration.
+A unified gateway that aggregates multiple LLM providers behind a single endpoint. Clients use their preferred protocol (OpenAI or Anthropic Messages) and the gateway handles routing, protocol translation, and load balancing.
 
 ## Features
 
-- **OpenAI Protocol Compatible**: Supports standard OpenAI API endpoints
-- **Multiple Provider Support**: Aggregate models from multiple OpenAI-compatible servers
-- **Load-Based Routing**: Routes to the provider with the least active completions
-- **MCP Server**: Full Model Context Protocol server with tool discovery and execution
-- **Scriptling Integration**: Python-like scripting environment for custom tools
-- **Dynamic Tool Loading**: Edit tool scripts without restarting the server
-- **Automatic Tool Calling**: AI completions automatically execute tools
-- **Responses API**: OpenAI-compatible responses storage and retrieval
-- **CLI Tools**: Command-line interface for script and tool execution
+- **Multi-Provider**: OpenAI, Claude, Gemini, Ollama, Mistral, ZAi — configure once, route by model name
+- **Protocol Translation**: Clients speak OpenAI or Messages (Claude) format; the gateway translates as needed
+- **Weight-Based Load Balancing**: Distribute load across providers with configurable weights
+- **Smart Routing**: Request the `auto` model and a Scriptling script picks the best provider/model based on tags, load, and request content
+- **MCP Aggregator**: Aggregate tools from multiple remote MCP servers with namespace isolation
+- **Responses API**: OpenAI-compatible responses storage (emulated for all providers)
+- **Conversations API**: n8n-compatible conversation management
+- **Optional Auth**: Bearer token protection for all endpoints
+- **Admin UI**: Optional web interface for monitoring providers, models, and MCP servers
 
 ## Quick Start
 
 ```bash
-# Build
 go build -o llmrouter .
-
-# Or use task/make for multi-platform builds
-task              # Build for current platform
-make              # Build for current platform
-task build-all    # Build for all platforms
-
-# Run the server
 ./llmrouter server
-
-# Run with custom config
 ./llmrouter -config /path/to/config.toml server
 ```
 
 ## Configuration
 
-Create a `config.toml` file:
-
 ```toml
 [server]
-port = 12345
 host = "0.0.0.0"
-token = "your-secret-token"  # Optional: Bearer token for API authentication
+port = 12345
+token = "your-secret-token"   # Optional bearer token
+admin_password = "admin123"   # Optional: enables admin UI at /admin
+storage_path = "./data"  # Omit for memory-only storage (under [server])
 
 [logging]
-level = "info"       # trace, debug, info, warn, error
-format = "console"   # console, json
+level = "info"    # trace | debug | info | warn | error
+format = "console" # console | json
 
-# LLM Providers
-[[providers]]
-name = "local-llm"
-base_url = "http://localhost:8080/v1"
-token = ""
-enabled = true
+[responses]
+ttl_days = 30
+
+[conversations]
+ttl_days = 30
 
 [[providers]]
 name = "openai"
-base_url = "https://api.openai.com/v1"
-token = "your-api-key"
+provider = "openai"           # openai | claude | gemini | ollama | mistral | zai
+token = "sk-..."
 enabled = true
-native_responses = true  # Provider supports native responses API
+weight = 1.0                  # 0.0-2.0, default 1.0; higher = preferred
+tags = ["capable", "expensive"]  # optional tags for smart routing
 
-# Provider with static models (no API fetching)
+[providers.model_tags]        # optional per-model tags
+"gpt-4o"      = ["capable", "expensive"]
+"gpt-4o-mini" = ["fast", "cheap"]
+
+[[providers]]
+name = "anthropic"
+provider = "claude"
+token = "sk-ant-..."
+enabled = true
+model_allowlist = ["claude-opus-4-5", "claude-sonnet-4-5"]  # Required for Claude
+tags = ["capable"]
+
+[providers.model_tags]
+"claude-opus-4-5"   = ["capable", "expensive"]
+"claude-sonnet-4-5" = ["capable", "fast"]
+
 [[providers]]
 name = "google"
-base_url = "https://generativelanguage.googleapis.com/v1beta/openai/"
+provider = "gemini"
 token = "your-google-key"
 enabled = true
-models = ["gemini-2.5-flash-lite", "gemini-2.5-pro"]
+model_allowlist = ["gemini-2.5-flash-lite"]  # Optional: restrict to specific models
 
-# Provider with allowlist (only these models exposed)
 [[providers]]
-name = "openai-filtered"
-base_url = "https://api.openai.com/v1"
-token = "your-api-key"
+name = "local"
+provider = "ollama"
+base_url = "http://localhost:11434/v1"
 enabled = true
-allowlist = ["gpt-4", "gpt-4-turbo", "gpt-3.5-turbo"]
 
-# Provider with denylist (these models excluded)
-[[providers]]
-name = "azure"
-base_url = "https://your-resource.openai.azure.com"
-token = "your-azure-key"
-enabled = true
-denylist = ["text-davinci-003"]
+[smart_routing]
+enabled = false
+script = "router.py"  # Scriptling script for routing decisions
+default_model = "mistralai/ministral-3-3b"  # Fallback if script returns nothing
+libdir = "./router_libs"  # Optional: directory of .py script libraries
 
 [mcp]
-# Remote MCP servers (optional)
-# Configure external MCP servers with tool visibility control
-# [[mcp.remote_servers]]
-#   namespace = "ai"                    # Namespace prefix for tools
-#   url = "https://ai.example.com/mcp"  # MCP server URL
-#   token = "your-bearer-token"         # Optional authentication
-#   tool_visibility = "native"          # "native" (default) or "ondemand"
-
-[scriptling]
-tools_path = "./example-tools"
-libraries_path = "./example-libs"
-
-[responses]
-storage_path = "./responses.db"
-ttl_days = 30
+[[mcp.remote_servers]]
+namespace = "tools"
+url = "https://tools.example.com/mcp"
+token = "secret"
+tool_visibility = "native"    # native | discoverable
+tool_allowlist = ["search", "query"]  # Optional: only these tools are enabled
+tool_denylist = ["delete"]           # Optional: these tools are disabled
 ```
 
-### Provider Configuration
+### Provider Types
 
-| Field       | Description                                  |
-| ----------- | -------------------------------------------- |
-| `name`      | Unique identifier for the provider           |
-| `base_url`  | OpenAI-compatible API base URL               |
-| `token`     | API token/key (optional for local servers)   |
-| `enabled`   | Enable/disable the provider                  |
-| `models`    | Static model list (skips API model fetching) |
-| `allowlist` | Only expose these models                     |
-| `denylist`  | Exclude these models                         |
+| Provider  | Default Base URL                              | Embeddings | Model Discovery  |
+| --------- | --------------------------------------------- | ---------- | ---------------- |
+| `openai`  | https://api.openai.com/v1                     | Yes        | Auto             |
+| `claude`  | https://api.anthropic.com/v1                  | No         | **Must specify** |
+| `gemini`  | https://generativelanguage.googleapis.com/... | Yes        | Auto             |
+| `ollama`  | https://ollama.com/v1/                        | Yes        | Auto             |
+| `mistral` | https://api.mistral.ai/v1                     | Yes        | Auto             |
+| `zai`     | https://api.z.ai/api/paas/v4/                 | Yes        | Auto             |
 
-### Model Filtering Rules
+`base_url` is optional — each provider has a built-in default. Set it to override (e.g. local LM Studio).
 
-1. Denylist is applied first - matching models are always excluded
-2. If allowlist is provided, only matching models are included
-3. If no allowlist, all non-denylisted models are included
+`model_allowlist` restricts the provider to only the listed models. For Claude this is required (no discovery API). For other providers it is optional.
 
-### Authentication
+`model_denylist` excludes specific models from auto-discovery. Ignored when `model_allowlist` is set.
 
-Optional bearer token authentication can be enabled by setting the `token` field in the server configuration:
+### Smart Routing
+
+When a client requests the model name `auto`, the router runs a [Scriptling](https://github.com/paularlott/scriptling) script to pick the best provider and model. If the script returns nothing or fails, `default_model` is used.
+
+`libdir` is an optional directory of `.py` files. Each file is registered as a script library (named after the file without the `.py` extension) and is available for `import` in the routing script. The directory is watched for changes — any modification triggers a full VM pool rebuild.
 
 ```toml
-[server]
-token = "your-secret-token"
+[smart_routing]
+enabled = true
+script = "router.py"  # Scriptling script for routing decisions
+default_model = "mistralai/ministral-3-3b"
+
+[smart_routing.vars]  # Optional key-value pairs exposed to the script
+openai_key = "sk-..."
+my_endpoint = "https://api.example.com"
 ```
 
-When configured, all API endpoints (except `/health`) require a valid bearer token:
+The `auto` model appears in `/v1/models` so clients can discover it.
 
-```bash
-curl -H "Authorization: Bearer your-secret-token" http://localhost:12345/v1/models
+#### Provider and Model Tags
+
+Tags are arbitrary strings assigned to providers and individual models. The routing script uses them to select the right provider/model for each request.
+
+```toml
+[[providers]]
+name = "mistral"
+provider = "mistral"
+token = "..."
+enabled = true
+tags = ["fast", "cheap"]           # provider-level tags
+
+[providers.model_tags]
+"mistralai/ministral-3-3b"      = ["small", "fast", "cheap"]
+"mistralai/mistral-small-latest" = ["small", "fast"]
 ```
 
-If no token is configured, the server runs without authentication.
+The routing script can then query by tag:
 
-### MCP Configuration
+```python
+import router
 
-| Field             | Description                                                        |
-| ----------------- | ------------------------------------------------------------------ |
-| `mode`            | Global mode: `native` (default) or `ondemand`                      |
-| `namespace`       | Namespace for the remote MCP server (prevents tool name conflicts) |
-| `url`             | URL of the remote MCP server                                       |
-| `token`           | Optional bearer token for authentication                           |
-| `tool_visibility` | Tool visibility mode: `native` (default) or `ondemand`             |
+req = router.get_request()
 
-#### Global Mode
+# Route tool-heavy requests to a capable model
+if router.is_chat_completion() and len(req["tools"]) > 0:
+    models = router.models_by_tag("capable")
+else:
+    models = router.models_by_tag("cheap")
 
-**`native`** (default): All tools (local, remote, and script-based) appear directly in tools/list. The LLM can call them directly by name.
+if models:
+    router.set_model(models[0])
+```
 
-**`ondemand`**: Only `tool_search` and `execute_tool` appear in tools/list. All other tools must be discovered via `tool_search` and called via `execute_tool`. Reduces initial context.
+Use `router.model_tags(model_id)` to narrow a candidate list by a secondary tag:
 
-#### Tool Visibility Modes (Per Remote Server)
+```python
+import router
 
-**`native`** (default): Remote server tools appear directly in the tools/list manifest. The LLM can call them directly by name (e.g., `namespace/tool-name`).
+# Start broad: all "capable" models
+candidates = router.models_by_tag("capable")
 
-**`ondemand`**: Remote server tools are hidden from tools/list but searchable via `tool_search` and callable via `execute_tool`.
+# Narrow: prefer "super_fast" within that set
+fast = [m for m in candidates if "super_fast" in router.model_tags(m)]
+cheap = [m for m in candidates if "cheap" in router.model_tags(m)]
 
-### Responses Configuration
+models = fast or cheap or candidates
+if models:
+    router.set_model(models[0])
+```
 
-| Field          | Description                                                    |
-| -------------- | -------------------------------------------------------------- |
-| `storage_path` | Path to BadgerDB storage directory (default: "./responses.db") |
-| `ttl_days`     | Time-to-live for stored responses in days (default: 30)        |
+See [docs/scriptling-router-library.md](docs/scriptling-router-library.md) for the full script API reference.
+
+#### Script Libraries
+
+Every routing script has access to all Scriptling standard libraries (`json`, `re`, `math`, `random`, `hashlib`, `base64`, `uuid`, `datetime`, `time`, `urllib`, etc.) plus the following extended and Scriptling-specific libraries:
+
+| Library | Description |
+|---------|-------------|
+| `requests` | HTTP client |
+| `secrets` | Cryptographically strong random numbers |
+| `html.parser` | HTML/XHTML parser |
+| `logging` | Logging to the router log |
+| `yaml` | YAML parsing |
+| `toml` | TOML parsing |
+| `sys` | System parameters |
+| `scriptling.ai` | AI/LLM client for OpenAI-compatible APIs |
+| `scriptling.ai.agent` | Agentic AI loop with automatic tool execution |
+| `scriptling.mcp` | MCP tool interaction |
+| `scriptling.toon` | TOON encoding/decoding |
+| `scriptling.fuzzy` | Fuzzy string matching |
+| `scriptling.runtime` | Background tasks, KV store, sync primitives |
+
+Filesystem access (`os`, `pathlib`, `glob`), subprocess execution, and `wait_for` are not available in routing scripts.
+
+#### Script Variables
+
+Use `[smart_routing.vars]` to pass tokens or other config to the script without hard-coding them:
+
+```toml
+[smart_routing.vars]
+openai_key = "sk-..."
+```
+
+```python
+import vars
+import scriptling.ai as ai
+
+client = ai.Client("", api_key=vars.openai_key)
+```
+
+### Weight-Based Load Balancing
+
+When multiple providers serve the same model, the router selects using `score = active_completions / weight`. Lower score wins.
+
+| Weight | Effect                                |
+| ------ | ------------------------------------- |
+| `0.0`  | Last resort only                      |
+| `1.0`  | Normal (default)                      |
+| `2.0`  | Preferred — gets 2× the traffic share |
+
+### MCP Tool Visibility
+
+| Mode           | Behavior                                            |
+| -------------- | --------------------------------------------------- |
+| `native`       | Tools appear in `tools/list`, directly callable     |
+| `discoverable` | Hidden from list, searchable via `tool_search` only |
+
+### MCP Tool Filtering
+
+Tools from remote MCP servers can be filtered using `tool_allowlist` or `tool_denylist`:
+
+- **`tool_allowlist`**: When defined, only the listed tools are enabled. All other tools are disabled.
+- **`tool_denylist`**: When defined, all tools are enabled except those in the list.
+
+Note: If both are defined, `tool_allowlist` takes precedence and `tool_denylist` is ignored.
+
+```toml
+[[mcp.remote_servers]]
+namespace = "github"
+url = "https://github.example.com/mcp"
+token = "secret"
+tool_visibility = "native"
+tool_allowlist = ["search_repos", "get_issue", "create_issue"]  # Only these 3 tools are enabled
+
+[[mcp.remote_servers]]
+namespace = "slack"
+url = "https://slack.example.com/mcp"
+token = "secret"
+tool_visibility = "native"
+tool_denylist = ["delete_message", "ban_user"]  # All tools enabled except these 2
+```
+
+### MCP OAuth Authentication
+
+For MCP servers that require OAuth authentication, configure the OAuth fields instead of `token`:
+
+```toml
+[[mcp.remote_servers]]
+namespace = "my-oauth-service"
+url = "https://api.example.com/mcp"
+auth_type = "oauth"
+oauth_client_id = "your-client-id"
+oauth_token_url = "https://auth.example.com/token"
+oauth_access_token = "current-access-token"
+oauth_refresh_token = "refresh-token"  # Optional: for token refresh
+```
 
 ## API Endpoints
 
-### GET /v1/models
-
-Returns aggregated models from all enabled providers.
+### Chat & Models
 
 ```bash
-# Without authentication
-curl http://localhost:12345/v1/models
-
-# With authentication (if token is configured)
-curl -H "Authorization: Bearer your-secret-token" http://localhost:12345/v1/models
+GET  /v1/models
+POST /v1/chat/completions    # OpenAI format, streaming supported
+POST /v1/messages            # Anthropic Messages format
+POST /v1/embeddings
+GET  /health
 ```
 
-### POST /v1/chat/completions
-
-Creates a chat completion (routed to appropriate provider).
+### Responses API
 
 ```bash
-# Without authentication
-curl -X POST http://localhost:12345/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "gpt-3.5-turbo",
-    "messages": [{"role": "user", "content": "Hello!"}]
-  }'
-
-# With authentication (if token is configured)
-curl -X POST http://localhost:12345/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your-secret-token" \
-  -d '{
-    "model": "gpt-3.5-turbo",
-    "messages": [{"role": "user", "content": "Hello!"}]
-  }'
+POST   /v1/responses
+GET    /v1/responses/{id}
+DELETE /v1/responses/{id}
+GET    /v1/responses
+POST   /v1/responses/{id}/cancel
+POST   /v1/responses/compact
 ```
 
-### POST /v1/embeddings
-
-Creates embeddings (routed to appropriate provider).
+### Conversations API
 
 ```bash
-# Single text input (without authentication)
-curl -X POST http://localhost:12345/v1/embeddings \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "text-embedding-embeddinggemma-300m-qat",
-    "input": "Hello world"
-  }'
-
-# Multiple text inputs (with authentication)
-curl -X POST http://localhost:12345/v1/embeddings \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your-secret-token" \
-  -d '{
-    "model": "text-embedding-embeddinggemma-300m-qat",
-    "input": ["Hello", "World"]
-  }'
+POST   /v1/conversations
+GET    /v1/conversations/{id}
+POST   /v1/conversations/{id}
+DELETE /v1/conversations/{id}
+GET    /v1/conversations/{conversation_id}/items
+POST   /v1/conversations/{conversation_id}/items
+GET    /v1/conversations/{conversation_id}/items/{item_id}
+DELETE /v1/conversations/{conversation_id}/items/{item_id}
 ```
 
-### POST /mcp
-
-Model Context Protocol endpoint for tool discovery and execution in native mode. Native tools appear in `tools/list` and can be called directly.
+### MCP
 
 ```bash
-# List available tools
-curl -X POST http://localhost:12345/mcp \
-  -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
-
-# Search for tools
-curl -X POST http://localhost:12345/mcp \
-  -H "Content-Type: application/json" \
-  -d '{
-    "jsonrpc":"2.0","id":1,"method":"tools/call",
-    "params":{"name":"tool_search","arguments":{"query":"calculator"}}
-  }'
-
-# Execute a tool
-curl -X POST http://localhost:12345/mcp \
-  -H "Content-Type: application/json" \
-  -d '{
-    "jsonrpc":"2.0","id":1,"method":"tools/call",
-    "params":{
-      "name":"execute_tool",
-      "arguments":{"name":"calculator","arguments":{"operation":"add","a":5,"b":3}}
-    }
-  }'
-
-# Execute arbitrary code
-curl -X POST http://localhost:12345/mcp \
-  -H "Content-Type: application/json" \
-  -d '{
-    "jsonrpc":"2.0","id":1,"method":"tools/call",
-    "params":{
-      "name":"execute_code",
-      "arguments":{"code":"import llmr.mcp\nllmr.mcp.return_string(str(2+2))"}
-    }
-  }'
+POST /mcp    # MCP protocol — aggregates tools from all configured remote servers
 ```
 
-#### Discovery Mode
+### Admin UI
 
-Use the `X-MCP-Tool-Mode: discovery` header or `?tool_mode=discovery` query parameter to enable discovery mode. In this mode, all tools are hidden from `tools/list` but remain searchable via `tool_search`. Useful for AI clients that work better with fewer initial tools.
+When `server.admin_password` is set, a web-based admin interface is available at `/admin` for monitoring providers, models, and MCP servers.
 
 ```bash
-# Only tool_search and execute_tool are visible in tools/list (using header)
-curl -X POST http://localhost:12345/mcp \
-  -H "Content-Type: application/json" \
-  -H "X-MCP-Tool-Mode: discovery" \
-  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
-
-# Or using query parameter
-curl -X POST "http://localhost:12345/mcp?tool_mode=discovery" \
-  -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
-
-# All tools are searchable via tool_search
-curl -X POST http://localhost:12345/mcp \
-  -H "Content-Type: application/json" \
-  -H "X-MCP-Tool-Mode: discovery" \
-  -d '{
-    "jsonrpc":"2.0","id":1,"method":"tools/call",
-    "params":{"name":"tool_search","arguments":{"query":"calculator"}}
-  }'
+GET /admin         # Admin UI (requires password login)
+GET /admin/login   # Login page
 ```
 
-### GET /health
+### Authentication
 
-Returns health information including provider status.
+When `server.token` is set, all endpoints except `/health` require:
 
-```bash
-curl http://localhost:12345/health
+```
+Authorization: Bearer your-secret-token
 ```
 
-## Responses API Endpoints
-
-The responses API allows storing, retrieving, and managing chat completion responses.
-
-### POST /v1/responses
-
-Create a new response entry.
+## CLI
 
 ```bash
-curl -X POST http://localhost:12345/v1/responses \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your-secret-token" \
-  -d '{
-    "model": "gpt-3.5-turbo",
-    "messages": [{"role": "user", "content": "Hello!"}],
-    "metadata": {"user_id": "123"}
-  }'
-```
-
-### GET /v1/responses/{id}
-
-Retrieve a specific response by ID.
-
-```bash
-curl -H "Authorization: Bearer your-secret-token" \
-  http://localhost:12345/v1/responses/resp_abc123
-```
-
-### DELETE /v1/responses/{id}
-
-Delete a specific response.
-
-```bash
-curl -X DELETE \
-  -H "Authorization: Bearer your-secret-token" \
-  http://localhost:12345/v1/responses/resp_abc123
-```
-
-### GET /v1/responses
-
-List responses with optional filtering.
-
-```bash
-# List all responses
-curl -H "Authorization: Bearer your-secret-token" \
-  http://localhost:12345/v1/responses
-
-# List with limit
-curl -H "Authorization: Bearer your-secret-token" \
-  "http://localhost:12345/v1/responses?limit=10&order=desc"
-```
-
-### POST /v1/responses/{id}/cancel
-
-Cancel an in-progress response.
-
-```bash
-curl -X POST \
-  -H "Authorization: Bearer your-secret-token" \
-  http://localhost:12345/v1/responses/resp_abc123/cancel
-```
-
-### POST /v1/responses/compact
-
-Trigger garbage collection and compaction of stored responses.
-
-```bash
-curl -X POST \
-  -H "Authorization: Bearer your-secret-token" \
-  http://localhost:12345/v1/responses/compact
-```
-
-## CLI Commands
-
-### Server
-
-```bash
-./llmrouter server                    # Run with default config
-./llmrouter -config custom.toml server  # Custom config
-./llmrouter server -port 8080         # Override port
-./llmrouter server -token secret123   # Set bearer token via CLI
-```
-
-### Script Execution
-
-```bash
-./llmrouter script path/to/script.py arg1 arg2
-./llmrouter script -server http://localhost:8080 script.py
-./llmrouter script -v script.py       # Verbose output
-./llmrouter script -token secret123 script.py  # With authentication
-```
-
-### Tool Execution
-
-```bash
-./llmrouter tool calculator '{"operation":"add","a":5,"b":3}'
-./llmrouter tool -server http://localhost:8080 my_tool args
-./llmrouter tool -v tool_name args    # Verbose output
-./llmrouter tool -token secret123 calculator args  # With authentication
+./llmrouter server                          # Start server
+./llmrouter -config custom.toml server      # Custom config
+./llmrouter server -port 8080               # Override port
+./llmrouter server -token secret123         # Set bearer token
+./llmrouter models                          # List available models
+./llmrouter ask gpt-4o "What is 2+2?"       # Ask a model a question
+./llmrouter tool calculator '{"op":"add","a":1,"b":2}'  # Execute MCP tool
 ```
 
 ## Building
-
-### Using Taskfile (parallel builds)
 
 ```bash
 task              # Build for current platform
 task build-all    # Build all platforms (parallel)
 task release      # Build all with checksums
-task clean        # Clean build artifacts
-task test         # Run tests
+make              # Alternative via Makefile
 ```
 
-### Using Makefile
-
-```bash
-make              # Build for current platform
-make build-all    # Build all platforms
-make release      # Build all with checksums
-make clean        # Clean build artifacts
-make help         # Show all targets
-```
-
-### Supported Platforms
-
-- Linux (AMD64, ARM64)
-- macOS (AMD64, ARM64)
-- Windows (AMD64, ARM64)
-
-## Documentation
-
-- [Creating Custom Tools](docs/creating_tools.md) - Guide to creating MCP tools
-- [MCP Library Reference](docs/mcp_library.md) - `llmr.mcp` library functions for tools
-- [AI Library Reference](docs/ai_library.md) - `llmr.ai` library for LLM integration
+Supported platforms: Linux, macOS, Windows × AMD64/ARM64.
 
 ## Architecture
 
-### Routing Logic
+```
+Client (OpenAI or Messages protocol)
+        │
+        ▼
+   LLM Router
+   ├── Protocol Layer  (OpenAI ↔ Messages translation via mcp/ai)
+   ├── Routing Layer   (model → provider, weight-based load balancing)
+   ├── Smart Routing   (Scriptling script, tag-based selection, hot-reload)
+   ├── Provider Layer  (openai | claude | gemini | ollama | mistral | zai)
+   ├── MCP Aggregator  (remote MCP servers with namespace + visibility control)
+   ├── Responses API   (emulated for all providers, in-memory index only)
+   └── Conversations   (n8n-compatible, stored in SnapshotKV)
+```
 
-1. **Model Selection**: Router checks which providers have the requested model
-2. **Load Balancing**: Routes to provider with fewest active completions
-3. **Failover**: Returns 404 if model not available on any provider
-
-### MCP Server
-
-The MCP server provides three built-in tools:
-
-| Tool           | Description                              |
-| -------------- | ---------------------------------------- |
-| `tool_search`  | Search for available tools by keyword    |
-| `execute_tool` | Execute a discovered tool with arguments |
-| `execute_code` | Execute arbitrary Python/Scriptling code |
-
-### Dynamic Loading
-
-- **Tool scripts**: Loaded from disk on each execution (edit without restart)
-- **Tool definitions**: Dynamically scanned from filesystem (add/remove/edit without restart)
-- **Libraries**: Loaded on-demand when first imported (edit without restart)
+Protocol translation is handled by the `mcp/ai` package — the gateway always works in OpenAI format internally and translates at the edges.
 
 ## License
 
