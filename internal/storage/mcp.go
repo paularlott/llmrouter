@@ -12,16 +12,21 @@ import (
 
 // MCPServerConfig represents a stored MCP server configuration
 type MCPServerConfig struct {
-	Namespace      string   `json:"namespace"`
-	URL            string   `json:"url"`
-	Token          string   `json:"token,omitempty"`
-	Enabled        bool     `json:"enabled"`           // Server is active (default true)
-	ToolVisibility string   `json:"tool_visibility"`   // "native" (default) or "ondemand"
-	ToolAllowlist  []string `json:"tool_allowlist,omitempty"`
-	ToolDenylist   []string `json:"tool_denylist,omitempty"`
-	DisabledTools  []string `json:"disabled_tools,omitempty"` // Tools disabled via UI toggle
-	CreatedAt      int64    `json:"created_at"`
-	UpdatedAt      int64    `json:"updated_at"`
+	Namespace           string   `json:"namespace"`
+	URL                 string   `json:"url"`
+	AuthType            string   `json:"auth_type,omitempty"`            // "bearer" (default) or "oauth2"
+	Token               string   `json:"token,omitempty"`
+	OAuthClientID       string   `json:"oauth_client_id,omitempty"`
+	OAuthTokenURL       string   `json:"oauth_token_url,omitempty"`
+	OAuthAccessToken    string   `json:"oauth_access_token,omitempty"`
+	OAuthRefreshToken   string   `json:"oauth_refresh_token,omitempty"`
+	Enabled             bool     `json:"enabled"`           // Server is active (default true)
+	ToolVisibility      string   `json:"tool_visibility"`   // "native" (default) or "ondemand"
+	ToolAllowlist       []string `json:"tool_allowlist,omitempty"`
+	ToolDenylist        []string `json:"tool_denylist,omitempty"`
+	DisabledTools       []string `json:"disabled_tools,omitempty"` // Tools disabled via UI toggle
+	CreatedAt           int64    `json:"created_at"`
+	UpdatedAt           int64    `json:"updated_at"`
 }
 
 // MCPStorage defines the interface for MCP server storage
@@ -129,16 +134,21 @@ func (s *SnapshotMCPStorage) Update(ctx context.Context, server *MCPServerConfig
 
 func (s *SnapshotMCPStorage) saveServer(key string, server *MCPServerConfig) error {
 	data := map[string]any{
-		"namespace":       server.Namespace,
-		"url":             server.URL,
-		"token":           server.Token,
-		"enabled":         server.Enabled,
-		"tool_visibility": server.ToolVisibility,
-		"tool_allowlist":  server.ToolAllowlist,
-		"tool_denylist":   server.ToolDenylist,
-		"disabled_tools":  server.DisabledTools,
-		"created_at":      server.CreatedAt,
-		"updated_at":      server.UpdatedAt,
+		"namespace":            server.Namespace,
+		"url":                  server.URL,
+		"auth_type":             server.AuthType,
+		"token":                 server.Token,
+		"oauth_client_id":       server.OAuthClientID,
+		"oauth_token_url":       server.OAuthTokenURL,
+		"oauth_access_token":    server.OAuthAccessToken,
+		"oauth_refresh_token":   server.OAuthRefreshToken,
+		"enabled":              server.Enabled,
+		"tool_visibility":      server.ToolVisibility,
+		"tool_allowlist":       server.ToolAllowlist,
+		"tool_denylist":        server.ToolDenylist,
+		"disabled_tools":       server.DisabledTools,
+		"created_at":           server.CreatedAt,
+		"updated_at":           server.UpdatedAt,
 	}
 
 	return s.db.Set(key, data)
@@ -315,8 +325,23 @@ func parseMCPServerConfig(data map[string]any) (*MCPServerConfig, error) {
 	if v, ok := data["url"].(string); ok {
 		server.URL = v
 	}
+	if v, ok := data["auth_type"].(string); ok {
+		server.AuthType = v
+	}
 	if v, ok := data["token"].(string); ok {
 		server.Token = v
+	}
+	if v, ok := data["oauth_client_id"].(string); ok {
+		server.OAuthClientID = v
+	}
+	if v, ok := data["oauth_token_url"].(string); ok {
+		server.OAuthTokenURL = v
+	}
+	if v, ok := data["oauth_access_token"].(string); ok {
+		server.OAuthAccessToken = v
+	}
+	if v, ok := data["oauth_refresh_token"].(string); ok {
+		server.OAuthRefreshToken = v
 	}
 	// Default to true if enabled field is not present (backwards compatibility)
 	server.Enabled = true
@@ -373,12 +398,17 @@ func parseStringSlice(v any) []string {
 
 func copyMCPServerConfig(server *MCPServerConfig) *MCPServerConfig {
 	result := &MCPServerConfig{
-		Namespace:      server.Namespace,
-		URL:            server.URL,
-		Token:          server.Token,
-		ToolVisibility: server.ToolVisibility,
-		CreatedAt:      server.CreatedAt,
-		UpdatedAt:      server.UpdatedAt,
+		Namespace:         server.Namespace,
+		URL:               server.URL,
+		AuthType:          server.AuthType,
+		Token:             server.Token,
+		OAuthClientID:     server.OAuthClientID,
+		OAuthTokenURL:     server.OAuthTokenURL,
+		OAuthAccessToken:  server.OAuthAccessToken,
+		OAuthRefreshToken: server.OAuthRefreshToken,
+		ToolVisibility:    server.ToolVisibility,
+		CreatedAt:         server.CreatedAt,
+		UpdatedAt:         server.UpdatedAt,
 	}
 
 	if server.ToolAllowlist != nil {
@@ -431,6 +461,7 @@ func (c *MCPServerConfig) ToJSON(includeToken bool) map[string]any {
 	result := map[string]any{
 		"namespace":       c.Namespace,
 		"url":             c.URL,
+		"auth_type":       c.AuthType,
 		"tool_visibility": c.ToolVisibility,
 		"created_at":      c.CreatedAt,
 		"updated_at":      c.UpdatedAt,
@@ -438,6 +469,10 @@ func (c *MCPServerConfig) ToJSON(includeToken bool) map[string]any {
 
 	if includeToken {
 		result["token"] = c.Token
+		result["oauth_client_id"] = c.OAuthClientID
+		result["oauth_token_url"] = c.OAuthTokenURL
+		result["oauth_access_token"] = c.OAuthAccessToken
+		result["oauth_refresh_token"] = c.OAuthRefreshToken
 	}
 
 	if len(c.ToolAllowlist) > 0 {

@@ -140,6 +140,12 @@
                       >
                         On-demand
                       </span>
+                      <span
+                        x-show="!server.static_server && server.auth_type === 'oauth2'"
+                        class="px-2 py-0.5 text-xs font-medium rounded-full bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                      >
+                        OAuth2
+                      </span>
                     </div>
                     <div class="flex items-center gap-4 text-sm text-slate-600 dark:text-slate-400">
                       <span class="flex items-center gap-1">
@@ -230,6 +236,15 @@
               </div>
 
               <div>
+                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Authentication</label>
+                <select x-model="form.auth_type" class="input-field">
+                  <option value="bearer">Bearer Token</option>
+                  <option value="oauth2">OAuth2 Client Credentials</option>
+                </select>
+              </div>
+
+              <!-- Bearer token fields -->
+              <div x-show="form.auth_type !== 'oauth2'">
                 <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Bearer Token (optional)</label>
                 <input
                   type="password"
@@ -239,6 +254,13 @@
                 />
                 <p x-show="editingServer" class="text-xs text-slate-500 dark:text-slate-400 mt-1">Leave empty to keep existing token</p>
               </div>
+
+              <!-- OAuth2 fields -->
+              <template x-if="form.auth_type === 'oauth2'">
+                <div class="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl text-sm text-blue-700 dark:text-blue-300">
+                  <p>Clicking <strong>Connect via OAuth2</strong> will open the provider's login page. You'll be redirected back automatically once authorized.</p>
+                </div>
+              </template>
 
               <div class="flex items-center gap-3">
                 <label class="flex items-center cursor-pointer">
@@ -280,7 +302,7 @@
                     <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                     <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                   </svg>
-                  <span x-text="editingServer ? 'Save Changes' : 'Add Server'"></span>
+                  <span x-text="editingServer ? 'Save Changes' : (form.auth_type === 'oauth2' ? 'Connect via OAuth2' : 'Add Server')"></span>
                 </button>
               </div>
             </form>

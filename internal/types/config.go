@@ -43,13 +43,18 @@ type MCPConfig struct {
 }
 
 type MCPRemoteServerConfig struct {
-	Namespace      string   `json:"namespace" toml:"namespace"`
-	URL            string   `json:"url" toml:"url"`
-	Token          string   `json:"token,omitempty" toml:"token"`
-	ToolVisibility string   `json:"tool_visibility,omitempty" toml:"tool_visibility"` // "native" (default) or "ondemand"
-	ToolAllowlist  []string `json:"tool_allowlist,omitempty" toml:"tool_allowlist"`   // If set, only these tools are enabled
-	ToolDenylist   []string `json:"tool_denylist,omitempty" toml:"tool_denylist"`     // If set, these tools are disabled
-	StaticServer   bool     `json:"static_server,omitempty" toml:"static_server"`     // If true, server is defined in config (read-only in UI)
+	Namespace           string   `json:"namespace" toml:"namespace"`
+	URL                 string   `json:"url" toml:"url"`
+	AuthType            string   `json:"auth_type,omitempty" toml:"auth_type"`
+	Token               string   `json:"token,omitempty" toml:"token"`
+	OAuthClientID       string   `json:"oauth_client_id,omitempty" toml:"oauth_client_id"`
+	OAuthTokenURL       string   `json:"oauth_token_url,omitempty" toml:"oauth_token_url"`
+	OAuthAccessToken    string   `json:"oauth_access_token,omitempty" toml:"oauth_access_token"`
+	OAuthRefreshToken   string   `json:"oauth_refresh_token,omitempty" toml:"oauth_refresh_token"`
+	ToolVisibility      string   `json:"tool_visibility,omitempty" toml:"tool_visibility"` // "native" (default) or "ondemand"
+	ToolAllowlist       []string `json:"tool_allowlist,omitempty" toml:"tool_allowlist"`   // If set, only these tools are enabled
+	ToolDenylist        []string `json:"tool_denylist,omitempty" toml:"tool_denylist"`     // If set, these tools are disabled
+	StaticServer        bool     `json:"static_server,omitempty" toml:"static_server"`     // If true, server is defined in config (read-only in UI)
 }
 
 type StorageConfig struct {

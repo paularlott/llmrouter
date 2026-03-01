@@ -38,6 +38,10 @@ func (a *Admin) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /admin/api/mcp-servers/{namespace}/tools", a.requireAuth(a.HandleGetMCPServerTools))
 	mux.HandleFunc("PUT /admin/api/mcp-servers/{namespace}/tools/toggle", a.requireAuth(a.HandleToggleMCPServerTool))
 	mux.HandleFunc("GET /admin/api/mcp-storage-status", a.requireAuth(a.HandleMCPStorageStatus))
+
+	// OAuth2 PKCE flow for MCP servers
+	mux.HandleFunc("POST /admin/api/mcp-servers/oauth/start", a.requireAuth(a.HandleOAuthStart))
+	mux.HandleFunc("GET /admin/oauth/callback", a.HandleOAuthCallback)
 }
 
 // HandleLoginPage renders the login page
@@ -217,6 +221,7 @@ func (a *Admin) HandleGetMCPServer(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusOK, MCPServerInfo{
 				Namespace:      server.Namespace,
 				URL:            server.URL,
+				AuthType:       server.AuthType,
 				Enabled:        server.Enabled,
 				ToolVisibility: server.ToolVisibility,
 				ToolAllowlist:  server.ToolAllowlist,
@@ -248,13 +253,17 @@ func (a *Admin) HandleCreateMCPServer(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		Namespace      string   `json:"namespace"`
-		URL            string   `json:"url"`
-		Token          string   `json:"token"`
-		Enabled        bool     `json:"enabled"`
-		ToolVisibility string   `json:"tool_visibility"`
-		ToolAllowlist  []string `json:"tool_allowlist"`
-		ToolDenylist   []string `json:"tool_denylist"`
+		Namespace         string `json:"namespace"`
+		URL               string `json:"url"`
+		AuthType          string `json:"auth_type"`
+		Token             string `json:"token"`
+		OAuthTokenURL     string `json:"oauth_token_url"`
+		OAuthAccessToken  string `json:"oauth_access_token"`
+		OAuthRefreshToken string `json:"oauth_refresh_token"`
+		Enabled           bool   `json:"enabled"`
+		ToolVisibility    string `json:"tool_visibility"`
+		ToolAllowlist     []string `json:"tool_allowlist"`
+		ToolDenylist      []string `json:"tool_denylist"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -277,13 +286,17 @@ func (a *Admin) HandleCreateMCPServer(w http.ResponseWriter, r *http.Request) {
 	}
 
 	server := &storage.MCPServerConfig{
-		Namespace:      req.Namespace,
-		URL:            strings.TrimSuffix(req.URL, "/"),
-		Token:          req.Token,
-		Enabled:        req.Enabled,
-		ToolVisibility: req.ToolVisibility,
-		ToolAllowlist:  req.ToolAllowlist,
-		ToolDenylist:   req.ToolDenylist,
+		Namespace:         req.Namespace,
+		URL:               strings.TrimSuffix(req.URL, "/"),
+		AuthType:          req.AuthType,
+		Token:             req.Token,
+		OAuthTokenURL:     req.OAuthTokenURL,
+		OAuthAccessToken:  req.OAuthAccessToken,
+		OAuthRefreshToken: req.OAuthRefreshToken,
+		Enabled:           req.Enabled,
+		ToolVisibility:    req.ToolVisibility,
+		ToolAllowlist:     req.ToolAllowlist,
+		ToolDenylist:      req.ToolDenylist,
 	}
 
 	if err := a.mcpStorage.Create(r.Context(), server); err != nil {
@@ -299,6 +312,7 @@ func (a *Admin) HandleCreateMCPServer(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, MCPServerInfo{
 		Namespace:      server.Namespace,
 		URL:            server.URL,
+		AuthType:       server.AuthType,
 		Enabled:        server.Enabled,
 		ToolVisibility: server.ToolVisibility,
 		ToolAllowlist:  server.ToolAllowlist,
@@ -328,12 +342,16 @@ func (a *Admin) HandleUpdateMCPServer(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		URL            string   `json:"url"`
-		Token          string   `json:"token"`
-		Enabled        bool     `json:"enabled"`
-		ToolVisibility string   `json:"tool_visibility"`
-		ToolAllowlist  []string `json:"tool_allowlist"`
-		ToolDenylist   []string `json:"tool_denylist"`
+		URL               string   `json:"url"`
+		AuthType          string   `json:"auth_type"`
+		Token             string   `json:"token"`
+		OAuthTokenURL     string   `json:"oauth_token_url"`
+		OAuthAccessToken  string   `json:"oauth_access_token"`
+		OAuthRefreshToken string   `json:"oauth_refresh_token"`
+		Enabled           bool     `json:"enabled"`
+		ToolVisibility    string   `json:"tool_visibility"`
+		ToolAllowlist     []string `json:"tool_allowlist"`
+		ToolDenylist      []string `json:"tool_denylist"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -345,8 +363,23 @@ func (a *Admin) HandleUpdateMCPServer(w http.ResponseWriter, r *http.Request) {
 	if req.URL != "" {
 		server.URL = strings.TrimSuffix(req.URL, "/")
 	}
-	if req.Token != "" {
-		server.Token = req.Token
+	server.AuthType = req.AuthType
+	if req.AuthType == "oauth2" {
+		server.OAuthTokenURL = req.OAuthTokenURL
+		if req.OAuthAccessToken != "" {
+			server.OAuthAccessToken = req.OAuthAccessToken
+		}
+		if req.OAuthRefreshToken != "" {
+			server.OAuthRefreshToken = req.OAuthRefreshToken
+		}
+		server.Token = ""
+	} else {
+		if req.Token != "" {
+			server.Token = req.Token
+		}
+		server.OAuthTokenURL = ""
+		server.OAuthAccessToken = ""
+		server.OAuthRefreshToken = ""
 	}
 	server.Enabled = req.Enabled
 	if req.ToolVisibility != "" {
@@ -368,6 +401,7 @@ func (a *Admin) HandleUpdateMCPServer(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, MCPServerInfo{
 		Namespace:      server.Namespace,
 		URL:            server.URL,
+		AuthType:       server.AuthType,
 		Enabled:        server.Enabled,
 		ToolVisibility: server.ToolVisibility,
 		ToolAllowlist:  server.ToolAllowlist,
@@ -527,6 +561,7 @@ func (a *Admin) HandleToggleMCPServer(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, MCPServerInfo{
 		Namespace:      server.Namespace,
 		URL:            server.URL,
+		AuthType:       server.AuthType,
 		Enabled:        server.Enabled,
 		ToolVisibility: server.ToolVisibility,
 		ToolAllowlist:  server.ToolAllowlist,

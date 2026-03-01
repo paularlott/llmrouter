@@ -139,7 +139,11 @@ Alpine.data("mcpServers", () => ({
   form: {
     namespace: "",
     url: "",
+    auth_type: "bearer",
     token: "",
+    oauth_token_url: "",
+    oauth_access_token: "",
+    oauth_refresh_token: "",
     enabled: true,
     tool_visibility: "native",
   },
@@ -186,7 +190,11 @@ Alpine.data("mcpServers", () => ({
     this.form = {
       namespace: "",
       url: "",
+      auth_type: "bearer",
       token: "",
+      oauth_token_url: "",
+      oauth_access_token: "",
+      oauth_refresh_token: "",
       enabled: true,
       tool_visibility: "native",
     };
@@ -199,7 +207,11 @@ Alpine.data("mcpServers", () => ({
     this.form = {
       namespace: server.namespace,
       url: server.url,
-      token: "", // Don't prefill token
+      auth_type: server.auth_type || "bearer",
+      token: "",
+      oauth_token_url: "",
+      oauth_access_token: "",
+      oauth_refresh_token: "",
       enabled: server.enabled,
       tool_visibility: server.tool_visibility || "native",
     };
@@ -211,27 +223,47 @@ Alpine.data("mcpServers", () => ({
     this.formError = null;
 
     try {
+      // OAuth2: initiate PKCE flow (new servers only)
+      if (this.form.auth_type === 'oauth2' && !this.editingServer) {
+        const response = await fetch('/admin/api/mcp-servers/oauth/start', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            namespace: this.form.namespace,
+            url: this.form.url,
+            tool_visibility: this.form.tool_visibility,
+            enabled: this.form.enabled,
+            callback_base: window.location.origin,
+          }),
+        });
+        if (!response.ok) {
+          const data = await response.json();
+          throw new Error(data.error || 'Failed to start OAuth flow');
+        }
+        const { auth_url } = await response.json();
+        window.location.href = auth_url;
+        return;
+      }
+
       const url = this.editingServer
         ? `/admin/api/mcp-servers/${this.editingServer.namespace}`
-        : "/admin/api/mcp-servers";
-      const method = this.editingServer ? "PUT" : "POST";
+        : '/admin/api/mcp-servers';
+      const method = this.editingServer ? 'PUT' : 'POST';
 
       const body = { ...this.form };
-      if (this.editingServer && !body.token) {
-        delete body.token; // Don't clear existing token if not provided
+      if (this.editingServer && body.auth_type !== 'oauth2' && !body.token) {
+        delete body.token;
       }
 
       const response = await fetch(url, {
         method,
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
 
       if (!response.ok) {
         const text = await response.text();
-        throw new Error(text || "Failed to save server");
+        throw new Error(text || 'Failed to save server');
       }
 
       this.showAddModal = false;

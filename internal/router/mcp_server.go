@@ -77,7 +77,9 @@ func NewMCPServer(config *types.Config, logger Logger) (*MCPServer, error) {
 // If storageServer is provided, it's used for disabled tools; otherwise static config is used
 func (m *MCPServer) createRemoteServerEntry(config types.MCPRemoteServerConfig, storageServer *storage.MCPServerConfig) (mcp.RemoteServerEntry, *remoteServerClient) {
 	var auth mcp.AuthProvider
-	if config.Token != "" {
+	if config.AuthType == "oauth2" {
+		auth = mcp.NewOAuth2RefreshTokenAuth(config.OAuthTokenURL, config.OAuthClientID, config.OAuthAccessToken, config.OAuthRefreshToken)
+	} else if config.Token != "" {
 		auth = mcp.NewBearerTokenAuth(config.Token)
 	}
 
@@ -162,12 +164,17 @@ func (m *MCPServer) ReloadAllServers(storageServers []*storage.MCPServerConfig) 
 	// Add storage-based servers (only enabled ones are registered with MCP)
 	for _, server := range storageServers {
 		config := types.MCPRemoteServerConfig{
-			Namespace:      server.Namespace,
-			URL:            server.URL,
-			Token:          server.Token,
-			ToolVisibility: server.ToolVisibility,
-			ToolAllowlist:  server.ToolAllowlist,
-			ToolDenylist:   server.ToolDenylist,
+			Namespace:         server.Namespace,
+			URL:               server.URL,
+			AuthType:          server.AuthType,
+			Token:             server.Token,
+			OAuthClientID:     server.OAuthClientID,
+			OAuthTokenURL:     server.OAuthTokenURL,
+			OAuthAccessToken:  server.OAuthAccessToken,
+			OAuthRefreshToken: server.OAuthRefreshToken,
+			ToolVisibility:    server.ToolVisibility,
+			ToolAllowlist:     server.ToolAllowlist,
+			ToolDenylist:      server.ToolDenylist,
 		}
 		entry, rsClient := m.createRemoteServerEntry(config, server)
 		m.remoteClients[server.Namespace] = rsClient
