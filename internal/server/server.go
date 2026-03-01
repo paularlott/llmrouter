@@ -86,6 +86,7 @@ func RunServer(ctx context.Context, cmd *cli.Command) error {
 					ToolVisibility: sc.GetString("tool_visibility"),
 					ToolAllowlist:  sc.GetStringSlice("tool_allowlist"),
 					ToolDenylist:   sc.GetStringSlice("tool_denylist"),
+					StaticServer:   true, // Servers from config file are static (read-only in UI)
 				})
 			}
 		}

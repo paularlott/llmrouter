@@ -55,6 +55,7 @@ type MCPServerInfo struct {
 	ToolVisibility string   `json:"tool_visibility"`
 	ToolAllowlist  []string `json:"tool_allowlist,omitempty"`
 	ToolDenylist   []string `json:"tool_denylist,omitempty"`
+	StaticServer   bool     `json:"static_server"`
 }
 
 // ModelInfo represents a model and its providers for the UI

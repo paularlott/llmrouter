@@ -98,6 +98,12 @@
                     <div class="flex items-center gap-3 mb-2">
                       <h3 class="text-lg font-semibold text-slate-900 dark:text-white" x-text="server.namespace"></h3>
                       <span
+                        x-show="server.static_server"
+                        class="px-2 py-0.5 text-xs font-medium rounded-full bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-400"
+                      >
+                        Static
+                      </span>
+                      <span
                         x-show="server.tool_visibility === 'ondemand'"
                         class="px-2 py-0.5 text-xs font-medium rounded-full bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400"
                       >
@@ -116,7 +122,7 @@
                   <div class="flex items-center gap-2">
                     <button
                       @click="viewTools(server)"
-                      class="p-2 text-slate-500 hover:text-green-600 dark:text-slate-400 dark:hover:text-green-400 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+                      class="p-2 text-slate-500 hover:text-green-600 dark:text-slate-400 dark:hover:text-green-400 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors cursor-pointer"
                       title="View Tools"
                     >
                       <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -124,8 +130,9 @@
                       </svg>
                     </button>
                     <button
+                      x-show="!server.static_server"
                       @click="editServer(server)"
-                      class="p-2 text-slate-500 hover:text-blue-600 dark:text-slate-400 dark:hover:text-blue-400 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+                      class="p-2 text-slate-500 hover:text-blue-600 dark:text-slate-400 dark:hover:text-blue-400 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors cursor-pointer"
                       title="Edit"
                     >
                       <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -133,8 +140,9 @@
                       </svg>
                     </button>
                     <button
+                      x-show="!server.static_server"
                       @click="confirmDelete(server)"
-                      class="p-2 text-slate-500 hover:text-red-600 dark:text-slate-400 dark:hover:text-red-400 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+                      class="p-2 text-slate-500 hover:text-red-600 dark:text-slate-400 dark:hover:text-red-400 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors cursor-pointer"
                       title="Delete"
                     >
                       <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -280,9 +288,19 @@
                   <span x-text="tools.filter(t => t.enabled).length"></span> of <span x-text="tools.length"></span> enabled
                 </p>
               </div>
-              <button @click="showToolsModal = false" class="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
+              <button @click="showToolsModal = false" class="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors cursor-pointer">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
               </button>
+            </div>
+
+            <!-- Static server notice -->
+            <div x-show="toolsServer?.static_server" class="px-6 py-3 bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
+              <p class="text-sm text-slate-600 dark:text-slate-400">
+                <svg class="w-4 h-4 inline-block mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                Tool filtering is configured in config file. Modify <code class="px-1 py-0.5 bg-slate-200 dark:bg-slate-700 rounded text-xs">tool_allowlist</code> or <code class="px-1 py-0.5 bg-slate-200 dark:bg-slate-700 rounded text-xs">tool_denylist</code> to change enabled state.
+              </p>
             </div>
 
             <div class="flex-1 overflow-y-auto p-6">
@@ -309,11 +327,23 @@
                   <div class="border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden" :class="{ 'opacity-50': !tool.enabled }">
                     <!-- Tool header -->
                     <div class="flex items-start gap-3 px-4 py-3 bg-slate-50 dark:bg-slate-800 cursor-pointer" @click="tool.expanded = !tool.expanded">
-                      <!-- Enable toggle -->
-                      <label class="flex items-center mt-0.5 cursor-pointer shrink-0" @click.stop>
-                        <input type="checkbox" :checked="tool.enabled" @change="tool.enabled = $event.target.checked" class="sr-only peer" />
-                        <div class="relative w-9 h-5 bg-slate-200 dark:bg-slate-600 rounded-full peer peer-checked:bg-blue-500 after:content-[''] after:absolute after:top-0.5 after:start-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-4"></div>
-                      </label>
+                      <!-- Enable toggle (interactive only for non-static servers) -->
+                      <template x-if="!toolsServer?.static_server">
+                        <label class="flex items-center mt-0.5 cursor-pointer shrink-0" @click.stop>
+                          <input type="checkbox" :checked="tool.enabled" @change="tool.enabled = $event.target.checked" class="sr-only peer" />
+                          <div class="relative w-9 h-5 bg-slate-200 dark:bg-slate-600 rounded-full peer peer-checked:bg-blue-500 after:content-[''] after:absolute after:top-0.5 after:start-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-4"></div>
+                        </label>
+                      </template>
+                      <!-- Enable indicator (read-only for static servers) -->
+                      <template x-if="toolsServer?.static_server">
+                        <div class="flex items-center mt-0.5 shrink-0">
+                          <div class="w-9 h-5 rounded-full flex items-center after:content-[''] after:absolute after:top-0.5 after:start-0.5 after:bg-white after:rounded-full after:h-4 after:w-4" :class="tool.enabled ? 'bg-blue-500' : 'bg-slate-300 dark:bg-slate-600'">
+                            <div class="relative w-9 h-5 rounded-full" :class="tool.enabled ? 'bg-blue-500' : 'bg-slate-300 dark:bg-slate-600'">
+                              <div class="absolute top-0.5 w-4 h-4 bg-white rounded-full transition-all" :class="tool.enabled ? 'left-4' : 'left-0.5'"></div>
+                            </div>
+                          </div>
+                        </div>
+                      </template>
                       <!-- Name + description -->
                       <div class="flex-1 min-w-0">
                         <div class="flex items-center gap-2">
@@ -365,7 +395,7 @@
             <div class="p-4 border-t border-slate-200 dark:border-slate-700 flex justify-end">
               <button
                 @click="showToolsModal = false"
-                class="px-4 py-2 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl transition-colors"
+                class="px-4 py-2 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl transition-colors cursor-pointer"
               >
                 Close
               </button>

@@ -1041,6 +1041,7 @@ func (r *Router) getMCPServers() []admin.MCPServerInfo {
 			ToolVisibility: s.ToolVisibility,
 			ToolAllowlist:  s.ToolAllowlist,
 			ToolDenylist:   s.ToolDenylist,
+			StaticServer:   s.StaticServer,
 		})
 	}
 	sort.Slice(servers, func(i, j int) bool { return servers[i].Namespace < servers[j].Namespace })
