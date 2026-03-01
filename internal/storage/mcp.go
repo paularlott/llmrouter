@@ -15,7 +15,8 @@ type MCPServerConfig struct {
 	Namespace      string   `json:"namespace"`
 	URL            string   `json:"url"`
 	Token          string   `json:"token,omitempty"`
-	ToolVisibility string   `json:"tool_visibility"` // "native" (default) or "ondemand"
+	Enabled        bool     `json:"enabled"`           // Server is active (default true)
+	ToolVisibility string   `json:"tool_visibility"`   // "native" (default) or "ondemand"
 	ToolAllowlist  []string `json:"tool_allowlist,omitempty"`
 	ToolDenylist   []string `json:"tool_denylist,omitempty"`
 	DisabledTools  []string `json:"disabled_tools,omitempty"` // Tools disabled via UI toggle
@@ -131,6 +132,7 @@ func (s *SnapshotMCPStorage) saveServer(key string, server *MCPServerConfig) err
 		"namespace":       server.Namespace,
 		"url":             server.URL,
 		"token":           server.Token,
+		"enabled":         server.Enabled,
 		"tool_visibility": server.ToolVisibility,
 		"tool_allowlist":  server.ToolAllowlist,
 		"tool_denylist":   server.ToolDenylist,
@@ -315,6 +317,11 @@ func parseMCPServerConfig(data map[string]any) (*MCPServerConfig, error) {
 	}
 	if v, ok := data["token"].(string); ok {
 		server.Token = v
+	}
+	// Default to true if enabled field is not present (backwards compatibility)
+	server.Enabled = true
+	if v, ok := data["enabled"].(bool); ok {
+		server.Enabled = v
 	}
 	if v, ok := data["tool_visibility"].(string); ok {
 		server.ToolVisibility = v

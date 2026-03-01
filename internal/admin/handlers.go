@@ -33,6 +33,7 @@ func (a *Admin) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /admin/api/mcp-servers", a.requireAuth(a.HandleCreateMCPServer))
 	mux.HandleFunc("GET /admin/api/mcp-servers/{namespace}", a.requireAuth(a.HandleGetMCPServer))
 	mux.HandleFunc("PUT /admin/api/mcp-servers/{namespace}", a.requireAuth(a.HandleUpdateMCPServer))
+	mux.HandleFunc("PUT /admin/api/mcp-servers/{namespace}/toggle", a.requireAuth(a.HandleToggleMCPServer))
 	mux.HandleFunc("DELETE /admin/api/mcp-servers/{namespace}", a.requireAuth(a.HandleDeleteMCPServer))
 	mux.HandleFunc("GET /admin/api/mcp-servers/{namespace}/tools", a.requireAuth(a.HandleGetMCPServerTools))
 	mux.HandleFunc("PUT /admin/api/mcp-servers/{namespace}/tools/toggle", a.requireAuth(a.HandleToggleMCPServerTool))
@@ -216,6 +217,7 @@ func (a *Admin) HandleGetMCPServer(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusOK, MCPServerInfo{
 				Namespace:      server.Namespace,
 				URL:            server.URL,
+				Enabled:        server.Enabled,
 				ToolVisibility: server.ToolVisibility,
 				ToolAllowlist:  server.ToolAllowlist,
 				ToolDenylist:   server.ToolDenylist,
@@ -249,6 +251,7 @@ func (a *Admin) HandleCreateMCPServer(w http.ResponseWriter, r *http.Request) {
 		Namespace      string   `json:"namespace"`
 		URL            string   `json:"url"`
 		Token          string   `json:"token"`
+		Enabled        bool     `json:"enabled"`
 		ToolVisibility string   `json:"tool_visibility"`
 		ToolAllowlist  []string `json:"tool_allowlist"`
 		ToolDenylist   []string `json:"tool_denylist"`
@@ -277,6 +280,7 @@ func (a *Admin) HandleCreateMCPServer(w http.ResponseWriter, r *http.Request) {
 		Namespace:      req.Namespace,
 		URL:            strings.TrimSuffix(req.URL, "/"),
 		Token:          req.Token,
+		Enabled:        req.Enabled,
 		ToolVisibility: req.ToolVisibility,
 		ToolAllowlist:  req.ToolAllowlist,
 		ToolDenylist:   req.ToolDenylist,
@@ -295,6 +299,7 @@ func (a *Admin) HandleCreateMCPServer(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, MCPServerInfo{
 		Namespace:      server.Namespace,
 		URL:            server.URL,
+		Enabled:        server.Enabled,
 		ToolVisibility: server.ToolVisibility,
 		ToolAllowlist:  server.ToolAllowlist,
 		ToolDenylist:   server.ToolDenylist,
@@ -325,6 +330,7 @@ func (a *Admin) HandleUpdateMCPServer(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		URL            string   `json:"url"`
 		Token          string   `json:"token"`
+		Enabled        bool     `json:"enabled"`
 		ToolVisibility string   `json:"tool_visibility"`
 		ToolAllowlist  []string `json:"tool_allowlist"`
 		ToolDenylist   []string `json:"tool_denylist"`
@@ -342,6 +348,7 @@ func (a *Admin) HandleUpdateMCPServer(w http.ResponseWriter, r *http.Request) {
 	if req.Token != "" {
 		server.Token = req.Token
 	}
+	server.Enabled = req.Enabled
 	if req.ToolVisibility != "" {
 		server.ToolVisibility = req.ToolVisibility
 	}
@@ -361,6 +368,7 @@ func (a *Admin) HandleUpdateMCPServer(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, MCPServerInfo{
 		Namespace:      server.Namespace,
 		URL:            server.URL,
+		Enabled:        server.Enabled,
 		ToolVisibility: server.ToolVisibility,
 		ToolAllowlist:  server.ToolAllowlist,
 		ToolDenylist:   server.ToolDenylist,
@@ -472,4 +480,57 @@ func (a *Admin) HandleToggleMCPServerTool(w http.ResponseWriter, r *http.Request
 	}
 
 	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
+}
+
+// HandleToggleMCPServer toggles an MCP server's enabled state
+func (a *Admin) HandleToggleMCPServer(w http.ResponseWriter, r *http.Request) {
+	namespace := r.PathValue("namespace")
+	if namespace == "" {
+		writeError(w, http.StatusBadRequest, "namespace required")
+		return
+	}
+
+	if a.mcpStorage == nil {
+		writeError(w, http.StatusInternalServerError, "storage not available")
+		return
+	}
+
+	// Get existing server
+	server, err := a.mcpStorage.Get(r.Context(), namespace)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "server not found or is a static server")
+		return
+	}
+
+	var req struct {
+		Enabled bool `json:"enabled"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	// Update enabled state
+	server.Enabled = req.Enabled
+
+	if err := a.mcpStorage.Update(r.Context(), server); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to update server")
+		return
+	}
+
+	// Notify router to reload MCP servers
+	if a.onMCPServerChange != nil {
+		a.onMCPServerChange()
+	}
+
+	writeJSON(w, http.StatusOK, MCPServerInfo{
+		Namespace:      server.Namespace,
+		URL:            server.URL,
+		Enabled:        server.Enabled,
+		ToolVisibility: server.ToolVisibility,
+		ToolAllowlist:  server.ToolAllowlist,
+		ToolDenylist:   server.ToolDenylist,
+		StaticServer:   false,
+	})
 }

@@ -60,6 +60,7 @@ type ProviderInfo struct {
 type MCPServerInfo struct {
 	Namespace      string   `json:"namespace"`
 	URL            string   `json:"url"`
+	Enabled        bool     `json:"enabled"`
 	ToolVisibility string   `json:"tool_visibility"`
 	ToolAllowlist  []string `json:"tool_allowlist,omitempty"`
 	ToolDenylist   []string `json:"tool_denylist,omitempty"`

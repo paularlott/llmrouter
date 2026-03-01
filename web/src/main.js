@@ -140,6 +140,7 @@ Alpine.data("mcpServers", () => ({
     namespace: "",
     url: "",
     token: "",
+    enabled: true,
     tool_visibility: "native",
   },
 
@@ -186,6 +187,7 @@ Alpine.data("mcpServers", () => ({
       namespace: "",
       url: "",
       token: "",
+      enabled: true,
       tool_visibility: "native",
     };
     this.editingServer = null;
@@ -198,6 +200,7 @@ Alpine.data("mcpServers", () => ({
       namespace: server.namespace,
       url: server.url,
       token: "", // Don't prefill token
+      enabled: server.enabled,
       tool_visibility: server.tool_visibility || "native",
     };
     this.showAddModal = true;
@@ -266,6 +269,36 @@ Alpine.data("mcpServers", () => ({
       this.error = err.message;
     } finally {
       this.deleting = false;
+    }
+  },
+
+  async toggleServerEnabled(server) {
+    const newEnabled = !server.enabled;
+
+    try {
+      const response = await fetch(
+        `/admin/api/mcp-servers/${server.namespace}/toggle`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            enabled: newEnabled,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || "Failed to toggle server");
+      }
+
+      // Update local state on success
+      server.enabled = newEnabled;
+    } catch (err) {
+      console.error("Failed to toggle server:", err);
+      this.error = err.message;
+      // Reload servers to get correct state
+      this.loadServers();
     }
   },
 

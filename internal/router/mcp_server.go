@@ -159,7 +159,7 @@ func (m *MCPServer) ReloadAllServers(storageServers []*storage.MCPServerConfig) 
 		m.logger.Info("registering static MCP server", "namespace", remoteServer.Namespace, "url", remoteServer.URL)
 	}
 
-	// Add storage-based servers
+	// Add storage-based servers (only enabled ones are registered with MCP)
 	for _, server := range storageServers {
 		config := types.MCPRemoteServerConfig{
 			Namespace:      server.Namespace,
@@ -170,9 +170,15 @@ func (m *MCPServer) ReloadAllServers(storageServers []*storage.MCPServerConfig) 
 			ToolDenylist:   server.ToolDenylist,
 		}
 		entry, rsClient := m.createRemoteServerEntry(config, server)
-		entries = append(entries, entry)
 		m.remoteClients[server.Namespace] = rsClient
-		m.logger.Info("registering storage-based MCP server", "namespace", server.Namespace, "url", server.URL)
+
+		// Only register enabled servers with the MCP server
+		if server.Enabled {
+			entries = append(entries, entry)
+			m.logger.Info("registering storage-based MCP server", "namespace", server.Namespace, "url", server.URL)
+		} else {
+			m.logger.Info("skipping disabled storage-based MCP server", "namespace", server.Namespace, "url", server.URL)
+		}
 	}
 
 	// Atomically replace all servers
