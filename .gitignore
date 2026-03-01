@@ -6,3 +6,4 @@
 /node_modules/
 /web/dist/assets/
 /web/dist/.vite/
+/data/

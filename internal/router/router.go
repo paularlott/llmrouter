@@ -86,7 +86,11 @@ func NewRouter(config *types.Config, logger Logger) (*Router, error) {
 	}
 
 	// Initialize shared storage
-	sharedStore, err := storage.NewStore(config.Storage.Path)
+	convTTL := time.Duration(config.Conversations.TTLDays) * 24 * time.Hour
+	if config.Conversations.TTLDays == 0 {
+		convTTL = 30 * 24 * time.Hour // Default 30 days
+	}
+	sharedStore, err := storage.NewStore(config.Storage.Path, convTTL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize storage: %w", err)
 	}

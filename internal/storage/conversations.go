@@ -4,9 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
-	"github.com/dgraph-io/badger/v4"
+	"github.com/paularlott/llmrouter/internal/snapshotkv"
 	"github.com/paularlott/mcp/ai/openai"
 )
 
@@ -30,67 +31,118 @@ type ConversationStorage interface {
 	DeleteItem(ctx context.Context, conversationID string, itemID string) error
 }
 
-// BadgerConversationStorage implements ConversationStorage using Badger
-type BadgerConversationStorage struct {
-	db  *badger.DB
+// conversationMetadata is stored in the snapshotkv document (without items)
+type conversationMetadata struct {
+	ID        string                 `json:"id"`
+	CreatedAt time.Time              `json:"created_at"`
+	Metadata  map[string]interface{} `json:"metadata"`
+	ItemCount int                    `json:"item_count"`
+}
+
+const conversationKeyPrefix = "conversations:"
+
+// SnapshotConversationStorage implements ConversationStorage using snapshotkv
+type SnapshotConversationStorage struct {
+	db  *snapshotkv.DB
 	ttl time.Duration
 }
 
-func newBadgerConversationStorage(db *badger.DB, ttl time.Duration) *BadgerConversationStorage {
-	return &BadgerConversationStorage{db: db, ttl: ttl}
+// NewSnapshotConversationStorage creates a new snapshotkv-based conversation storage
+func NewSnapshotConversationStorage(db *snapshotkv.DB, ttl time.Duration) *SnapshotConversationStorage {
+	return &SnapshotConversationStorage{db: db, ttl: ttl}
 }
 
-func (s *BadgerConversationStorage) Store(ctx context.Context, conversation *StoredConversation) error {
-	key := []byte("conv:" + conversation.ID)
+func (s *SnapshotConversationStorage) conversationKey(id string) string {
+	return conversationKeyPrefix + id
+}
 
-	data, err := json.Marshal(conversation)
+func (s *SnapshotConversationStorage) Store(ctx context.Context, conversation *StoredConversation) error {
+	key := s.conversationKey(conversation.ID)
+
+	// Serialize items to JSON for blob storage
+	itemsData, err := json.Marshal(conversation.Items)
 	if err != nil {
-		return fmt.Errorf("failed to marshal conversation: %w", err)
+		return fmt.Errorf("failed to marshal conversation items: %w", err)
 	}
 
-	return s.db.Update(func(txn *badger.Txn) error {
-		entry := badger.NewEntry(key, data)
-		if s.ttl > 0 {
-			entry = entry.WithTTL(s.ttl)
-		}
-		return txn.SetEntry(entry)
-	})
+	// Create metadata (stored in document)
+	meta := conversationMetadata{
+		ID:        conversation.ID,
+		CreatedAt: conversation.CreatedAt,
+		Metadata:  conversation.Metadata,
+		ItemCount: len(conversation.Items),
+	}
+
+	// Convert metadata to map for snapshotkv
+	metaMap := map[string]any{
+		"id":         meta.ID,
+		"created_at": meta.CreatedAt,
+		"metadata":   meta.Metadata,
+		"item_count": meta.ItemCount,
+	}
+
+	if s.ttl > 0 {
+		return s.db.SetWithBlobEx(key, metaMap, itemsData, s.ttl)
+	}
+
+	return s.db.SetWithBlob(key, metaMap, itemsData)
 }
 
-func (s *BadgerConversationStorage) Get(ctx context.Context, id string) (*StoredConversation, error) {
-	key := []byte("conv:" + id)
-	var conversation StoredConversation
+func (s *SnapshotConversationStorage) Get(ctx context.Context, id string) (*StoredConversation, error) {
+	key := s.conversationKey(id)
 
-	err := s.db.View(func(txn *badger.Txn) error {
-		item, err := txn.Get(key)
-		if err != nil {
-			if err == badger.ErrKeyNotFound {
-				return fmt.Errorf("conversation not found")
-			}
-			return err
-		}
-
-		return item.Value(func(val []byte) error {
-			return json.Unmarshal(val, &conversation)
-		})
-	})
-
+	metaMap, err := s.db.Get(key)
 	if err != nil {
+		if err == snapshotkv.ErrNotFound {
+			return nil, fmt.Errorf("conversation not found")
+		}
 		return nil, err
 	}
 
-	return &conversation, nil
+	// Parse metadata
+	meta := &conversationMetadata{}
+	if v, ok := metaMap["id"].(string); ok {
+		meta.ID = v
+	}
+	if v, ok := metaMap["created_at"].(time.Time); ok {
+		meta.CreatedAt = v
+	} else if v, ok := metaMap["created_at"].(string); ok {
+		meta.CreatedAt, _ = time.Parse(time.RFC3339, v)
+	}
+	if v, ok := metaMap["metadata"].(map[string]interface{}); ok {
+		meta.Metadata = v
+	}
+	if v, ok := metaMap["item_count"].(int); ok {
+		meta.ItemCount = v
+	}
+
+	// Get items from blob
+	itemsData, err := s.db.GetBlob(key)
+	if err != nil && err != snapshotkv.ErrNoBlob {
+		return nil, fmt.Errorf("failed to get conversation items: %w", err)
+	}
+
+	var items []openai.ConversationItem
+	if len(itemsData) > 0 {
+		if err := json.Unmarshal(itemsData, &items); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal conversation items: %w", err)
+		}
+	}
+
+	return &StoredConversation{
+		ID:        meta.ID,
+		CreatedAt: meta.CreatedAt,
+		Metadata:  meta.Metadata,
+		Items:     items,
+	}, nil
 }
 
-func (s *BadgerConversationStorage) Delete(ctx context.Context, id string) error {
-	key := []byte("conv:" + id)
-
-	return s.db.Update(func(txn *badger.Txn) error {
-		return txn.Delete(key)
-	})
+func (s *SnapshotConversationStorage) Delete(ctx context.Context, id string) error {
+	key := s.conversationKey(id)
+	return s.db.Delete(key)
 }
 
-func (s *BadgerConversationStorage) Update(ctx context.Context, id string, metadata map[string]interface{}) error {
+func (s *SnapshotConversationStorage) Update(ctx context.Context, id string, metadata map[string]interface{}) error {
 	conversation, err := s.Get(ctx, id)
 	if err != nil {
 		return err
@@ -100,7 +152,7 @@ func (s *BadgerConversationStorage) Update(ctx context.Context, id string, metad
 	return s.Store(ctx, conversation)
 }
 
-func (s *BadgerConversationStorage) AddItems(ctx context.Context, conversationID string, items []openai.ConversationItem) error {
+func (s *SnapshotConversationStorage) AddItems(ctx context.Context, conversationID string, items []openai.ConversationItem) error {
 	conversation, err := s.Get(ctx, conversationID)
 	if err != nil {
 		return err
@@ -110,7 +162,7 @@ func (s *BadgerConversationStorage) AddItems(ctx context.Context, conversationID
 	return s.Store(ctx, conversation)
 }
 
-func (s *BadgerConversationStorage) GetItems(ctx context.Context, conversationID string, after string, limit int, order string) ([]openai.ConversationItem, bool, error) {
+func (s *SnapshotConversationStorage) GetItems(ctx context.Context, conversationID string, after string, limit int, order string) ([]openai.ConversationItem, bool, error) {
 	conversation, err := s.Get(ctx, conversationID)
 	if err != nil {
 		return nil, false, err
@@ -157,7 +209,7 @@ func (s *BadgerConversationStorage) GetItems(ctx context.Context, conversationID
 	return items[startIdx:endIdx], hasMore, nil
 }
 
-func (s *BadgerConversationStorage) GetItem(ctx context.Context, conversationID string, itemID string) (*openai.ConversationItem, error) {
+func (s *SnapshotConversationStorage) GetItem(ctx context.Context, conversationID string, itemID string) (*openai.ConversationItem, error) {
 	conversation, err := s.Get(ctx, conversationID)
 	if err != nil {
 		return nil, err
@@ -172,7 +224,7 @@ func (s *BadgerConversationStorage) GetItem(ctx context.Context, conversationID 
 	return nil, fmt.Errorf("item not found")
 }
 
-func (s *BadgerConversationStorage) DeleteItem(ctx context.Context, conversationID string, itemID string) error {
+func (s *SnapshotConversationStorage) DeleteItem(ctx context.Context, conversationID string, itemID string) error {
 	conversation, err := s.Get(ctx, conversationID)
 	if err != nil {
 		return err
@@ -195,6 +247,17 @@ func (s *BadgerConversationStorage) DeleteItem(ctx context.Context, conversation
 
 	conversation.Items = newItems
 	return s.Store(ctx, conversation)
+}
+
+// ListConversations returns all conversation IDs (for admin/debug purposes)
+func (s *SnapshotConversationStorage) ListConversations() []string {
+	keys := s.db.FindKeysByPrefix(conversationKeyPrefix)
+	// Strip the prefix from keys
+	result := make([]string, len(keys))
+	for i, key := range keys {
+		result[i] = strings.TrimPrefix(key, conversationKeyPrefix)
+	}
+	return result
 }
 
 // MemoryConversationStorage implements ConversationStorage using in-memory storage
@@ -336,3 +399,11 @@ func (s *MemoryConversationStorage) DeleteItem(ctx context.Context, conversation
 	return s.Store(ctx, conversation)
 }
 
+// ListConversations returns all conversation IDs (for admin/debug purposes)
+func (s *MemoryConversationStorage) ListConversations() []string {
+	keys := make([]string, 0, len(s.conversations))
+	for id := range s.conversations {
+		keys = append(keys, id)
+	}
+	return keys
+}

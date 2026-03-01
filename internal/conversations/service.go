@@ -16,12 +16,8 @@ type Service struct {
 }
 
 func NewService(sharedStore *storage.Store, config *types.ConversationsConfig) (*Service, error) {
-	ttl := time.Duration(config.TTLDays) * 24 * time.Hour
-	if config.TTLDays == 0 {
-		ttl = 30 * 24 * time.Hour
-	}
 	return &Service{
-		storage: sharedStore.NewConversationStorage(ttl),
+		storage: sharedStore.NewConversationStorage(),
 		config:  config,
 	}, nil
 }

@@ -4,32 +4,43 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/dgraph-io/badger/v4"
+	"github.com/paularlott/llmrouter/internal/snapshotkv"
 )
 
 type Store struct {
-	db *badger.DB
+	db      *snapshotkv.DB
+	memory  bool
+	ttl     time.Duration
+	convTTL time.Duration
 }
 
-func NewStore(path string) (*Store, error) {
+func NewStore(path string, conversationTTL time.Duration) (*Store, error) {
 	if path == "" {
-		return &Store{}, nil
+		// Memory-only mode - no persistence
+		return &Store{
+			memory:  true,
+			convTTL: conversationTTL,
+		}, nil
 	}
-	opts := badger.DefaultOptions(path).WithLogger(nil)
-	db, err := badger.Open(opts)
+
+	db, err := snapshotkv.Open(path, &snapshotkv.Config{
+		TTLCleanupInterval: 5 * time.Minute,
+	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to open badger db: %w", err)
+		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
-	return &Store{db: db}, nil
+
+	return &Store{
+		db:      db,
+		convTTL: conversationTTL,
+	}, nil
 }
 
-func (s *Store) IsMemory() bool { return s.db == nil }
+func (s *Store) IsMemory() bool { return s.memory }
 
 func (s *Store) RunGC() error {
-	if s.db == nil {
-		return nil
-	}
-	return s.db.RunValueLogGC(0.5)
+	// snapshotkv handles its own cleanup via TTL
+	return nil
 }
 
 func (s *Store) Close() error {
@@ -39,9 +50,9 @@ func (s *Store) Close() error {
 	return s.db.Close()
 }
 
-func (s *Store) NewConversationStorage(ttl time.Duration) ConversationStorage {
-	if s.db == nil {
+func (s *Store) NewConversationStorage() ConversationStorage {
+	if s.memory {
 		return NewMemoryConversationStorage()
 	}
-	return newBadgerConversationStorage(s.db, ttl)
+	return NewSnapshotConversationStorage(s.db, s.convTTL)
 }

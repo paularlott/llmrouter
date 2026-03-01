@@ -347,8 +347,8 @@ Client (OpenAI or Messages protocol)
    ├── Smart Routing   (Scriptling script, tag-based selection, hot-reload)
    ├── Provider Layer  (openai | claude | gemini | ollama | mistral | zai)
    ├── MCP Aggregator  (remote MCP servers with namespace + visibility control)
-   ├── Responses API   (emulated for all providers, stored in BadgerDB)
-   └── Conversations   (n8n-compatible, stored in BadgerDB)
+   ├── Responses API   (emulated for all providers, in-memory index only)
+   └── Conversations   (n8n-compatible, stored in SnapshotKV)
 ```
 
 Protocol translation is handled by the `mcp/ai` package — the gateway always works in OpenAI format internally and translates at the edges.
