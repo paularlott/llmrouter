@@ -66,7 +66,7 @@ release: build-all
 	cd dist && sha256sum * > checksums.txt
 
 # Run the server in development mode
-dev:
+run-server: assets
 	go run . server
 
 # Display help

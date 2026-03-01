@@ -1,4 +1,4 @@
-version: '3'
+version: "3"
 
 vars:
   BINARY_NAME: llmrouter
@@ -93,8 +93,9 @@ tasks:
       - task: build-all
       - cd dist && sha256sum * > checksums.txt
 
-  dev:
+  run-server:
     desc: Run the server in development mode
+    deps: [assets]
     cmds:
       - go run . server
 

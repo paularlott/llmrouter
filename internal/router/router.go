@@ -1006,16 +1006,25 @@ func (r *Router) getStats() *admin.Stats {
 	modelCount := len(r.ModelMap)
 	r.ModelMapMu.RUnlock()
 
-	mcpServerCount := 0
-	if r.mcpServer != nil {
-		mcpServerCount = len(r.config.MCP.RemoteServers)
+	mcpServerCount := len(r.config.MCP.RemoteServers)
+	if r.mcpStorage != nil {
+		storageServers, err := r.mcpStorage.List(context.Background())
+		if err == nil {
+			mcpServerCount += len(storageServers)
+		}
+	}
+
+	// Sum active completions from all providers
+	activeRequests := 0
+	for _, p := range r.Providers {
+		activeRequests += int(p.ActiveCompletions.Load())
 	}
 
 	return &admin.Stats{
 		Providers:      len(r.Providers),
 		Models:         modelCount,
 		MCPServers:     mcpServerCount,
-		ActiveRequests: 0, // TODO: track active requests
+		ActiveRequests: activeRequests,
 	}
 }
 

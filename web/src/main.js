@@ -66,9 +66,43 @@ Alpine.data("dashboard", () => ({
   error: null,
   showModelsModal: false,
   selectedProvider: null,
+  pollInterval: null,
 
   async init() {
     await this.loadData();
+    // Start polling stats every 1 second
+    this.pollInterval = setInterval(() => this.refreshStats(), 1000);
+    // Stop polling when page is hidden, resume when visible
+    document.addEventListener('visibilitychange', this.handleVisibility.bind(this));
+  },
+
+  destroy() {
+    if (this.pollInterval) clearInterval(this.pollInterval);
+    document.removeEventListener('visibilitychange', this.handleVisibility.bind(this));
+  },
+
+  handleVisibility() {
+    if (document.hidden) {
+      if (this.pollInterval) clearInterval(this.pollInterval);
+    } else {
+      this.refreshStats();
+      this.pollInterval = setInterval(() => this.refreshStats(), 1000);
+    }
+  },
+
+  async refreshStats() {
+    try {
+      const res = await fetch("/admin/api/stats");
+      if (res.status === 401) {
+        window.location.href = "/admin/login";
+        return;
+      }
+      if (res.ok) {
+        this.stats = await res.json();
+      }
+    } catch (err) {
+      // Silently fail for polling
+    }
   },
 
   async loadData() {
