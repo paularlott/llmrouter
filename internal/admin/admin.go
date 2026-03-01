@@ -50,9 +50,11 @@ type ProviderInfo struct {
 
 // MCPServerInfo represents MCP server information for the UI
 type MCPServerInfo struct {
-	Namespace      string `json:"namespace"`
-	URL            string `json:"url"`
-	ToolVisibility string `json:"tool_visibility"`
+	Namespace      string   `json:"namespace"`
+	URL            string   `json:"url"`
+	ToolVisibility string   `json:"tool_visibility"`
+	ToolAllowlist  []string `json:"tool_allowlist,omitempty"`
+	ToolDenylist   []string `json:"tool_denylist,omitempty"`
 }
 
 // ModelInfo represents a model and its providers for the UI
@@ -66,6 +68,7 @@ type ToolInfo struct {
 	Name        string                 `json:"name"`
 	Description string                 `json:"description"`
 	InputSchema map[string]interface{} `json:"input_schema"`
+	Enabled     bool                   `json:"enabled"`
 }
 
 // New creates a new Admin handler

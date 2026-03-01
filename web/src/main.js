@@ -280,7 +280,7 @@ Alpine.data("mcpServers", () => ({
       }
 
       const data = await response.json();
-      this.tools = data.map((tool) => ({ ...tool, enabled: true, expanded: false }));
+      this.tools = data.map((tool) => ({ ...tool, expanded: false }));
     } catch (err) {
       this.toolsError = err.message;
     } finally {

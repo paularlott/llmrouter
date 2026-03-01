@@ -84,6 +84,8 @@ func RunServer(ctx context.Context, cmd *cli.Command) error {
 					URL:            strings.TrimSuffix(sc.GetString("url"), "/"),
 					Token:          sc.GetString("token"),
 					ToolVisibility: sc.GetString("tool_visibility"),
+					ToolAllowlist:  sc.GetStringSlice("tool_allowlist"),
+					ToolDenylist:   sc.GetStringSlice("tool_denylist"),
 				})
 			}
 		}

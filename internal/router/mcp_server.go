@@ -1,6 +1,7 @@
 package router
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"sort"
@@ -9,13 +10,21 @@ import (
 	"github.com/paularlott/llmrouter/internal/admin"
 	"github.com/paularlott/llmrouter/internal/types"
 	"github.com/paularlott/mcp"
+	"slices"
 )
+
+// remoteServerClient holds a client and its config for admin UI tool listing
+type remoteServerClient struct {
+	client   *mcp.Client
+	config   types.MCPRemoteServerConfig
+}
 
 // MCPServer wraps the MCP server functionality
 type MCPServer struct {
-	server *mcp.Server
-	config *types.Config
-	logger Logger
+	server         *mcp.Server
+	config         *types.Config
+	logger         Logger
+	remoteClients  map[string]*remoteServerClient // namespace -> client
 }
 
 // NewMCPServer creates a new MCP server instance
@@ -23,9 +32,10 @@ func NewMCPServer(config *types.Config, logger Logger) (*MCPServer, error) {
 	server := mcp.NewServer("llmrouter", "1.0.0")
 
 	mcpServer := &MCPServer{
-		server: server,
-		config: config,
-		logger: logger,
+		server:        server,
+		config:        config,
+		logger:        logger,
+		remoteClients: make(map[string]*remoteServerClient),
 	}
 
 	for _, remoteServer := range config.MCP.RemoteServers {
@@ -34,7 +44,32 @@ func NewMCPServer(config *types.Config, logger Logger) (*MCPServer, error) {
 			auth = mcp.NewBearerTokenAuth(remoteServer.Token)
 		}
 
+		// Create client for MCP server registration (may be filtered)
 		client := mcp.NewClient(remoteServer.URL, auth, remoteServer.Namespace)
+
+		// Create a separate unfiltered client for admin UI tool listing
+		unfilteredClient := mcp.NewClient(remoteServer.URL, auth, remoteServer.Namespace)
+		mcpServer.remoteClients[remoteServer.Namespace] = &remoteServerClient{
+			client: unfilteredClient,
+			config: remoteServer,
+		}
+
+		// Apply tool filter to the MCP server client (not the admin UI client)
+		if len(remoteServer.ToolAllowlist) > 0 || len(remoteServer.ToolDenylist) > 0 {
+			allowlist := remoteServer.ToolAllowlist
+			denylist := remoteServer.ToolDenylist
+			client = client.WithToolFilter(func(toolName string) bool {
+				if len(allowlist) > 0 {
+					// If allowlist is defined, tool is included only if in the list
+					return slices.Contains(allowlist, toolName)
+				}
+				if len(denylist) > 0 {
+					// If denylist is defined, tool is included unless in the list
+					return !slices.Contains(denylist, toolName)
+				}
+				return true
+			})
+		}
 
 		if remoteServer.ToolVisibility == "ondemand" || remoteServer.ToolVisibility == "discoverable" {
 			if err := server.RegisterRemoteServerDiscoverable(client); err != nil {
@@ -59,14 +94,44 @@ func (m *MCPServer) HandleRequest(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetToolsForAdmin returns tools for a specific namespace for the admin UI
+// This fetches ALL tools from the remote server (not filtered) and calculates enabled state
 func (m *MCPServer) GetToolsForAdmin(namespace string) ([]admin.ToolInfo, error) {
-	tools := m.server.ListTools()
 	result := make([]admin.ToolInfo, 0)
+
+	// Find the remote client for this namespace
+	rsClient, exists := m.remoteClients[namespace]
+	if !exists {
+		return result, nil
+	}
+
+	// Fetch all tools directly from the remote server (unfiltered)
+	ctx := context.Background()
+	tools, err := rsClient.client.ListTools(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// Get allowlist/denylist from config
+	allowlist := rsClient.config.ToolAllowlist
+	denylist := rsClient.config.ToolDenylist
 
 	prefix := namespace + "."
 	for _, tool := range tools {
 		if !strings.HasPrefix(tool.Name, prefix) {
 			continue
+		}
+
+		// Extract tool name without namespace prefix for list checking
+		toolNameWithoutPrefix := strings.TrimPrefix(tool.Name, prefix)
+
+		// Calculate enabled state based on allowlist/denylist
+		enabled := true
+		if len(allowlist) > 0 {
+			// If allowlist is defined, tool is enabled only if in the list
+			enabled = slices.Contains(allowlist, toolNameWithoutPrefix)
+		} else if len(denylist) > 0 {
+			// If denylist is defined, tool is enabled unless in the list
+			enabled = !slices.Contains(denylist, toolNameWithoutPrefix)
 		}
 
 		var inputSchema map[string]interface{}
@@ -83,9 +148,10 @@ func (m *MCPServer) GetToolsForAdmin(namespace string) ([]admin.ToolInfo, error)
 		}
 
 		result = append(result, admin.ToolInfo{
-			Name:        tool.Name,
+			Name:        toolNameWithoutPrefix,
 			Description: tool.Description,
 			InputSchema: inputSchema,
+			Enabled:     enabled,
 		})
 	}
 

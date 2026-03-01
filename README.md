@@ -91,6 +91,8 @@ namespace = "tools"
 url = "https://tools.example.com/mcp"
 token = "secret"
 tool_visibility = "native"    # native | discoverable
+tool_allowlist = ["search", "query"]  # Optional: only these tools are enabled
+tool_denylist = ["delete"]           # Optional: these tools are disabled
 ```
 
 ### Provider Types
@@ -236,6 +238,31 @@ When multiple providers serve the same model, the router selects using `score = 
 | -------------- | --------------------------------------------------- |
 | `native`       | Tools appear in `tools/list`, directly callable     |
 | `discoverable` | Hidden from list, searchable via `tool_search` only |
+
+### MCP Tool Filtering
+
+Tools from remote MCP servers can be filtered using `tool_allowlist` or `tool_denylist`:
+
+- **`tool_allowlist`**: When defined, only the listed tools are enabled. All other tools are disabled.
+- **`tool_denylist`**: When defined, all tools are enabled except those in the list.
+
+Note: If both are defined, `tool_allowlist` takes precedence and `tool_denylist` is ignored.
+
+```toml
+[[mcp.remote_servers]]
+namespace = "github"
+url = "https://github.example.com/mcp"
+token = "secret"
+tool_visibility = "native"
+tool_allowlist = ["search_repos", "get_issue", "create_issue"]  # Only these 3 tools are enabled
+
+[[mcp.remote_servers]]
+namespace = "slack"
+url = "https://slack.example.com/mcp"
+token = "secret"
+tool_visibility = "native"
+tool_denylist = ["delete_message", "ban_user"]  # All tools enabled except these 2
+```
 
 ## API Endpoints
 

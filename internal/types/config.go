@@ -43,10 +43,12 @@ type MCPConfig struct {
 }
 
 type MCPRemoteServerConfig struct {
-	Namespace      string `json:"namespace"`
-	URL            string `json:"url"`
-	Token          string `json:"token,omitempty"`
-	ToolVisibility string `json:"tool_visibility,omitempty"` // "native" (default) or "ondemand"
+	Namespace      string   `json:"namespace" toml:"namespace"`
+	URL            string   `json:"url" toml:"url"`
+	Token          string   `json:"token,omitempty" toml:"token"`
+	ToolVisibility string   `json:"tool_visibility,omitempty" toml:"tool_visibility"` // "native" (default) or "ondemand"
+	ToolAllowlist  []string `json:"tool_allowlist,omitempty" toml:"tool_allowlist"`   // If set, only these tools are enabled
+	ToolDenylist   []string `json:"tool_denylist,omitempty" toml:"tool_denylist"`     // If set, these tools are disabled
 }
 
 type StorageConfig struct {
