@@ -109,6 +109,7 @@ func NewRouter(config *types.Config, logger Logger) (*Router, error) {
 	router.mux.HandleFunc("/v1/models", auth(router.HandleModels))
 	router.mux.HandleFunc("/v1/chat/completions", auth(router.HandleChatCompletions))
 	router.mux.HandleFunc("/v1/messages", auth(router.HandleMessages))
+	router.mux.HandleFunc("/v1/messages/count_tokens", auth(router.HandleCountTokens))
 	router.mux.HandleFunc("/v1/embeddings", auth(router.HandleEmbeddings))
 	router.mux.HandleFunc("/health", router.HandleHealth) // Health endpoint is not protected
 
@@ -578,9 +579,8 @@ func (r *Router) isConnectionError(err error) bool {
 		"no such host",
 		"network is unreachable",
 		"temporary failure",
-		"timeout",
-		"dial",
-		"EOF",
+		"dial tcp",
+		"eof",
 		"connection closed",
 	}
 
@@ -724,7 +724,17 @@ func (r *Router) HandleMessages(w http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
 
 	if messagesReq.Stream {
-		providerName, err := r.GetProviderForModel(openaiReq.Model, "")
+		providerHint := ""
+		if openaiReq.Model == "auto" && r.smartRouter != nil {
+			result := r.smartRouter.Route(ctx, &openaiReq)
+			if result.Model == "" {
+				http.Error(w, "auto routing failed: no model available", http.StatusServiceUnavailable)
+				return
+			}
+			openaiReq.Model = result.Model
+			providerHint = result.ProviderHint
+		}
+		providerName, err := r.GetProviderForModel(openaiReq.Model, providerHint)
 		if err != nil {
 			r.logger.WithError(err).Error("messages stream request failed")
 			http.Error(w, err.Error(), http.StatusNotFound)
@@ -734,6 +744,7 @@ func (r *Router) HandleMessages(w http.ResponseWriter, req *http.Request) {
 		w.Header().Set("Cache-Control", "no-cache")
 		w.Header().Set("Connection", "keep-alive")
 		stream := r.streamChatCompletion(ctx, providerName, &openaiReq)
+		defer r.decrementActiveCompletions(providerName)
 		flush := func() {
 			if f, ok := w.(http.Flusher); ok {
 				f.Flush()
@@ -1345,6 +1356,21 @@ func (r *Router) HandleCompactResponses(w http.ResponseWriter, req *http.Request
 	if err := writeJSON(w, resp); err != nil {
 		r.logger.WithError(err).Error("failed to write response")
 	}
+}
+
+func (r *Router) HandleCountTokens(w http.ResponseWriter, req *http.Request) {
+	var messagesReq claude.MessagesRequest
+	if err := readJSON(req, &messagesReq); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	openaiReq := claude.MessagesRequestToOpenAI(&messagesReq)
+	tc := openai.NewTokenCounter()
+	tc.AddPromptTokensFromMessages(openaiReq.Messages)
+
+	w.Header().Set("Content-Type", "application/json")
+	writeJSON(w, map[string]int{"input_tokens": tc.GetUsage().PromptTokens})
 }
 
 func (r *Router) HandleUnsupported(w http.ResponseWriter, req *http.Request) {

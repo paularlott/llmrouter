@@ -288,8 +288,9 @@ oauth_refresh_token = "refresh-token"  # Optional: for token refresh
 
 ```bash
 GET  /v1/models
-POST /v1/chat/completions    # OpenAI format, streaming supported
-POST /v1/messages            # Anthropic Messages format
+POST /v1/chat/completions          # OpenAI format, streaming supported
+POST /v1/messages                  # Anthropic Messages format
+POST /v1/messages/count_tokens     # Anthropic token counting (emulated)
 POST /v1/embeddings
 GET  /health
 ```
