@@ -14,9 +14,35 @@ A unified gateway that aggregates multiple LLM providers behind a single endpoin
 - **Optional Auth**: Bearer token protection for all endpoints
 - **Admin UI**: Optional web interface for monitoring providers, models, and MCP servers
 
-## Quick Start
+## Installation
+
+### Homebrew (macOS & Linux)
 
 ```bash
+brew tap paularlott/tap
+brew install llmrouter
+```
+
+### Download from GitHub Releases
+
+Download the latest release for your platform from [github.com/paularlott/llmrouter/releases](https://github.com/paularlott/llmrouter/releases):
+
+| Platform | Architecture | Download |
+|----------|-------------|----------|
+| macOS | Intel (AMD64) | `llmrouter-darwin-amd64.zip` |
+| macOS | Apple Silicon (ARM64) | `llmrouter-darwin-arm64.zip` |
+| Linux | AMD64 | `llmrouter-linux-amd64.zip` |
+| Linux | ARM64 | `llmrouter-linux-arm64.zip` |
+| Windows | AMD64 | `llmrouter-windows-amd64.zip` |
+| Windows | ARM64 | `llmrouter-windows-arm64.zip` |
+
+Extract the archive and place the binary in your PATH.
+
+### Build from Source
+
+```bash
+git clone https://github.com/paularlott/llmrouter.git
+cd llmrouter
 go build -o llmrouter .
 ./llmrouter server
 ./llmrouter -config /path/to/config.toml server
@@ -354,12 +380,14 @@ Authorization: Bearer your-secret-token
 ./llmrouter tool calculator '{"op":"add","a":1,"b":2}'  # Execute MCP tool
 ```
 
-## Building
+## Development
+
+### Building
 
 ```bash
 task              # Build for current platform
-task build-all    # Build all platforms (parallel)
-task release      # Build all with checksums
+task build-all    # Build all platforms with ZIP archives
+task release      # Build, create GitHub release, and update Homebrew formula
 make              # Alternative via Makefile
 ```
 

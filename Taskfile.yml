@@ -89,7 +89,15 @@ tasks:
 
   # Build all platforms in parallel
   build-all:
-    desc: Build for all platforms (in parallel)
+    desc: Build for all platforms
+    deps: [clean]
+    cmds:
+      - mkdir -p dist
+      - task: build-platforms
+      - task: create-zips
+
+  build-platforms:
+    desc: Build for all platforms (Linux, macOS, Windows)
     deps:
       - build-linux-amd64
       - build-linux-arm64
@@ -98,12 +106,37 @@ tasks:
       - build-windows-amd64
       - build-windows-arm64
 
-  release:
-    desc: Create release builds with checksums
+  create-zips:
+    desc: Create ZIP files for all platforms
     cmds:
-      - task: clean
-      - task: build-all
-      - cd dist && sha256sum * > checksums.txt
+      - cd dist && cp llmrouter-darwin-amd64 llmrouter && zip llmrouter-darwin-amd64.zip llmrouter && rm llmrouter
+      - cd dist && cp llmrouter-darwin-arm64 llmrouter && zip llmrouter-darwin-arm64.zip llmrouter && rm llmrouter
+      - cd dist && cp llmrouter-linux-amd64 llmrouter && zip llmrouter-linux-amd64.zip llmrouter && rm llmrouter
+      - cd dist && cp llmrouter-linux-arm64 llmrouter && zip llmrouter-linux-arm64.zip llmrouter && rm llmrouter
+      - cd dist && cp llmrouter-windows-amd64.exe llmrouter.exe && zip llmrouter-windows-amd64.zip llmrouter.exe && rm llmrouter.exe
+      - cd dist && cp llmrouter-windows-arm64.exe llmrouter.exe && zip llmrouter-windows-arm64.zip llmrouter.exe && rm llmrouter.exe
+
+  release:
+    desc: Tag the version and create GitHub release with all platform binaries
+    deps: [build-all]
+    cmds:
+      - |
+        # Check if tag exists
+        if git tag -l v{{.VERSION}} | grep -q v{{.VERSION}}; then
+          echo "Tag v{{.VERSION}} already exists, skipping tag creation"
+        else
+          echo "Creating tag v{{.VERSION}}"
+          git tag -a v{{.VERSION}} -m "Release {{.VERSION}}"
+          git push origin v{{.VERSION}}
+        fi
+        # Create release and upload zip files only
+        gh release create v{{.VERSION}} -t "Release {{.VERSION}}" -n "LLM Router {{.VERSION}}" dist/*.zip
+      - task: homebrew-formula
+
+  homebrew-formula:
+    desc: Generate the Homebrew formula
+    cmds:
+      - go run ./scripts/homebrew-formula/ > ../homebrew-tap/Formula/llmrouter.rb
 
   run-server:
     desc: Run the server in development mode

@@ -21,7 +21,7 @@ ifeq ($(BUILD_WITH),)
 	endif
 endif
 
-.PHONY: all clean test lint assets build build-all release dev container container-local tag
+.PHONY: all clean test lint assets build build-platforms build-all create-zips release homebrew-formula run-server help container container-local tag
 
 # Build frontend assets
 assets:
@@ -68,7 +68,7 @@ build-windows-arm64:
 	GOOS=windows GOARCH=arm64 go build $(LDFLAGS) -o dist/$(BINARY_NAME)-windows-arm64.exe .
 
 # Build all platforms (sequential, use Taskfile for parallel)
-build-all: clean assets
+build-platforms: assets
 	@mkdir -p dist
 	$(MAKE) build-linux-amd64
 	$(MAKE) build-linux-arm64
@@ -77,9 +77,35 @@ build-all: clean assets
 	$(MAKE) build-windows-amd64
 	$(MAKE) build-windows-arm64
 
-# Create release builds with checksums
+# Build all platforms with ZIP archives
+build-all: clean
+	$(MAKE) build-platforms
+	$(MAKE) create-zips
+
+# Create ZIP files for all platforms
+create-zips:
+	cd dist && cp llmrouter-darwin-amd64 llmrouter && zip llmrouter-darwin-amd64.zip llmrouter && rm llmrouter
+	cd dist && cp llmrouter-darwin-arm64 llmrouter && zip llmrouter-darwin-arm64.zip llmrouter && rm llmrouter
+	cd dist && cp llmrouter-linux-amd64 llmrouter && zip llmrouter-linux-amd64.zip llmrouter && rm llmrouter
+	cd dist && cp llmrouter-linux-arm64 llmrouter && zip llmrouter-linux-arm64.zip llmrouter && rm llmrouter
+	cd dist && cp llmrouter-windows-amd64.exe llmrouter.exe && zip llmrouter-windows-amd64.zip llmrouter.exe && rm llmrouter.exe
+	cd dist && cp llmrouter-windows-arm64.exe llmrouter.exe && zip llmrouter-windows-arm64.zip llmrouter.exe && rm llmrouter.exe
+
+# Tag version and create GitHub release with all platform binaries
 release: build-all
-	cd dist && sha256sum * > checksums.txt
+	@if git tag -l v$(VERSION) | grep -q v$(VERSION); then \
+		echo "Tag v$(VERSION) already exists, skipping tag creation"; \
+	else \
+		echo "Creating tag v$(VERSION)"; \
+		git tag -a v$(VERSION) -m "Release $(VERSION)"; \
+		git push origin v$(VERSION); \
+	fi
+	gh release create v$(VERSION) -t "Release $(VERSION)" -n "LLM Router $(VERSION)" dist/*.zip
+	$(MAKE) homebrew-formula
+
+# Generate the Homebrew formula
+homebrew-formula:
+	go run ./scripts/homebrew-formula/ > ../homebrew-tap/Formula/llmrouter.rb
 
 # Run the server in development mode
 run-server: assets
@@ -93,9 +119,9 @@ help:
 	@echo "  make clean        - Remove build artifacts"
 	@echo "  make test         - Run tests"
 	@echo "  make lint         - Run linter"
-	@echo "  make build-all    - Build for all platforms"
-	@echo "  make release      - Build all platforms with checksums"
-	@echo "  make dev          - Run server in development mode"
+	@echo "  make build-all    - Build all platforms with ZIP archives"
+	@echo "  make release      - Build, create GitHub release, and update Homebrew formula"
+	@echo "  make run-server   - Run server in development mode"
 	@echo "  make container    - Build and push multi-arch container image"
 	@echo "  make container-local - Build container image locally (no push)"
 	@echo "  make tag          - Tag version and push to GitHub"
