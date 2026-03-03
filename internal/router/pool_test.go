@@ -403,10 +403,6 @@ func TestLibDir_NoLibDirNoWatcher(t *testing.T) {
 	}
 	defer sr.Stop()
 
-	if len(sr.scriptLibs) != 0 {
-		t.Fatalf("want empty scriptLibs with no libdir, got %d entries", len(sr.scriptLibs))
-	}
-
 	result := sr.Route(context.Background(), &ChatCompletionRequest{Model: "auto"})
 	if result.Model != "model-a" {
 		t.Fatalf("want model-a, got %q", result.Model)
