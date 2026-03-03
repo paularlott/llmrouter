@@ -259,7 +259,22 @@
               <!-- OAuth2 fields -->
               <template x-if="form.auth_type === 'oauth2'">
                 <div class="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl text-sm text-blue-700 dark:text-blue-300">
-                  <p>Clicking <strong>Connect via OAuth2</strong> will open the provider's login page. You'll be redirected back automatically once authorized.</p>
+                  <template x-if="!editingServer">
+                    <p>Clicking <strong>Connect via OAuth2</strong> will open the provider's login page. You'll be redirected back automatically once authorized.</p>
+                  </template>
+                  <template x-if="editingServer">
+                    <div class="flex items-center justify-between gap-3">
+                      <p>This server uses OAuth2 authentication. Click <strong>Re-authenticate</strong> to refresh the OAuth tokens.</p>
+                      <button
+                        type="button"
+                        @click="reauth()"
+                        :disabled="saving"
+                        class="shrink-0 px-3 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 cursor-pointer"
+                      >
+                        Re-authenticate
+                      </button>
+                    </div>
+                  </template>
                 </div>
               </template>
 

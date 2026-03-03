@@ -27,6 +27,7 @@ type pendingOAuth struct {
 	TokenURL       string
 	CodeVerifier   string
 	SessionToken   string
+	Reauth         bool
 	CreatedAt      time.Time
 }
 
@@ -66,6 +67,7 @@ func (a *Admin) HandleOAuthStart(w http.ResponseWriter, r *http.Request) {
 		ToolVisibility string `json:"tool_visibility"`
 		Enabled        bool   `json:"enabled"`
 		CallbackBase   string `json:"callback_base"` // e.g. "http://localhost:12345"
+		Reauth         bool   `json:"reauth"`        // true = update existing server
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body")
@@ -118,6 +120,7 @@ func (a *Admin) HandleOAuthStart(w http.ResponseWriter, r *http.Request) {
 		TokenURL:       meta.TokenEndpoint,
 		CodeVerifier:   verifier,
 		SessionToken:   a.getSessionFromCookie(r),
+		Reauth:         req.Reauth,
 		CreatedAt:      time.Now(),
 	}
 
@@ -203,8 +206,27 @@ func (a *Admin) HandleOAuthCallback(w http.ResponseWriter, r *http.Request) {
 		ToolVisibility:    pending.ToolVisibility,
 	}
 
-	if err := a.mcpStorage.Create(r.Context(), server); err != nil {
-		http.Error(w, "failed to save server: "+err.Error(), http.StatusInternalServerError)
+	var saveErr error
+	if pending.Reauth {
+		// Update existing server — preserve fields not touched by OAuth
+		existing, err := a.mcpStorage.Get(r.Context(), pending.Namespace)
+		if err != nil {
+			http.Error(w, "server not found: "+err.Error(), http.StatusNotFound)
+			return
+		}
+		existing.AuthType = "oauth2"
+		existing.OAuthClientID = pending.ClientID
+		existing.OAuthTokenURL = pending.TokenURL
+		existing.OAuthAccessToken = tokens.AccessToken
+		existing.OAuthRefreshToken = tokens.RefreshToken
+		existing.Token = ""
+		saveErr = a.mcpStorage.Update(r.Context(), existing)
+	} else {
+		saveErr = a.mcpStorage.Create(r.Context(), server)
+	}
+
+	if saveErr != nil {
+		http.Error(w, "failed to save server: "+saveErr.Error(), http.StatusInternalServerError)
 		return
 	}
 

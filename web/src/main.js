@@ -252,6 +252,35 @@ Alpine.data("mcpServers", () => ({
     this.showAddModal = true;
   },
 
+  async reauth() {
+    this.saving = true;
+    this.formError = null;
+
+    try {
+      const response = await fetch('/admin/api/mcp-servers/oauth/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          namespace: this.form.namespace,
+          url: this.form.url,
+          tool_visibility: this.form.tool_visibility,
+          enabled: this.form.enabled,
+          callback_base: window.location.origin,
+          reauth: true,
+        }),
+      });
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to start OAuth flow');
+      }
+      const { auth_url } = await response.json();
+      window.location.href = auth_url;
+    } catch (err) {
+      this.formError = err.message;
+      this.saving = false;
+    }
+  },
+
   async saveServer() {
     this.saving = true;
     this.formError = null;
