@@ -112,8 +112,6 @@ func RunServer(ctx context.Context, cmd *cli.Command) error {
 	r.StartBackgroundTasks()
 	defer r.StopBackgroundTasks()
 
-	r.RefreshModels(ctx)
-
 	shutdownChan := make(chan os.Signal, 1)
 	signal.Notify(shutdownChan, syscall.SIGINT, syscall.SIGTERM)
 
@@ -123,6 +121,9 @@ func RunServer(ctx context.Context, cmd *cli.Command) error {
 			logger.Error("server error", "error", err)
 		}
 	}()
+
+	go r.InitMCPServers()
+	r.RefreshModels(ctx)
 
 	<-shutdownChan
 	logger.Info("shutting down server")

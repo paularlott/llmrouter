@@ -180,9 +180,6 @@ func NewRouter(config *types.Config, logger Logger) (*Router, error) {
 		logger.Info("admin UI enabled at /admin")
 	}
 
-	// Load storage-based MCP servers on startup
-	router.reloadMCPServers()
-
 	// Add catch-all handler for unmatched routes (must be last)
 	router.mux.HandleFunc("/", router.HandleCatchAll)
 
@@ -931,6 +928,11 @@ func (r *Router) HandleMCP(w http.ResponseWriter, req *http.Request) {
 	r.mcpServer.HandleRequest(w, req)
 }
 
+// InitMCPServers loads MCP servers from storage; call after the HTTP server is listening.
+func (r *Router) InitMCPServers() {
+	r.reloadMCPServers()
+}
+
 // StartBackgroundTasks starts the background health check task
 func (r *Router) StartBackgroundTasks() {
 	r.wg.Add(1)
@@ -1379,7 +1381,20 @@ func (r *Router) HandleUnsupported(w http.ResponseWriter, req *http.Request) {
 
 // HandleCatchAll handles all unmatched routes and logs a warning
 func (r *Router) HandleCatchAll(w http.ResponseWriter, req *http.Request) {
+	// Redirect root to admin
+	if req.URL.Path == "/" {
+		http.Redirect(w, req, "/admin", http.StatusFound)
+		return
+	}
+
 	r.logger.Warn("unhandled request", "method", req.Method, "path", req.URL.Path, "query", req.URL.RawQuery, "user_agent", req.Header.Get("User-Agent"))
+
+	// Serve styled 404 page if admin is enabled
+	if r.admin != nil && r.admin.Enabled() {
+		r.admin.Serve404(w, req)
+		return
+	}
+
 	http.NotFound(w, req)
 }
 

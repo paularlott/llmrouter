@@ -73,6 +73,16 @@ func (a *Admin) HandleDashboard(w http.ResponseWriter, r *http.Request) {
 	a.templates.Render(w, "dashboard.html", data)
 }
 
+// Serve404 renders the 404 page
+func (a *Admin) Serve404(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotFound)
+	data := &TemplateData{
+		CSSFile: "/admin/assets/main.css",
+		JSFile:  "/admin/assets/main.js",
+	}
+	a.templates.Render(w, "404.html", data)
+}
+
 // HandleMCPServersPage renders the MCP servers page
 func (a *Admin) HandleMCPServersPage(w http.ResponseWriter, r *http.Request) {
 	data := &TemplateData{

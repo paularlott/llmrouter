@@ -35,10 +35,11 @@ func (r *remoteServerClient) ensureInitialized(ctx context.Context) error {
 
 // MCPServer wraps the MCP server functionality
 type MCPServer struct {
-	server        *mcp.Server
-	config        *types.Config
-	logger        Logger
-	remoteClients map[string]*remoteServerClient // namespace -> client (for admin UI)
+	server               *mcp.Server
+	config               *types.Config
+	logger               Logger
+	remoteClients        map[string]*remoteServerClient // namespace -> client (for admin UI)
+	pendingStaticEntries []mcp.RemoteServerEntry
 }
 
 // NewMCPServer creates a new MCP server instance
@@ -63,12 +64,7 @@ func NewMCPServer(config *types.Config, logger Logger) (*MCPServer, error) {
 		mcpServer.remoteClients[remoteServer.Namespace] = rsClient
 	}
 
-	// Register all static servers at once
-	if len(entries) > 0 {
-		if err := server.ReplaceRemoteServers(entries); err != nil {
-			logger.Warn("failed to register some remote MCP servers", "error", err)
-		}
-	}
+	mcpServer.pendingStaticEntries = entries
 
 	return mcpServer, nil
 }
@@ -146,9 +142,8 @@ func (m *MCPServer) HandleRequest(w http.ResponseWriter, r *http.Request) {
 }
 
 // ReloadAllServers atomically replaces all remote servers (static + storage-based)
-// This is the preferred way to update servers when storage changes
 func (m *MCPServer) ReloadAllServers(storageServers []*storage.MCPServerConfig) {
-	entries := make([]mcp.RemoteServerEntry, 0, len(m.config.MCP.RemoteServers)+len(storageServers))
+	entries := make([]mcp.RemoteServerEntry, 0, len(m.pendingStaticEntries)+len(storageServers))
 
 	// Clear existing remote clients
 	m.remoteClients = make(map[string]*remoteServerClient)
