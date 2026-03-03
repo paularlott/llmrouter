@@ -967,9 +967,9 @@ func (r *Router) healthCheckTask() {
 func (r *Router) checkDisabledProviders() {
 	unhealthyProviders := make([]string, 0)
 
-	// Find unhealthy providers (skip static model providers)
+	// Find all unhealthy enabled providers
 	for name, provider := range r.Providers {
-		if provider.Enabled && !provider.Healthy && len(provider.Models) == 0 {
+		if provider.Enabled && !provider.Healthy {
 			unhealthyProviders = append(unhealthyProviders, name)
 		}
 	}

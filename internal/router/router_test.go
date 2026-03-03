@@ -530,9 +530,9 @@ func (c *countingClient) ChatCompletion(_ context.Context, req openai.ChatComple
 	return &openai.ChatCompletionResponse{Model: req.Model}, nil
 }
 
-// --- checkDisabledProviders skips static-model providers ---
+// --- checkDisabledProviders recovers all providers ---
 
-func TestCheckDisabledProviders_SkipsStaticModelProviders(t *testing.T) {
+func TestCheckDisabledProviders_RecoversStaticModelProviders(t *testing.T) {
 	r := &Router{
 		Providers:    make(map[string]*Provider),
 		ModelMap:     make(map[string][]string),
@@ -540,7 +540,7 @@ func TestCheckDisabledProviders_SkipsStaticModelProviders(t *testing.T) {
 		logger:       &testLogger{},
 		shutdownChan: make(chan struct{}),
 	}
-	// Static model provider (has Models set) — should be skipped by health check
+	// Static model provider (has Models set) — should still be recovered
 	r.Providers["static"] = &Provider{
 		Name: "static", Enabled: true, Healthy: false,
 		Models: []string{"m1"},
@@ -548,10 +548,65 @@ func TestCheckDisabledProviders_SkipsStaticModelProviders(t *testing.T) {
 		Weight: 1.0,
 	}
 
-	// Run checkDisabledProviders — static provider should NOT be re-enabled
+	// Run checkDisabledProviders — static provider SHOULD be re-enabled
 	r.checkDisabledProviders()
 
-	if r.Providers["static"].Healthy {
-		t.Fatal("static model provider should not be re-enabled by health check")
+	if !r.Providers["static"].Healthy {
+		t.Fatal("static model provider should be re-enabled by health check when recovered")
+	}
+}
+
+func TestCheckDisabledProviders_RecoversDynamicModelProviders(t *testing.T) {
+	r := &Router{
+		Providers:    make(map[string]*Provider),
+		ModelMap:     make(map[string][]string),
+		ModelTags:    make(map[string][]string),
+		logger:       &testLogger{},
+		shutdownChan: make(chan struct{}),
+	}
+	// Dynamic model provider (no Models set) — should be recovered
+	r.Providers["dynamic"] = &Provider{
+		Name: "dynamic", Enabled: true, Healthy: false,
+		Models: nil, // dynamic discovery
+		Client: &mockClient{"dynamic"},
+		Weight: 1.0,
+	}
+
+	r.checkDisabledProviders()
+
+	if !r.Providers["dynamic"].Healthy {
+		t.Fatal("dynamic model provider should be re-enabled by health check when recovered")
+	}
+}
+
+// errorMockClient always returns an error from GetModels
+type errorMockClient struct {
+	mockClient
+}
+
+func (c *errorMockClient) GetModels(ctx context.Context) (*openai.ModelsResponse, error) {
+	return nil, errors.New("connection refused")
+}
+
+func TestCheckDisabledProviders_RemainsUnhealthyOnError(t *testing.T) {
+	r := &Router{
+		Providers:    make(map[string]*Provider),
+		ModelMap:     make(map[string][]string),
+		ModelTags:    make(map[string][]string),
+		logger:       &testLogger{},
+		shutdownChan: make(chan struct{}),
+	}
+	// Provider that will fail health check
+	r.Providers["failing"] = &Provider{
+		Name: "failing", Enabled: true, Healthy: false,
+		Models: nil,
+		Client: &errorMockClient{},
+		Weight: 1.0,
+	}
+
+	r.checkDisabledProviders()
+
+	if r.Providers["failing"].Healthy {
+		t.Fatal("provider should remain unhealthy when health check fails")
 	}
 }
