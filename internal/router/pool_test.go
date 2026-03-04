@@ -177,7 +177,7 @@ func TestPool_FileWatchRebuildsPool(t *testing.T) {
 	scriptFile.WriteString(`import router; router.set_model("model-a")`)
 	scriptFile.Close()
 
-	sr, err := newSmartRouter(scriptFile.Name(), "model-a", nil, "", r, &testLogger{})
+	sr, err := newSmartRouter(scriptFile.Name(), "model-a", nil, nil, r, &testLogger{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -301,7 +301,7 @@ router.set_model(mylib.pick())
 `)
 	scriptFile.Close()
 
-	sr, err := newSmartRouter(scriptFile.Name(), "model-a", nil, dir, r, &testLogger{})
+	sr, err := newSmartRouter(scriptFile.Name(), "model-a", nil, []string{dir}, r, &testLogger{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -337,7 +337,7 @@ router.set_model(mylib.pick())
 `)
 	scriptFile.Close()
 
-	sr, err := newSmartRouter(scriptFile.Name(), "model-a", nil, dir, r, &testLogger{})
+	sr, err := newSmartRouter(scriptFile.Name(), "model-a", nil, []string{dir}, r, &testLogger{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -397,7 +397,7 @@ func TestLibDir_NoLibDirNoWatcher(t *testing.T) {
 	scriptFile.WriteString(`import router; router.set_model("model-a")`)
 	scriptFile.Close()
 
-	sr, err := newSmartRouter(scriptFile.Name(), "model-a", nil, "", r, &testLogger{})
+	sr, err := newSmartRouter(scriptFile.Name(), "model-a", nil, nil, r, &testLogger{})
 	if err != nil {
 		t.Fatal(err)
 	}

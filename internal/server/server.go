@@ -97,7 +97,7 @@ func RunServer(ctx context.Context, cmd *cli.Command) error {
 			config.SmartRouting.Enabled = srCfg.GetBool("enabled")
 			config.SmartRouting.Script = srCfg.GetString("script")
 			config.SmartRouting.DefaultModel = srCfg.GetString("default_model")
-			config.SmartRouting.LibDir = srCfg.GetString("libdir")
+			config.SmartRouting.LibPath = srCfg.GetStringSlice("libpath")
 		}
 	}
 

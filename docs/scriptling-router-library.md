@@ -9,7 +9,7 @@ The `router` library is automatically available in routing scripts. It exposes l
 enabled = true
 script = "router.scriptling"
 default_model = "mistralai/ministral-3-3b"
-libdir = "./router_libs"  # Optional: directory of .py script libraries
+libpath = ["./router_libs", "/shared/libs"]  # Optional: additional directories to search for libraries
 
 [smart_routing.vars]
 openai_key = "sk-..."
@@ -19,6 +19,14 @@ my_endpoint = "https://api.example.com"
 Smart routing activates when a client requests the model name `auto`. The script picks a provider and model. On any failure or empty result, `default_model` is used. The `auto` model is injected into `/v1/models` so clients can discover it.
 
 `vars` is an optional map of key-value string pairs made available to the script as the `vars` library (see [Script Variables](#script-variables)).
+
+### Library Path
+
+Libraries are searched in the following order:
+1. **Script directory** - the directory containing the routing script is always searched first
+2. **libpath entries** - any directories specified in `libpath` are searched in order
+
+This matches the behaviour of the scriptling CLI's `--libpath` / `-L` flag. The script directory is implicitly the first search path, allowing libraries placed alongside the script to be imported without additional configuration.
 
 ### Provider Tags
 
@@ -209,19 +217,19 @@ Return nothing or don't call `set_model` to fall back to `default_model`.
 
 ## Hot Reload
 
-The routing script and any libraries in `libdir` are watched with a filesystem watcher. Changes are picked up within ~100ms — no restart required. When any file in `libdir` changes, all VM pools are rebuilt with the updated libraries.
+The routing script and any libraries in the library search paths are watched with a filesystem watcher. Changes are picked up within ~100ms — no restart required. When any file in a watched directory changes, all VM pools are rebuilt with the updated libraries.
 
 ---
 
-## Script Libraries (`libdir`)
+## Script Libraries (`libpath`)
 
-Set `libdir` to a directory of `.py` files to make shared libraries available to routing scripts. Each file is registered as a script library named after the file (without the `.py` extension).
+Set `libpath` to a list of directories containing `.py` files to make shared libraries available to routing scripts. The directory containing the routing script is always searched first, followed by any `libpath` entries in order.
 
 ```toml
 [smart_routing]
 enabled = true
 script = "router.py"
-libdir = "./router_libs"
+libpath = ["./router_libs", "/shared/libs"]
 ```
 
 Given `./router_libs/utils.py`:
@@ -243,7 +251,7 @@ if model:
     router.set_model(model)
 ```
 
-Libraries are hot-reloaded alongside the routing script — any change to a file in `libdir` triggers a full pool rebuild.
+Libraries are hot-reloaded alongside the routing script — any change to a file in a watched directory triggers a full pool rebuild.
 
 ---
 

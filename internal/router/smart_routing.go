@@ -27,12 +27,12 @@ const (
 )
 
 // SmartRouter runs the routing script using a pool of pre-warmed VMs.
-// The pool is rebuilt when the script or any library in libdir changes on disk.
+// The pool is rebuilt when the script or any library in libDirs changes on disk.
 type SmartRouter struct {
 	scriptPath   string
 	defaultModel string
 	vars         map[string]string
-	libDir       string
+	libDirs      []string
 	router       *Router
 	logger       Logger
 
@@ -43,12 +43,12 @@ type SmartRouter struct {
 	stopCh    chan struct{}
 }
 
-func newSmartRouter(scriptPath, defaultModel string, vars map[string]string, libDir string, r *Router, logger Logger) (*SmartRouter, error) {
+func newSmartRouter(scriptPath, defaultModel string, vars map[string]string, libDirs []string, r *Router, logger Logger) (*SmartRouter, error) {
 	sr := &SmartRouter{
 		scriptPath:   scriptPath,
 		defaultModel: defaultModel,
 		vars:         vars,
-		libDir:       libDir,
+		libDirs:      libDirs,
 		router:       r,
 		logger:       logger,
 		stopCh:       make(chan struct{}),
@@ -69,7 +69,7 @@ func newSmartRouter(scriptPath, defaultModel string, vars map[string]string, lib
 			logger.Warn("could not watch routing script", "path", scriptPath, "error", err)
 		}
 	}
-	if libDir != "" {
+	for _, libDir := range libDirs {
 		if err := watcher.Add(libDir); err != nil {
 			logger.Warn("could not watch routing libdir", "path", libDir, "error", err)
 		}
@@ -110,10 +110,11 @@ func (sr *SmartRouter) newVM() *scriptling.Scriptling {
 
 	vm.RegisterLibrary(buildRouterLibrary(sr.router))
 
-	// Set up library loader for dynamic loading from libdir
+	// Set up library loader for dynamic loading from libDirs
 	// Supports Python-style folder structure: knot/groups.py → import knot.groups
-	if sr.libDir != "" {
-		loader := libloader.NewFilesystem(sr.libDir)
+	// Directories are searched in order: script dir first, then any additional libpath entries
+	if len(sr.libDirs) > 0 {
+		loader := libloader.NewMultiFilesystem(sr.libDirs...)
 		vm.SetLibraryLoader(loader)
 	}
 

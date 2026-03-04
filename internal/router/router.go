@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -141,11 +142,22 @@ func NewRouter(config *types.Config, logger Logger) (*Router, error) {
 
 	// Initialize smart routing if enabled
 	if config.SmartRouting.Enabled {
+		// Build lib dirs: script dir first, then any additional libpath entries
+		var libDirs []string
+		if config.SmartRouting.Script != "" {
+			libDirs = append(libDirs, filepath.Dir(config.SmartRouting.Script))
+		}
+		for _, dir := range config.SmartRouting.LibPath {
+			if dir != "" {
+				libDirs = append(libDirs, dir)
+			}
+		}
+
 		sr, err := newSmartRouter(
 			config.SmartRouting.Script,
 			config.SmartRouting.DefaultModel,
 			config.SmartRouting.Vars,
-			config.SmartRouting.LibDir,
+			libDirs,
 			router,
 			logger,
 		)
