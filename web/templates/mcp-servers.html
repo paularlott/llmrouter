@@ -26,7 +26,7 @@
             <a href="/admin/models" class="nav-link">Models</a>
             <a href="/admin/mcp-servers" class="nav-link nav-link-active">MCP Servers</a>
             <div class="w-px h-5 bg-slate-200 dark:bg-slate-700 mx-2"></div>
-            <button @click="$store.darkMode.toggle()" class="nav-link cursor-pointer" title="Toggle dark mode">
+            <button @click="$store.darkMode.toggle()" class="nav-link cursor-pointer" aria-label="Toggle dark mode" title="Toggle dark mode">
               <svg x-show="!$store.darkMode.value" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
               </svg>
@@ -50,7 +50,7 @@
           <div class="flex justify-between items-center mb-8">
             <div>
               <h2 class="text-2xl font-bold text-slate-900 dark:text-white">MCP Servers</h2>
-              <p class="text-slate-600 dark:text-slate-400 mt-1">Manage remote MCP server connections</p>
+              <p class="text-slate-600 dark:text-slate-300 mt-1">Manage remote MCP server connections</p>
             </div>
             <button
               x-show="storageWritable"
@@ -67,12 +67,12 @@
           <!-- Storage not configured warning -->
           <div x-show="!loading && !storageWritable" class="card bg-amber-50 dark:bg-amber-900/30 border-amber-200 dark:border-amber-800 mb-6">
             <div class="flex items-start gap-3">
-              <svg class="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg class="w-5 h-5 text-amber-600 dark:text-amber-300 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
               </svg>
               <div>
                 <p class="font-medium text-amber-800 dark:text-amber-200">Storage Not Configured</p>
-                <p class="text-sm text-amber-700 dark:text-amber-300 mt-1">MCP servers cannot be added because no storage path is configured. To enable dynamic MCP server management, configure a storage path in your configuration file.</p>
+                <p class="text-sm text-amber-700 dark:text-amber-200 mt-1">MCP servers cannot be added because no storage path is configured. To enable dynamic MCP server management, configure a storage path in your configuration file.</p>
               </div>
             </div>
           </div>
@@ -95,7 +95,7 @@
               </svg>
             </div>
             <h3 class="text-xl font-semibold text-slate-900 dark:text-white mb-2">No MCP Servers</h3>
-            <p class="text-slate-600 dark:text-slate-400 mb-6">Add your first MCP server to extend available tools</p>
+            <p class="text-slate-600 dark:text-slate-300 mb-6">Add your first MCP server to extend available tools</p>
             <button
               @click="showAddModal = true"
               class="px-6 py-3 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-xl shadow-lg shadow-blue-500/25 hover:shadow-xl transition-all cursor-pointer"
@@ -112,7 +112,7 @@
               </svg>
             </div>
             <h3 class="text-xl font-semibold text-slate-900 dark:text-white mb-2">No MCP Servers</h3>
-            <p class="text-slate-600 dark:text-slate-400 mb-6">Configure a storage path to enable dynamic MCP server management</p>
+            <p class="text-slate-600 dark:text-slate-300 mb-6">Configure a storage path to enable dynamic MCP server management</p>
           </div>
 
           <!-- Server list -->
@@ -148,7 +148,7 @@
                         OAuth2
                       </span>
                     </div>
-                    <div class="flex items-center gap-4 text-sm text-slate-600 dark:text-slate-400">
+                    <div class="flex items-center gap-4 text-sm text-slate-600 dark:text-slate-300">
                       <span class="flex items-center gap-1">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
@@ -160,14 +160,15 @@
                   <div class="flex items-center gap-2">
                     <!-- Enable/Disable toggle (only for non-static servers) -->
                     <template x-if="!server.static_server">
-                      <label class="flex items-center cursor-pointer" title="Enable/Disable server">
+                      <label class="flex items-center cursor-pointer" :aria-label="'Enable or disable ' + server.namespace + ' server'">
                         <input type="checkbox" :checked="server.enabled" @change="toggleServerEnabled(server)" class="sr-only peer" />
                         <div class="relative w-9 h-5 bg-slate-200 dark:bg-slate-600 rounded-full peer peer-checked:bg-green-500 after:content-[''] after:absolute after:top-0.5 after:start-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-4"></div>
                       </label>
                     </template>
                     <button
                       @click="viewTools(server)"
-                      class="p-2 text-slate-500 hover:text-green-600 dark:text-slate-400 dark:hover:text-green-400 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors cursor-pointer"
+                      class="p-2 text-slate-500 hover:text-green-600 dark:text-slate-400 dark:hover:text-green-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors cursor-pointer"
+                      :aria-label="'View tools for ' + server.namespace"
                       title="View Tools"
                     >
                       <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -177,7 +178,8 @@
                     <button
                       x-show="!server.static_server"
                       @click="editServer(server)"
-                      class="p-2 text-slate-500 hover:text-blue-600 dark:text-slate-400 dark:hover:text-blue-400 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors cursor-pointer"
+                      class="p-2 text-slate-500 hover:text-blue-600 dark:text-slate-400 dark:hover:text-blue-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors cursor-pointer"
+                      :aria-label="'Edit ' + server.namespace"
                       title="Edit"
                     >
                       <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -187,7 +189,8 @@
                     <button
                       x-show="!server.static_server"
                       @click="confirmDelete(server)"
-                      class="p-2 text-slate-500 hover:text-red-600 dark:text-slate-400 dark:hover:text-red-400 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors cursor-pointer"
+                      class="p-2 text-slate-500 hover:text-red-600 dark:text-slate-400 dark:hover:text-red-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors cursor-pointer"
+                      :aria-label="'Delete ' + server.namespace"
                       title="Delete"
                     >
                       <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -202,16 +205,17 @@
       </main>
 
       <!-- Add/Edit Modal -->
-      <div x-show="showAddModal" x-cloak class="fixed inset-0 z-50 overflow-y-auto" @keydown.escape.window="showAddModal = false; resetForm()">
+      <div x-show="showAddModal" x-cloak class="fixed inset-0 z-50 overflow-y-auto" @keydown.escape.window="showAddModal = false; resetForm()" role="dialog" aria-modal="true" aria-labelledby="add-edit-modal-title">
         <div class="flex items-center justify-center min-h-screen px-4">
           <div class="fixed inset-0 bg-black/50 backdrop-blur-sm transition-opacity" @click="showAddModal = false; resetForm()"></div>
           <div class="relative bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-lg w-full p-6 border border-slate-200 dark:border-slate-700">
-            <h2 class="text-xl font-bold text-slate-900 dark:text-white mb-6" x-text="editingServer ? 'Edit Server' : 'Add MCP Server'"></h2>
+            <h2 id="add-edit-modal-title" class="text-xl font-bold text-slate-900 dark:text-white mb-6" x-text="editingServer ? 'Edit Server' : 'Add MCP Server'"></h2>
 
             <form @submit.prevent="saveServer" class="space-y-4">
               <div>
-                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Namespace</label>
+                <label for="namespace" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Namespace</label>
                 <input
+                  id="namespace"
                   type="text"
                   x-model="form.namespace"
                   required
@@ -220,14 +224,15 @@
                   class="input-field disabled:opacity-50 disabled:cursor-not-allowed"
                   placeholder="e.g., github"
                 />
-                <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                <p class="text-xs text-slate-500 dark:text-slate-300 mt-1">
                   Lowercase letters, numbers, hyphens, underscores. Tools will be prefixed (e.g., github/search)
                 </p>
               </div>
 
               <div>
-                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Server URL</label>
+                <label for="server-url" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Server URL</label>
                 <input
+                  id="server-url"
                   type="url"
                   x-model="form.url"
                   required
@@ -237,8 +242,8 @@
               </div>
 
               <div>
-                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Authentication</label>
-                <select x-model="form.auth_type" class="input-field">
+                <label for="auth-type" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Authentication</label>
+                <select id="auth-type" x-model="form.auth_type" class="input-field">
                   <option value="bearer">Bearer Token</option>
                   <option value="oauth2">OAuth2 Client Credentials</option>
                 </select>
@@ -246,19 +251,20 @@
 
               <!-- Bearer token fields -->
               <div x-show="form.auth_type !== 'oauth2'">
-                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Bearer Token (optional)</label>
+                <label for="bearer-token" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Bearer Token (optional)</label>
                 <input
+                  id="bearer-token"
                   type="password"
                   x-model="form.token"
                   class="input-field"
                   placeholder="Your API key"
                 />
-                <p x-show="editingServer" class="text-xs text-slate-500 dark:text-slate-400 mt-1">Leave empty to keep existing token</p>
+                <p x-show="editingServer" class="text-xs text-slate-500 dark:text-slate-300 mt-1">Leave empty to keep existing token</p>
               </div>
 
               <!-- OAuth2 fields -->
               <template x-if="form.auth_type === 'oauth2'">
-                <div class="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl text-sm text-blue-700 dark:text-blue-300">
+                <div class="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl text-sm text-blue-700 dark:text-blue-200">
                   <template x-if="!editingServer">
                     <p>Clicking <strong>Connect via OAuth2</strong> will open the provider's login page. You'll be redirected back automatically once authorized.</p>
                   </template>
@@ -280,15 +286,15 @@
 
               <div class="flex items-center gap-3">
                 <label class="flex items-center cursor-pointer">
-                  <input type="checkbox" x-model="form.enabled" class="sr-only peer" />
+                  <input type="checkbox" x-model="form.enabled" class="sr-only peer" aria-label="Enable server" />
                   <div class="relative w-9 h-5 bg-slate-200 dark:bg-slate-600 rounded-full peer peer-checked:bg-green-500 after:content-[''] after:absolute after:top-0.5 after:start-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-4"></div>
                 </label>
                 <span class="text-sm font-medium text-slate-700 dark:text-slate-300">Enabled</span>
               </div>
 
               <div>
-                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Tool Visibility</label>
-                <select x-model="form.tool_visibility" class="input-field">
+                <label for="tool-visibility" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Tool Visibility</label>
+                <select id="tool-visibility" x-model="form.tool_visibility" class="input-field">
                   <option value="native">Native (show in tools/list)</option>
                   <option value="ondemand">On-demand (searchable via tool_search only)</option>
                 </select>
@@ -327,12 +333,12 @@
       </div>
 
       <!-- Delete Confirmation Modal -->
-      <div x-show="showDeleteModal" x-cloak class="fixed inset-0 z-50 overflow-y-auto">
+      <div x-show="showDeleteModal" x-cloak class="fixed inset-0 z-50 overflow-y-auto" role="dialog" aria-modal="true" aria-labelledby="delete-modal-title">
         <div class="flex items-center justify-center min-h-screen px-4">
           <div class="fixed inset-0 bg-black/50 backdrop-blur-sm transition-opacity" @click="showDeleteModal = false"></div>
           <div class="relative bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-md w-full p-6 border border-slate-200 dark:border-slate-700">
-            <h2 class="text-xl font-bold text-slate-900 dark:text-white mb-4">Delete Server</h2>
-            <p class="text-slate-600 dark:text-slate-400 mb-6">
+            <h2 id="delete-modal-title" class="text-xl font-bold text-slate-900 dark:text-white mb-4">Delete Server</h2>
+            <p class="text-slate-600 dark:text-slate-300 mb-6">
               Are you sure you want to delete <span class="font-semibold" x-text="deletingServer?.namespace"></span>? This action cannot be undone.
             </p>
             <div class="flex justify-end gap-3">
@@ -359,27 +365,27 @@
       </div>
 
       <!-- Tools Modal -->
-      <div x-show="showToolsModal" x-cloak class="fixed inset-0 z-50 overflow-y-auto" @keydown.escape.window="showToolsModal = false">
+      <div x-show="showToolsModal" x-cloak class="fixed inset-0 z-50 overflow-y-auto" @keydown.escape.window="showToolsModal = false" role="dialog" aria-modal="true" aria-labelledby="tools-modal-title">
         <div class="flex items-center justify-center min-h-screen px-4">
           <div class="fixed inset-0 bg-black/50 backdrop-blur-sm transition-opacity" @click="showToolsModal = false"></div>
           <div class="relative bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-2xl w-full max-h-[80vh] flex flex-col border border-slate-200 dark:border-slate-700">
             <div class="p-6 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
               <div>
-                <h2 class="text-xl font-bold text-slate-900 dark:text-white">
+                <h2 id="tools-modal-title" class="text-xl font-bold text-slate-900 dark:text-white">
                   Tools — <span x-text="toolsServer?.namespace"></span>
                 </h2>
-                <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5" x-show="!loadingTools && !toolsError">
+                <p class="text-sm text-slate-500 dark:text-slate-300 mt-0.5" x-show="!loadingTools && !toolsError">
                   <span x-text="tools.filter(t => t.enabled).length"></span> of <span x-text="tools.length"></span> enabled
                 </p>
               </div>
-              <button @click="showToolsModal = false" class="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors cursor-pointer">
+              <button @click="showToolsModal = false" class="p-2 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors cursor-pointer" aria-label="Close modal">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
               </button>
             </div>
 
             <!-- Static server notice -->
             <div x-show="toolsServer?.static_server" class="px-6 py-3 bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
-              <p class="text-sm text-slate-600 dark:text-slate-400">
+              <p class="text-sm text-slate-600 dark:text-slate-300">
                 <svg class="w-4 h-4 inline-block mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
@@ -404,7 +410,7 @@
               <!-- Tools list -->
               <div x-show="!loadingTools && !toolsError" class="space-y-2">
                 <template x-if="tools.length === 0">
-                  <p class="text-slate-500 dark:text-slate-400 text-center py-8">No tools available from this server.</p>
+                  <p class="text-slate-500 dark:text-slate-300 text-center py-8">No tools available from this server.</p>
                 </template>
 
                 <template x-for="tool in tools" :key="tool.name">
@@ -413,7 +419,7 @@
                     <div class="flex items-start gap-3 px-4 py-3 bg-slate-50 dark:bg-slate-800 cursor-pointer" @click="tool.expanded = !tool.expanded">
                       <!-- Enable toggle (interactive only for non-static servers) -->
                       <template x-if="!toolsServer?.static_server">
-                        <label class="flex items-center mt-0.5 cursor-pointer shrink-0" @click.stop>
+                        <label class="flex items-center mt-0.5 cursor-pointer shrink-0" @click.stop :aria-label="'Enable or disable ' + tool.name + ' tool'">
                           <input type="checkbox" :checked="tool.enabled" @change="toggleTool(tool)" class="sr-only peer" />
                           <div class="relative w-9 h-5 bg-slate-200 dark:bg-slate-600 rounded-full peer peer-checked:bg-blue-500 after:content-[''] after:absolute after:top-0.5 after:start-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-4"></div>
                         </label>
@@ -431,10 +437,10 @@
                         <div class="flex items-center gap-2">
                           <span class="font-mono text-sm font-semibold text-slate-900 dark:text-white" x-text="tool.name"></span>
                         </div>
-                        <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5" x-text="tool.description || 'No description'"></p>
+                        <p class="text-sm text-slate-500 dark:text-slate-300 mt-0.5" x-text="tool.description || 'No description'"></p>
                       </div>
                       <!-- Expand chevron -->
-                      <button @click.stop="tool.expanded = !tool.expanded" class="p-1 shrink-0 cursor-pointer">
+                      <button @click.stop="tool.expanded = !tool.expanded" class="p-1 shrink-0 cursor-pointer" :aria-label="(tool.expanded ? 'Collapse' : 'Expand') + ' parameters for ' + tool.name" :aria-expanded="tool.expanded">
                         <svg class="w-4 h-4 text-slate-400 transition-transform" :class="{ 'rotate-180': tool.expanded }" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
                         </svg>
@@ -444,19 +450,19 @@
                     <div x-show="tool.expanded" x-transition class="px-4 py-3 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700">
                       <template x-if="tool.input_schema && tool.input_schema.properties && Object.keys(tool.input_schema.properties).length > 0">
                         <div>
-                          <p class="text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wide mb-2">Parameters</p>
+                          <p class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2">Parameters</p>
                           <div class="space-y-2">
                             <template x-for="[param, def] in Object.entries(tool.input_schema.properties)" :key="param">
                               <div class="flex items-start gap-2 text-sm">
-                                <span class="font-mono text-blue-600 dark:text-blue-400 shrink-0" x-text="param"></span>
-                                <span class="text-slate-400 shrink-0" x-show="(tool.input_schema.required || []).includes(param)">*</span>
-                                <span class="text-slate-500 dark:text-slate-400 px-1.5 py-0.5 rounded text-xs font-mono"
+                                <span class="font-mono text-blue-600 dark:text-blue-300 shrink-0" x-text="param"></span>
+                                <span class="text-slate-500 dark:text-slate-400 shrink-0" x-show="(tool.input_schema.required || []).includes(param)">*</span>
+                                <span class="text-slate-500 dark:text-slate-300 px-1.5 py-0.5 rounded text-xs font-mono"
                                   :class="{
-                                    'bg-green-100 dark:bg-green-800/60 text-green-700 dark:text-green-300': def.type === 'string',
-                                    'bg-amber-100 dark:bg-amber-800/60 text-amber-700 dark:text-amber-300': def.type === 'number' || def.type === 'integer',
-                                    'bg-purple-100 dark:bg-purple-800/60 text-purple-700 dark:text-purple-300': def.type === 'boolean',
-                                    'bg-blue-100 dark:bg-blue-800/60 text-blue-700 dark:text-blue-300': def.type === 'array',
-                                    'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300': !def.type || (def.type !== 'string' && def.type !== 'number' && def.type !== 'integer' && def.type !== 'boolean' && def.type !== 'array'),
+                                    'bg-green-100 dark:bg-green-800/60 text-green-700 dark:text-green-200': def.type === 'string',
+                                    'bg-amber-100 dark:bg-amber-800/60 text-amber-700 dark:text-amber-200': def.type === 'number' || def.type === 'integer',
+                                    'bg-purple-100 dark:bg-purple-800/60 text-purple-700 dark:text-purple-200': def.type === 'boolean',
+                                    'bg-blue-100 dark:bg-blue-800/60 text-blue-700 dark:text-blue-200': def.type === 'array',
+                                    'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-200': !def.type || (def.type !== 'string' && def.type !== 'number' && def.type !== 'integer' && def.type !== 'boolean' && def.type !== 'array'),
                                   }"
                                   x-text="def.type || 'any'"></span>
                                 <span class="text-slate-600 dark:text-slate-300" x-text="def.description ? '— ' + def.description : ''"></span>
@@ -466,7 +472,7 @@
                         </div>
                       </template>
                       <template x-if="!tool.input_schema || !tool.input_schema.properties || Object.keys(tool.input_schema.properties).length === 0">
-                        <p class="text-xs text-slate-400 dark:text-slate-500">No parameters</p>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">No parameters</p>
                       </template>
                     </div>
                   </div>

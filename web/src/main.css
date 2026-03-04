@@ -19,6 +19,11 @@
     @apply w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none bg-white dark:bg-slate-700/60 dark:border-slate-600 dark:text-white;
   }
 
+  /* WCAG AA compliant placeholder - slate-500 on white (4.6:1), slate-400 on slate-700 (4.04:1 still fails, use slate-300) */
+  .input-field::placeholder {
+    @apply text-slate-500 dark:text-slate-300;
+  }
+
   /* Dark hierarchy:
      page bg:    slate-950
      sidebar:    slate-900
@@ -30,10 +35,10 @@
   }
 
   .nav-link {
-    @apply flex items-center gap-2 px-3 py-2 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors text-sm font-medium;
+    @apply flex items-center gap-2 px-3 py-2 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors text-sm font-medium;
   }
 
   .nav-link-active {
-    @apply bg-blue-50 dark:bg-blue-500/20 text-blue-700 dark:text-blue-300;
+    @apply bg-blue-50 dark:bg-blue-500/20 text-blue-700 dark:text-blue-200;
   }
 }

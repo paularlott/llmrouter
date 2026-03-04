@@ -26,7 +26,7 @@
             <a href="/admin/models" class="nav-link nav-link-active">Models</a>
             <a href="/admin/mcp-servers" class="nav-link">MCP Servers</a>
             <div class="w-px h-5 bg-slate-200 dark:bg-slate-700 mx-2"></div>
-            <button @click="$store.darkMode.toggle()" class="nav-link cursor-pointer" title="Toggle dark mode">
+            <button @click="$store.darkMode.toggle()" class="nav-link cursor-pointer" aria-label="Toggle dark mode" title="Toggle dark mode">
               <svg x-show="!$store.darkMode.value" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
               </svg>
@@ -49,11 +49,11 @@
         <div class="flex justify-between items-center mb-8">
           <div>
             <h2 class="text-2xl font-bold text-slate-900 dark:text-white">Models</h2>
-            <p class="text-slate-600 dark:text-slate-400 mt-1" x-show="!loading">
+            <p class="text-slate-600 dark:text-slate-300 mt-1" x-show="!loading">
               <span x-text="models.length"></span> models across all providers
             </p>
           </div>
-          <input type="search" x-model="search" placeholder="Filter models..." class="input-field w-64" />
+          <input type="search" x-model="search" placeholder="Filter models..." class="input-field w-64" aria-label="Filter models" />
         </div>
 
         <div x-show="loading" class="flex items-center justify-center py-16">
@@ -84,11 +84,11 @@
                       </template>
                     </div>
                   </td>
-                  <td class="px-6 py-3 text-right text-slate-500 dark:text-slate-400" x-text="(model.providers || []).length"></td>
+                  <td class="px-6 py-3 text-right text-slate-500 dark:text-slate-300" x-text="(model.providers || []).length"></td>
                 </tr>
               </template>
               <tr x-show="filtered.length === 0">
-                <td colspan="3" class="px-6 py-8 text-center text-slate-500 dark:text-slate-400">No models found</td>
+                <td colspan="3" class="px-6 py-8 text-center text-slate-500 dark:text-slate-300">No models found</td>
               </tr>
             </tbody>
           </table>
