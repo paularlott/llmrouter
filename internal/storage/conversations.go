@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/paularlott/llmrouter/internal/snapshotkv"
+	"github.com/paularlott/snapshotkv"
 	"github.com/paularlott/mcp/ai/openai"
 )
 

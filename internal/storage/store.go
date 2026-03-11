@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/paularlott/llmrouter/internal/snapshotkv"
+	"github.com/paularlott/snapshotkv"
 )
 
 type Store struct {

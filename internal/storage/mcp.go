@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/paularlott/llmrouter/internal/snapshotkv"
+	"github.com/paularlott/snapshotkv"
 )
 
 // MCPServerConfig represents a stored MCP server configuration

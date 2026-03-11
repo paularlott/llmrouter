@@ -9,7 +9,7 @@ require (
 	github.com/paularlott/logger v0.3.0
 	github.com/paularlott/mcp v0.14.0
 	github.com/paularlott/scriptling v0.2.11
-	github.com/vmihailenco/msgpack/v5 v5.4.1
+	github.com/paularlott/snapshotkv v0.1.0
 )
 
 require (
@@ -24,6 +24,7 @@ require (
 	github.com/stretchr/testify v1.11.1 // indirect
 	github.com/tklauser/go-sysconf v0.3.16 // indirect
 	github.com/tklauser/numcpus v0.11.0 // indirect
+	github.com/vmihailenco/msgpack/v5 v5.4.1 // indirect
 	github.com/vmihailenco/tagparser/v2 v2.0.0 // indirect
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
 	golang.org/x/net v0.51.0 // indirect
