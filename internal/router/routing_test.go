@@ -910,3 +910,109 @@ if router.conversation_turns() == 0:
 		t.Fatalf("want model-a, got %q", result.Model)
 	}
 }
+
+// --- Model alias tests ---
+
+// newRouterWithAliases builds a router with a provider that has real models and aliases.
+func newRouterWithAliases(models []string, aliases map[string]string) *Router {
+	r := &Router{
+		Providers: make(map[string]*Provider),
+		ModelMap:  make(map[string][]string),
+		ModelTags: make(map[string][]string),
+		logger:    &testLogger{},
+	}
+	p := &Provider{
+		Name: "p1", ProviderType: "openai",
+		Client: &mockClient{"p1"}, Enabled: true, Healthy: true, Weight: 1.0,
+		ModelAliases: aliases,
+	}
+	r.Providers["p1"] = p
+	r.addProviderModels("p1", models, p)
+	return r
+}
+
+func TestAlias_ResolveKnown(t *testing.T) {
+	r := newRouterWithAliases([]string{"gpt-4o"}, map[string]string{"gpt4": "gpt-4o"})
+	if got := r.resolveAliasForProvider("gpt4", "p1"); got != "gpt-4o" {
+		t.Fatalf("want gpt-4o, got %q", got)
+	}
+}
+
+func TestAlias_ResolveUnknown(t *testing.T) {
+	r := newRouterWithAliases([]string{"gpt-4o"}, map[string]string{"gpt4": "gpt-4o"})
+	if got := r.resolveAliasForProvider("gpt-4o", "p1"); got != "gpt-4o" {
+		t.Fatalf("want gpt-4o unchanged, got %q", got)
+	}
+}
+
+func TestAlias_InModelMap(t *testing.T) {
+	r := newRouterWithAliases([]string{"gpt-4o"}, map[string]string{"gpt4": "gpt-4o"})
+	if _, ok := r.ModelMap["gpt4"]; !ok {
+		t.Fatal("alias should appear in ModelMap")
+	}
+}
+
+func TestAlias_GetProviderForModel(t *testing.T) {
+	r := newRouterWithAliases([]string{"gpt-4o"}, map[string]string{"gpt4": "gpt-4o"})
+	// Alias is a key in ModelMap; look up provider directly via alias
+	got, err := r.GetProviderForModel("gpt4", "")
+	if err != nil || got != "p1" {
+		t.Fatalf("want p1, got %q err %v", got, err)
+	}
+}
+
+func TestAlias_CreateChatCompletion(t *testing.T) {
+	r := newRouterWithAliases([]string{"gpt-4o"}, map[string]string{"gpt4": "gpt-4o"})
+	resp, err := r.CreateChatCompletion(context.Background(), &ChatCompletionRequest{Model: "gpt4"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The request should have been forwarded with the real model name for this provider
+	if resp.Model != "gpt-4o" {
+		t.Fatalf("want gpt-4o forwarded to provider, got %q", resp.Model)
+	}
+}
+
+// TestAlias_RoundRobin: two providers each aliasing "fast" to a different real model —
+// load balancing distributes across both, and each gets its own real model name.
+func TestAlias_RoundRobin(t *testing.T) {
+	r := &Router{
+		Providers: make(map[string]*Provider),
+		ModelMap:  make(map[string][]string),
+		ModelTags: make(map[string][]string),
+		logger:    &testLogger{},
+	}
+	for i, name := range []string{"p1", "p2"} {
+		realModel := []string{"gpt-4o-mini", "mistral-small"}[i]
+		p := &Provider{
+			Name: name, ProviderType: "openai",
+			Client: &mockClient{name}, Enabled: true, Healthy: true, Weight: 1.0,
+			ModelAliases: map[string]string{"fast": realModel},
+		}
+		r.Providers[name] = p
+		r.addProviderModels(name, []string{realModel}, p)
+	}
+
+	counts := map[string]int{}
+	for i := 0; i < 4; i++ {
+		got, err := r.GetProviderForModel("fast", "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		counts[got]++
+		r.Providers[got].ActiveCompletions.Add(1)
+	}
+	for _, p := range []string{"p1", "p2"} {
+		if counts[p] != 2 {
+			t.Errorf("provider %s selected %d times via alias, want 2", p, counts[p])
+		}
+	}
+
+	// Verify each provider resolves the alias to its own real model
+	if got := r.resolveAliasForProvider("fast", "p1"); got != "gpt-4o-mini" {
+		t.Errorf("p1 alias: want gpt-4o-mini, got %q", got)
+	}
+	if got := r.resolveAliasForProvider("fast", "p2"); got != "mistral-small" {
+		t.Errorf("p2 alias: want mistral-small, got %q", got)
+	}
+}

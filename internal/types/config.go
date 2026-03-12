@@ -37,6 +37,7 @@ type ProviderConfig struct {
 	Tags          []string            `json:"tags,omitempty" toml:"tags"`                        // arbitrary tags for routing scripts
 	ModelTags     map[string][]string `json:"model_tags,omitempty" toml:"model_tags"`            // model_id -> tags
 	ModelDenylist []string            `json:"model_denylist,omitempty" toml:"model_denylist"`    // models to exclude from auto-discovery
+	ModelAliases  map[string]string   `json:"model_aliases,omitempty" toml:"model_aliases"`      // alias -> real model name
 }
 
 type MCPConfig struct {

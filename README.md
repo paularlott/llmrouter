@@ -80,6 +80,10 @@ tags = ["capable", "expensive"]  # optional tags for smart routing
 "gpt-4o"      = ["capable", "expensive"]
 "gpt-4o-mini" = ["fast", "cheap"]
 
+[providers.model_aliases]     # optional alias -> real model name, resolved per-provider
+"gpt4"     = "gpt-4o"
+"gpt4-mini" = "gpt-4o-mini"
+
 [[providers]]
 name = "anthropic"
 provider = "claude"
@@ -87,6 +91,9 @@ token = "sk-ant-..."
 enabled = true
 model_allowlist = ["claude-opus-4-5", "claude-sonnet-4-5"]  # Required for Claude
 tags = ["capable"]
+
+[providers.model_aliases]     # same alias "fast", different real model on this provider
+"fast" = "claude-sonnet-4-5"
 
 [providers.model_tags]
 "claude-opus-4-5"   = ["capable", "expensive"]
@@ -140,6 +147,8 @@ tool_denylist = ["delete"]           # Optional: these tools are disabled
 `model_denylist` excludes specific models from auto-discovery. Ignored when `model_allowlist` is set.
 
 `models` overrides the model list entirely — the provider's `/models` API is still called (for health checks) but its response is discarded and the configured list is used instead. Useful for providers that return no models or an incomplete list.
+
+`model_aliases` maps short or friendly names to real model IDs. Aliases appear in `/v1/models` alongside real models and support the same weight-based load balancing and round-robin behaviour. When multiple providers define the same alias, each provider maps it to its own real model — requests via that alias are distributed across all of them, and each provider receives its own real model name.
 
 ### Smart Routing
 

@@ -31,6 +31,7 @@ type Provider struct {
 	Weight            float64
 	Tags              []string            // provider-level tags
 	ModelTags         map[string][]string // model_id -> tags
+	ModelAliases      map[string]string   // alias -> real model name
 }
 
 type Router struct {

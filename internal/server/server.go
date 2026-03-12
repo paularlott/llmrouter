@@ -78,6 +78,12 @@ func RunServer(ctx context.Context, cmd *cli.Command) error {
 					providerCfg.ModelTags[k] = mtObj.GetStringSlice(k)
 				}
 			}
+			if maObj := pc.GetObject("model_aliases"); maObj != nil {
+				providerCfg.ModelAliases = make(map[string]string)
+				for _, k := range maObj.GetKeys("") {
+					providerCfg.ModelAliases[k] = maObj.GetString(k)
+				}
+			}
 			config.Providers = append(config.Providers, providerCfg)
 		}
 		if mcpCfg := typedConfig.GetObject("mcp"); mcpCfg != nil {

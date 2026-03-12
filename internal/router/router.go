@@ -64,6 +64,7 @@ func NewRouter(config *types.Config, logger Logger) (*Router, error) {
 			Weight:         weight,
 			Tags:           providerConfig.Tags,
 			ModelTags:      providerConfig.ModelTags,
+			ModelAliases:   providerConfig.ModelAliases,
 		}
 
 		router.Providers[provider.Name] = provider
@@ -280,6 +281,17 @@ func (r *Router) addProviderModels(providerName string, modelIDs []string, p *Pr
 		r.ModelMap[modelID] = append(r.ModelMap[modelID], providerName)
 	}
 
+	// Register aliases in ModelMap so they appear in /v1/models and participate
+	// in load balancing. The alias→real translation happens per-provider at dispatch.
+	for alias := range p.ModelAliases {
+		if alias == "" {
+			continue
+		}
+		if !inSlice(providerName, r.ModelMap[alias]) {
+			r.ModelMap[alias] = append(r.ModelMap[alias], providerName)
+		}
+	}
+
 	for modelID, tags := range p.ModelTags {
 		for _, t := range tags {
 			if !inSlice(t, r.ModelTags[modelID]) {
@@ -362,6 +374,17 @@ func inSlice(s string, slice []string) bool {
 		}
 	}
 	return false
+}
+
+// resolveAliasForProvider returns the real model name for a given provider,
+// or the alias unchanged if the provider has no mapping for it.
+func (r *Router) resolveAliasForProvider(model, providerName string) string {
+	if p, ok := r.Providers[providerName]; ok {
+		if real, ok := p.ModelAliases[model]; ok && real != "" {
+			return real
+		}
+	}
+	return model
 }
 
 func (r *Router) GetProviderForModel(model string, hint string) (string, error) {
@@ -512,9 +535,12 @@ func (r *Router) CreateChatCompletion(ctx context.Context, req *ChatCompletionRe
 	r.incrementActiveCompletions(providerName)
 	defer r.decrementActiveCompletions(providerName)
 
-	r.logger.Debug("routing chat completion", "model", req.Model, "provider", providerName)
+	// Resolve alias to the real model name for this specific provider
+	dispatchReq := *req
+	dispatchReq.Model = r.resolveAliasForProvider(req.Model, providerName)
+	r.logger.Debug("routing chat completion", "alias", req.Model, "model", dispatchReq.Model, "provider", providerName)
 
-	resp, err := provider.Client.ChatCompletion(ctx, *req)
+	resp, err := provider.Client.ChatCompletion(ctx, dispatchReq)
 	if err != nil {
 		if r.isConnectionError(err) {
 			r.DisableProvider(providerName, fmt.Sprintf("connection error: %v", err))
@@ -534,7 +560,9 @@ func (r *Router) CreateEmbedding(ctx context.Context, req *EmbeddingRequest) (*E
 	provider := r.Providers[providerName]
 	r.logger.Info("routing embedding request", "model", req.Model, "provider", providerName)
 
-	resp, err := provider.Client.CreateEmbedding(ctx, *req)
+	dispatchReq := *req
+	dispatchReq.Model = r.resolveAliasForProvider(req.Model, providerName)
+	resp, err := provider.Client.CreateEmbedding(ctx, dispatchReq)
 	if err != nil {
 		if r.isConnectionError(err) {
 			r.DisableProvider(providerName, fmt.Sprintf("connection error: %v", err))
@@ -548,7 +576,9 @@ func (r *Router) CreateEmbedding(ctx context.Context, req *EmbeddingRequest) (*E
 func (r *Router) streamChatCompletion(ctx context.Context, providerName string, req *ChatCompletionRequest) *openai.ChatStream {
 	provider := r.Providers[providerName]
 	r.incrementActiveCompletions(providerName)
-	return provider.Client.StreamChatCompletion(ctx, *req)
+	dispatchReq := *req
+	dispatchReq.Model = r.resolveAliasForProvider(req.Model, providerName)
+	return provider.Client.StreamChatCompletion(ctx, dispatchReq)
 }
 
 func (r *Router) writeStream(w http.ResponseWriter, stream *openai.ChatStream, model, providerName string) {
@@ -859,9 +889,11 @@ func (r *Router) createChatCompletionWithHeaders(ctx context.Context, req *ChatC
 	r.incrementActiveCompletions(providerName)
 	defer r.decrementActiveCompletions(providerName)
 
-	r.logger.Debug("routing chat completion with passthrough headers", "model", req.Model, "provider", providerName)
+	dispatchReq := *req
+	dispatchReq.Model = r.resolveAliasForProvider(req.Model, providerName)
+	r.logger.Debug("routing chat completion with passthrough headers", "alias", req.Model, "model", dispatchReq.Model, "provider", providerName)
 
-	resp, err := client.ChatCompletion(ctx, *req)
+	resp, err := client.ChatCompletion(ctx, dispatchReq)
 	if err != nil {
 		if r.isConnectionError(err) {
 			r.DisableProvider(providerName, fmt.Sprintf("connection error: %v", err))
@@ -1241,6 +1273,7 @@ func (r *Router) HandleCreateResponse(w http.ResponseWriter, req *http.Request) 
 		return
 	}
 
+	createReq.Model = r.resolveAliasForProvider(createReq.Model, providerName)
 	resp, err := r.responsesService.CreateResponse(req.Context(), r.Providers[providerName].Client, &createReq)
 	if err != nil {
 		r.logger.WithError(err).Error("failed to create response")
