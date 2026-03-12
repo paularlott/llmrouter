@@ -229,7 +229,7 @@ func (m *MCPServer) GetToolsForAdmin(namespace string) ([]admin.ToolInfo, error)
 	allowlist := rsClient.config.ToolAllowlist
 	denylist := rsClient.config.ToolDenylist
 
-	prefix := namespace + "."
+	prefix := namespace + mcp.DefaultNamespaceSeparator
 	for _, tool := range tools {
 		if !strings.HasPrefix(tool.Name, prefix) {
 			continue
@@ -304,7 +304,7 @@ func (m *MCPServer) GetStorageServerTools(namespace string, server *storage.MCPS
 		return result, nil
 	}
 
-	prefix := namespace + "."
+	prefix := namespace + mcp.DefaultNamespaceSeparator
 	for _, tool := range tools {
 		if !strings.HasPrefix(tool.Name, prefix) {
 			continue
