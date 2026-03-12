@@ -40,7 +40,8 @@ type ProviderConfig struct {
 }
 
 type MCPConfig struct {
-	RemoteServers []MCPRemoteServerConfig `json:"remote_servers,omitempty"` // Remote MCP server connections
+	RemoteServers           []MCPRemoteServerConfig `json:"remote_servers,omitempty"`             // Remote MCP server connections
+	ToolCacheRefreshMinutes int                     `json:"tool_cache_refresh_minutes,omitempty"` // Auto-refresh tool cache interval (0 = disabled)
 }
 
 type MCPRemoteServerConfig struct {

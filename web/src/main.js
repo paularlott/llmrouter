@@ -168,6 +168,7 @@ Alpine.data("mcpServers", () => ({
   toolsError: null,
   saving: false,
   deleting: false,
+  refreshing: false,
   formError: null,
   storageWritable: false,
   form: {
@@ -217,6 +218,23 @@ Alpine.data("mcpServers", () => ({
       this.error = err.message;
     } finally {
       this.loading = false;
+    }
+  },
+
+  async refreshCache() {
+    this.refreshing = true;
+    try {
+      const response = await fetch("/admin/api/mcp-servers/refresh-cache", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      if (!response.ok) throw new Error("Failed to refresh cache");
+      // Reload servers to show updated tool counts
+      await this.loadServers();
+    } catch (err) {
+      this.error = err.message;
+    } finally {
+      this.refreshing = false;
     }
   },
 

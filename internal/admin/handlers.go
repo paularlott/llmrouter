@@ -37,6 +37,7 @@ func (a *Admin) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("DELETE /admin/api/mcp-servers/{namespace}", a.requireAuth(a.HandleDeleteMCPServer))
 	mux.HandleFunc("GET /admin/api/mcp-servers/{namespace}/tools", a.requireAuth(a.HandleGetMCPServerTools))
 	mux.HandleFunc("PUT /admin/api/mcp-servers/{namespace}/tools/toggle", a.requireAuth(a.HandleToggleMCPServerTool))
+	mux.HandleFunc("POST /admin/api/mcp-servers/refresh-cache", a.requireAuth(a.HandleRefreshMCPCache))
 	mux.HandleFunc("GET /admin/api/mcp-storage-status", a.requireAuth(a.HandleMCPStorageStatus))
 
 	// OAuth2 PKCE flow for MCP servers
@@ -578,4 +579,15 @@ func (a *Admin) HandleToggleMCPServer(w http.ResponseWriter, r *http.Request) {
 		ToolDenylist:   server.ToolDenylist,
 		StaticServer:   false,
 	})
+}
+
+// HandleRefreshMCPCache refreshes the tool cache from all remote MCP servers
+func (a *Admin) HandleRefreshMCPCache(w http.ResponseWriter, r *http.Request) {
+	if a.onMCPCacheRefresh == nil {
+		writeError(w, http.StatusInternalServerError, "cache refresh not available")
+		return
+	}
+
+	a.onMCPCacheRefresh()
+	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
 }

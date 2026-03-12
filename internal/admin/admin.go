@@ -37,6 +37,7 @@ type Admin struct {
 	mcpStorage         storage.MCPStorage
 	mcpStorageWritable bool // true if storage is persistent (not memory-only)
 	onMCPServerChange  func()
+	onMCPCacheRefresh  func() // Called to refresh tool cache from remote servers
 }
 
 // Stats represents dashboard statistics
@@ -83,7 +84,7 @@ type ToolInfo struct {
 }
 
 // New creates a new Admin handler
-func New(config *types.Config, getStats func() *Stats, getProviders func() []ProviderInfo, getMCPServers func() []MCPServerInfo, getMCPTools func(string) ([]ToolInfo, error), getModels func() []ModelInfo, mcpStorage storage.MCPStorage, mcpStorageWritable bool, onMCPServerChange func()) *Admin {
+func New(config *types.Config, getStats func() *Stats, getProviders func() []ProviderInfo, getMCPServers func() []MCPServerInfo, getMCPTools func(string) ([]ToolInfo, error), getModels func() []ModelInfo, mcpStorage storage.MCPStorage, mcpStorageWritable bool, onMCPServerChange func(), onMCPCacheRefresh func()) *Admin {
 	if config.Server.AdminPassword == "" {
 		return nil
 	}
@@ -100,6 +101,7 @@ func New(config *types.Config, getStats func() *Stats, getProviders func() []Pro
 		mcpStorage:         mcpStorage,
 		mcpStorageWritable: mcpStorageWritable,
 		onMCPServerChange:  onMCPServerChange,
+		onMCPCacheRefresh:  onMCPCacheRefresh,
 	}
 }
 

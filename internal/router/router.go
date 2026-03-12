@@ -186,10 +186,16 @@ func NewRouter(config *types.Config, logger Logger) (*Router, error) {
 	}
 	router.mcpStorage = mcpStorage
 
-	router.admin = admin.New(config, router.getStats, router.getProviders, router.getMCPServers, router.getMCPTools, router.getModels, mcpStorage, mcpStorageWritable, router.reloadMCPServers)
+	router.admin = admin.New(config, router.getStats, router.getProviders, router.getMCPServers, router.getMCPTools, router.getModels, mcpStorage, mcpStorageWritable, router.reloadMCPServers, router.reloadMCPServers)
 	if router.admin.Enabled() {
 		router.admin.RegisterRoutes(router.mux)
 		logger.Info("admin UI enabled at /admin")
+	}
+
+	// Start MCP tool cache refresh timer if configured
+	if config.MCP.ToolCacheRefreshMinutes > 0 {
+		go router.startMCPCacheRefreshTimer(time.Duration(config.MCP.ToolCacheRefreshMinutes) * time.Minute)
+		logger.Info("MCP tool cache auto-refresh enabled", "interval_minutes", config.MCP.ToolCacheRefreshMinutes)
 	}
 
 	// Add catch-all handler for unmatched routes (must be last)
@@ -1166,6 +1172,17 @@ func (r *Router) reloadMCPServers() {
 
 	// Atomically reload all servers (static + storage-based)
 	r.mcpServer.ReloadAllServers(servers)
+}
+
+// startMCPCacheRefreshTimer periodically refreshes the MCP tool cache
+func (r *Router) startMCPCacheRefreshTimer(interval time.Duration) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		r.logger.Info("auto-refreshing MCP tool cache")
+		r.reloadMCPServers()
+	}
 }
 
 // getModels returns model information for the admin UI

@@ -212,6 +212,12 @@ func (m *MCPServer) GetToolsForAdmin(namespace string) ([]admin.ToolInfo, error)
 		return result, nil
 	}
 
+	// Refresh the tool cache to ensure we get the latest tools from the remote server
+	if err := rsClient.client.RefreshToolCache(ctx); err != nil {
+		m.logger.Warn("failed to refresh tool cache from remote server", "namespace", namespace, "error", err)
+		return result, nil
+	}
+
 	// Fetch all tools directly from the remote server (unfiltered)
 	tools, err := rsClient.client.ListTools(ctx)
 	if err != nil {
@@ -282,6 +288,12 @@ func (m *MCPServer) GetStorageServerTools(namespace string, server *storage.MCPS
 	ctx := context.Background()
 	if err := rsClient.ensureInitialized(ctx); err != nil {
 		m.logger.Warn("failed to initialize MCP client for tools listing", "namespace", namespace, "url", rsClient.config.URL, "error", err)
+		return result, nil
+	}
+
+	// Refresh the tool cache to ensure we get the latest tools from the remote server
+	if err := rsClient.client.RefreshToolCache(ctx); err != nil {
+		m.logger.Warn("failed to refresh tool cache from remote server", "namespace", namespace, "error", err)
 		return result, nil
 	}
 
