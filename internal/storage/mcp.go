@@ -91,7 +91,12 @@ func (s *SnapshotMCPStorage) Get(ctx context.Context, namespace string) (*MCPSer
 		return nil, err
 	}
 
-	return parseMCPServerConfig(data)
+	m, ok := data.(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("invalid data type for MCP server config")
+	}
+
+	return parseMCPServerConfig(m)
 }
 
 func (s *SnapshotMCPStorage) List(ctx context.Context) ([]*MCPServerConfig, error) {
@@ -104,7 +109,12 @@ func (s *SnapshotMCPStorage) List(ctx context.Context) ([]*MCPServerConfig, erro
 			continue
 		}
 
-		server, err := parseMCPServerConfig(data)
+		m, ok := data.(map[string]any)
+		if !ok {
+			continue
+		}
+
+		server, err := parseMCPServerConfig(m)
 		if err != nil {
 			continue
 		}
@@ -176,7 +186,12 @@ func (s *SnapshotMCPStorage) ToggleTool(ctx context.Context, namespace, toolName
 		return fmt.Errorf("MCP server not found")
 	}
 
-	server, err := parseMCPServerConfig(data)
+	m, ok := data.(map[string]any)
+	if !ok {
+		return fmt.Errorf("invalid data type for MCP server config")
+	}
+
+	server, err := parseMCPServerConfig(m)
 	if err != nil {
 		return err
 	}

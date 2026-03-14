@@ -91,12 +91,17 @@ func (s *SnapshotConversationStorage) Store(ctx context.Context, conversation *S
 func (s *SnapshotConversationStorage) Get(ctx context.Context, id string) (*StoredConversation, error) {
 	key := s.conversationKey(id)
 
-	metaMap, err := s.db.Get(key)
+	data, err := s.db.Get(key)
 	if err != nil {
 		if err == snapshotkv.ErrNotFound {
 			return nil, fmt.Errorf("conversation not found")
 		}
 		return nil, err
+	}
+
+	metaMap, ok := data.(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("invalid data type for conversation metadata")
 	}
 
 	// Parse metadata
