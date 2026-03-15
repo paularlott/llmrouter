@@ -29,8 +29,12 @@ github.com/paularlott/mcp v0.14.1 h1:iiTGfHKAxwxr4VKpE5lG5Xld3XPDSvDdiLg26HcKFQM
 github.com/paularlott/mcp v0.14.1/go.mod h1:RHtwyZchcdC4oiz0fEaTBDEWNP0YHL7qMFhbmm/l7WI=
 github.com/paularlott/scriptling v0.2.21 h1:MCnK5I/Ndandv+4wLwwKgt3AUI/mzcdNKC/VSa+vcpg=
 github.com/paularlott/scriptling v0.2.21/go.mod h1:r+NhY5JjhRSqhcI/41FptYgOZjm7E93MhfgjEBr/QvA=
+github.com/paularlott/scriptling v0.2.22 h1:P1JT5qqv7YJBI2aCKUhU7imRXHtgaVEYs68rZ+Fuf5M=
+github.com/paularlott/scriptling v0.2.22/go.mod h1:sWXG+jDSvupNz6sSrhQp5CLPeUEjGo/L64y6T7DxTJw=
 github.com/paularlott/snapshotkv v0.2.0 h1:xGFcVsIsRsrOHsuvakfRCrN1xxi53bZhFLUXpUDln0Q=
 github.com/paularlott/snapshotkv v0.2.0/go.mod h1:X2ONJRnGTRUV2j8tIdO187y0QLm4n7bnCbdnV/mTWUQ=
+github.com/paularlott/snapshotkv v0.3.0 h1:FUxebbnUJJtnJwjd+W8obyD78WX/opvZkSvY6Cc+5xg=
+github.com/paularlott/snapshotkv v0.3.0/go.mod h1:X2ONJRnGTRUV2j8tIdO187y0QLm4n7bnCbdnV/mTWUQ=
 github.com/pkg/diff v0.0.0-20210226163009-20ebb0f2a09e/go.mod h1:pJLUxLENpZxwdsKMEsNbx1VGcRFpLqf3715MtcvvzbA=
 github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
