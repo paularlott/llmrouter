@@ -108,12 +108,12 @@ func NewRouter(config *types.Config, logger Logger) (*Router, error) {
 	// Setup HTTP mux with auth middleware
 	auth := middleware.Auth(config.Server.Token)
 	router.mux = http.NewServeMux()
-	router.mux.HandleFunc("/v1/models", auth(router.HandleModels))
-	router.mux.HandleFunc("/v1/chat/completions", auth(router.HandleChatCompletions))
-	router.mux.HandleFunc("/v1/messages", auth(router.HandleMessages))
-	router.mux.HandleFunc("/v1/messages/count_tokens", auth(router.HandleCountTokens))
-	router.mux.HandleFunc("/v1/embeddings", auth(router.HandleEmbeddings))
-	router.mux.HandleFunc("/health", router.HandleHealth) // Health endpoint is not protected
+	router.mux.HandleFunc("GET /v1/models", auth(router.HandleModels))
+	router.mux.HandleFunc("POST /v1/chat/completions", auth(router.HandleChatCompletions))
+	router.mux.HandleFunc("POST /v1/messages", auth(router.HandleMessages))
+	router.mux.HandleFunc("POST /v1/messages/count_tokens", auth(router.HandleCountTokens))
+	router.mux.HandleFunc("POST /v1/embeddings", auth(router.HandleEmbeddings))
+	router.mux.HandleFunc("GET /health", router.HandleHealth) // Health endpoint is not protected
 
 	// Add responses endpoints if service is available
 	if router.responsesService != nil {
@@ -174,7 +174,7 @@ func NewRouter(config *types.Config, logger Logger) (*Router, error) {
 
 	// Add MCP endpoints if server is available
 	if router.mcpServer != nil {
-		router.mux.HandleFunc("/mcp", auth(router.HandleMCP))
+		router.mux.HandleFunc("POST /mcp", auth(router.HandleMCP))
 		logger.Info("MCP server endpoint available at /mcp (use X-MCP-Tool-Mode: discovery header for discovery mode)")
 	}
 
@@ -1447,6 +1447,15 @@ func (r *Router) HandleCatchAll(w http.ResponseWriter, req *http.Request) {
 	// Redirect root to admin
 	if req.URL.Path == "/" {
 		http.Redirect(w, req, "/admin", http.StatusFound)
+		return
+	}
+
+	// Handle CORS preflight silently
+	if req.Method == http.MethodOptions {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, anthropic-version, x-api-key")
+		w.WriteHeader(http.StatusNoContent)
 		return
 	}
 
