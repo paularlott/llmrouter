@@ -129,7 +129,7 @@ func RunServer(ctx context.Context, cmd *cli.Command) error {
 	}()
 
 	go r.InitMCPServers()
-	r.RefreshModels(ctx)
+	go r.RefreshModels(ctx)
 
 	<-shutdownChan
 	logger.Info("shutting down server")

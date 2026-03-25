@@ -206,8 +206,9 @@ func NewRouter(config *types.Config, logger Logger) (*Router, error) {
 }
 
 func (r *Router) RefreshModels(ctx context.Context) error {
-	r.logger.Info("refreshing models from all providers concurrently")
+	r.logger.Debug("refreshing models from all providers concurrently")
 
+	var wg sync.WaitGroup
 	for providerName, provider := range r.Providers {
 		if !provider.Enabled {
 			continue
@@ -220,7 +221,9 @@ func (r *Router) RefreshModels(ctx context.Context) error {
 			r.logger.Debug("skipping provider fetch already in progress", "provider", providerName)
 			continue
 		}
+		wg.Add(1)
 		go func(name string, p *Provider) {
+			defer wg.Done()
 			defer p.Fetching.Store(false)
 			r.logger.Debug("fetching models from provider", "provider", name)
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -245,6 +248,7 @@ func (r *Router) RefreshModels(ctx context.Context) error {
 			r.addProviderModels(name, modelIDs, p)
 		}(providerName, provider)
 	}
+	wg.Wait()
 
 	return nil
 }
@@ -665,6 +669,8 @@ func (r *Router) decrementActiveCompletions(providerName string) {
 
 // HTTP Handlers
 func (r *Router) HandleModels(w http.ResponseWriter, req *http.Request) {
+	r.RefreshModels(req.Context())
+
 	w.Header().Set("Content-Type", "application/json")
 	if req.Header.Get("anthropic-version") != "" {
 		if err := writeJSON(w, r.ListModelsAnthropic()); err != nil {
@@ -1056,7 +1062,7 @@ func (r *Router) checkDisabledProviders() {
 			r.EnableProvider(name)
 			r.logger.Info("provider recovered and re-enabled", "provider", name)
 			provider.Fetching.Store(false) // reset so RefreshModels can pick it up
-			r.RefreshModels(context.Background())
+			go r.RefreshModels(context.Background())
 		}(providerName)
 	}
 
