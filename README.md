@@ -321,6 +321,8 @@ oauth_refresh_token = "refresh-token"  # Optional: for token refresh
 
 ## API Endpoints
 
+All endpoints are available under both `/v1/` and `/ollama/` base paths. For example, models can be listed at either `/v1/models` or `/ollama/v1/models`.
+
 ### Chat & Models
 
 ```bash
@@ -331,6 +333,23 @@ POST /v1/messages/count_tokens     # Anthropic token counting (emulated)
 POST /v1/embeddings
 GET  /health
 ```
+
+### Ollama Compatible
+
+The `/ollama/` base path provides full Ollama API compatibility, allowing tools like VS Code (Copilot), LM Studio, and other Ollama clients to connect directly. Set the Ollama base URL to `http://host:port/ollama`.
+
+```bash
+GET  /ollama/api/version           # API version info
+GET  /ollama/api/tags              # List models
+GET  /ollama/api/ps                # List running models
+POST /ollama/api/chat              # Chat with messages (supports images)
+POST /ollama/api/generate          # Generate from prompt (supports images)
+POST /ollama/api/embed             # Embeddings (batch)
+POST /ollama/api/embeddings        # Embeddings (single)
+POST /ollama/api/show              # Model details
+```
+
+Images sent via Ollama's `images` field are automatically converted with the correct media type (JPEG, PNG, GIF, WebP) based on file signature detection.
 
 ### Responses API
 
