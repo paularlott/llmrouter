@@ -113,6 +113,24 @@ func NewRouter(config *types.Config, logger Logger) (*Router, error) {
 	router.mux.HandleFunc("POST /v1/messages", auth(router.HandleMessages))
 	router.mux.HandleFunc("POST /v1/messages/count_tokens", auth(router.HandleCountTokens))
 	router.mux.HandleFunc("POST /v1/embeddings", auth(router.HandleEmbeddings))
+	router.mux.HandleFunc("GET /ollama/v1/models", auth(router.HandleModels))
+	router.mux.HandleFunc("POST /ollama/v1/chat/completions", auth(router.HandleChatCompletions))
+	router.mux.HandleFunc("POST /ollama/v1/messages", auth(router.HandleMessages))
+	router.mux.HandleFunc("POST /ollama/v1/messages/count_tokens", auth(router.HandleCountTokens))
+	router.mux.HandleFunc("POST /ollama/v1/embeddings", auth(router.HandleEmbeddings))
+	router.mux.HandleFunc("GET /ollama/api/version", auth(router.HandleOllamaVersion))
+	router.mux.HandleFunc("GET /ollama/api/tags", auth(router.HandleOllamaTags))
+	router.mux.HandleFunc("GET /ollama/api/ps", auth(router.HandleOllamaRunningModels))
+	router.mux.HandleFunc("POST /ollama/api/chat", auth(router.HandleOllamaChat))
+	router.mux.HandleFunc("POST /ollama/api/generate", auth(router.HandleOllamaGenerate))
+	router.mux.HandleFunc("POST /ollama/api/embed", auth(router.HandleOllamaEmbed))
+	router.mux.HandleFunc("POST /ollama/api/embeddings", auth(router.HandleOllamaEmbeddings))
+	router.mux.HandleFunc("POST /ollama/api/show", auth(router.HandleOllamaShow))
+	router.mux.HandleFunc("POST /ollama/api/create", auth(router.HandleUnsupported))
+	router.mux.HandleFunc("DELETE /ollama/api/delete", auth(router.HandleUnsupported))
+	router.mux.HandleFunc("POST /ollama/api/copy", auth(router.HandleUnsupported))
+	router.mux.HandleFunc("POST /ollama/api/pull", auth(router.HandleUnsupported))
+	router.mux.HandleFunc("POST /ollama/api/push", auth(router.HandleUnsupported))
 	router.mux.HandleFunc("GET /health", router.HandleHealth) // Health endpoint is not protected
 
 	// Add responses endpoints if service is available
@@ -125,6 +143,14 @@ func NewRouter(config *types.Config, logger Logger) (*Router, error) {
 		router.mux.HandleFunc("POST /v1/responses/{id}/compact", auth(router.HandleCompactResponses))
 		router.mux.HandleFunc("GET /v1/responses/{id}/input-items", auth(router.HandleUnsupported))
 		router.mux.HandleFunc("GET /v1/responses/{id}/input-tokens", auth(router.HandleUnsupported))
+		router.mux.HandleFunc("POST /ollama/v1/responses", auth(router.HandleCreateResponse))
+		router.mux.HandleFunc("GET /ollama/v1/responses/{id}", auth(router.HandleGetResponse))
+		router.mux.HandleFunc("DELETE /ollama/v1/responses/{id}", auth(router.HandleDeleteResponse))
+		router.mux.HandleFunc("GET /ollama/v1/responses", auth(router.HandleListResponses))
+		router.mux.HandleFunc("POST /ollama/v1/responses/{id}/cancel", auth(router.HandleCancelResponse))
+		router.mux.HandleFunc("POST /ollama/v1/responses/{id}/compact", auth(router.HandleCompactResponses))
+		router.mux.HandleFunc("GET /ollama/v1/responses/{id}/input-items", auth(router.HandleUnsupported))
+		router.mux.HandleFunc("GET /ollama/v1/responses/{id}/input-tokens", auth(router.HandleUnsupported))
 		logger.Info("responses endpoints available")
 	}
 
@@ -138,6 +164,14 @@ func NewRouter(config *types.Config, logger Logger) (*Router, error) {
 		router.mux.HandleFunc("POST /v1/conversations/{conversation_id}/items", auth(router.HandleCreateItems))
 		router.mux.HandleFunc("GET /v1/conversations/{conversation_id}/items/{item_id}", auth(router.HandleGetItem))
 		router.mux.HandleFunc("DELETE /v1/conversations/{conversation_id}/items/{item_id}", auth(router.HandleDeleteItem))
+		router.mux.HandleFunc("POST /ollama/v1/conversations", auth(router.HandleCreateConversation))
+		router.mux.HandleFunc("GET /ollama/v1/conversations/{id}", auth(router.HandleGetConversation))
+		router.mux.HandleFunc("POST /ollama/v1/conversations/{id}", auth(router.HandleUpdateConversation))
+		router.mux.HandleFunc("DELETE /ollama/v1/conversations/{id}", auth(router.HandleDeleteConversation))
+		router.mux.HandleFunc("GET /ollama/v1/conversations/{conversation_id}/items", auth(router.HandleListItems))
+		router.mux.HandleFunc("POST /ollama/v1/conversations/{conversation_id}/items", auth(router.HandleCreateItems))
+		router.mux.HandleFunc("GET /ollama/v1/conversations/{conversation_id}/items/{item_id}", auth(router.HandleGetItem))
+		router.mux.HandleFunc("DELETE /ollama/v1/conversations/{conversation_id}/items/{item_id}", auth(router.HandleDeleteItem))
 		logger.Info("conversations endpoints available")
 	}
 
@@ -1071,7 +1105,28 @@ func (r *Router) checkDisabledProviders() {
 
 // ServeHTTP implements http.Handler
 func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	r.mux.ServeHTTP(w, req)
+	r.logger.Trace("request received",
+		"method", req.Method,
+		"path", req.URL.Path,
+		"query", req.URL.RawQuery,
+		"remote_addr", req.RemoteAddr,
+		"user_agent", req.Header.Get("User-Agent"),
+	)
+
+	rec := &statusLoggingResponseWriter{
+		ResponseWriter: w,
+		statusCode:     http.StatusOK,
+	}
+	r.mux.ServeHTTP(rec, req)
+
+	r.logger.Trace("request completed",
+		"method", req.Method,
+		"path", req.URL.Path,
+		"query", req.URL.RawQuery,
+		"status", rec.statusCode,
+		"remote_addr", req.RemoteAddr,
+		"user_agent", req.Header.Get("User-Agent"),
+	)
 }
 
 // getStats returns statistics for the admin UI
