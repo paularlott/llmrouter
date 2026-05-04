@@ -12,7 +12,7 @@ import (
 	"github.com/paularlott/scriptling/extlibs"
 	"github.com/paularlott/scriptling/extlibs/agent"
 	"github.com/paularlott/scriptling/extlibs/ai"
-	"github.com/paularlott/scriptling/extlibs/fuzzy"
+	"github.com/paularlott/scriptling/extlibs/similarity"
 	"github.com/paularlott/scriptling/extlibs/mcp"
 	"github.com/paularlott/scriptling/libloader"
 	"github.com/paularlott/scriptling/object"
@@ -98,7 +98,9 @@ func (sr *SmartRouter) newVM() *scriptling.Scriptling {
 	}
 	mcp.Register(vm)
 	mcp.RegisterToon(vm)
-	fuzzy.Register(vm)
+	similarity.Register(vm)
+	extlibs.RegisterTemplateHTMLLibrary(vm)
+	extlibs.RegisterTemplateTextLibrary(vm)
 
 	if len(sr.vars) > 0 {
 		pairs := make(map[string]object.Object, len(sr.vars))

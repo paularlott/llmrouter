@@ -239,7 +239,9 @@ Every routing script has access to all Scriptling standard libraries (`json`, `r
 | `scriptling.ai.agent` | Agentic AI loop with automatic tool execution |
 | `scriptling.mcp` | MCP tool interaction |
 | `scriptling.toon` | TOON encoding/decoding |
-| `scriptling.fuzzy` | Fuzzy string matching |
+| `scriptling.similarity` | String matching and similarity utilities |
+| `scriptling.template.html` | HTML template rendering |
+| `scriptling.template.text` | Text template rendering |
 | `scriptling.runtime` | Background tasks, KV store, sync primitives |
 
 Filesystem access (`os`, `pathlib`, `glob`), subprocess execution, and `wait_for` are not available in routing scripts.

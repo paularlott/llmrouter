@@ -112,8 +112,10 @@ The following extended libraries are enabled. Filesystem access (`os`, `os.path`
 | `scriptling.ai.agent`     | Agentic AI loop with automatic tool execution  |
 | `scriptling.mcp`          | MCP (Model Context Protocol) tool interaction  |
 | `scriptling.toon`         | TOON encoding/decoding                         |
-| `scriptling.fuzzy`        | Fuzzy string matching                          |
-| `scriptling.runtime`      | Background tasks                               |
+| `scriptling.similarity`       | String matching and similarity utilities        |
+| `scriptling.template.html`   | HTML template rendering                         |
+| `scriptling.template.text`   | Text template rendering                         |
+| `scriptling.runtime`         | Background tasks                                |
 | `scriptling.runtime.kv`   | Thread-safe key-value store                    |
 | `scriptling.runtime.sync` | Named cross-environment concurrency primitives |
 
