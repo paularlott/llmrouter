@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math/rand"
 	"net/http"
 	"path/filepath"
 	"sort"
@@ -440,7 +441,8 @@ func (r *Router) GetProviderForModel(model string, hint string) (string, error) 
 
 	// Select provider with best score: lowest load adjusted by weight
 	// score = ActiveCompletions / weight (lower is better)
-	var selectedProvider string
+	// Ties are broken randomly to ensure distribution under concurrent load.
+	var tiedProviders []string
 	bestScore := float64(-1)
 
 	for _, providerName := range providers {
@@ -455,12 +457,19 @@ func (r *Router) GetProviderForModel(model string, hint string) (string, error) 
 		score := float64(provider.ActiveCompletions.Load()) / w
 		if bestScore < 0 || score < bestScore {
 			bestScore = score
-			selectedProvider = providerName
+			tiedProviders = []string{providerName}
+		} else if score == bestScore {
+			tiedProviders = append(tiedProviders, providerName)
 		}
 	}
 
-	if selectedProvider == "" {
+	if len(tiedProviders) == 0 {
 		return "", fmt.Errorf("no enabled provider found for model %s", model)
+	}
+
+	selectedProvider := tiedProviders[0]
+	if len(tiedProviders) > 1 {
+		selectedProvider = tiedProviders[rand.Intn(len(tiedProviders))]
 	}
 
 	// Honour the hint if the hinted provider is healthy and its score is within

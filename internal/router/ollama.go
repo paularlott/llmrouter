@@ -1,6 +1,7 @@
 package router
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -458,9 +459,51 @@ func ollamaContentToOpenAI(text string, images []string) any {
 		parts = append(parts, openai.TextContentPart(text))
 	}
 	for _, image := range images {
-		parts = append(parts, openai.ImageBase64ContentPart(image, "image/png", ""))
+		mediaType := detectImageMediaType(image)
+		parts = append(parts, openai.ImageBase64ContentPart(image, mediaType, ""))
 	}
 	return parts
+}
+
+// detectImageMediaType detects the image format from base64-encoded data.
+func detectImageMediaType(data string) string {
+	// Base64 encodes 3 bytes into 4 chars; decode enough for signature detection.
+	end := len(data)
+	if end > 16 {
+		end = 16
+	}
+	// Pad if necessary for base64 decoding.
+	chunk := data[:end]
+	if m := len(chunk) % 4; m != 0 {
+		chunk += strings.Repeat("=", 4-m)
+	}
+	b, err := base64.StdEncoding.DecodeString(chunk)
+	if err != nil {
+		b, err = base64.URLEncoding.DecodeString(chunk)
+		if err != nil {
+			return "image/png"
+		}
+	}
+	if len(b) < 4 {
+		return "image/png"
+	}
+	// PNG: 89 50 4E 47
+	if b[0] == 0x89 && b[1] == 0x50 && b[2] == 0x4E && b[3] == 0x47 {
+		return "image/png"
+	}
+	// JPEG: FF D8 FF
+	if b[0] == 0xFF && b[1] == 0xD8 && b[2] == 0xFF {
+		return "image/jpeg"
+	}
+	// GIF: 47 49 46 38
+	if b[0] == 0x47 && b[1] == 0x49 && b[2] == 0x46 && b[3] == 0x38 {
+		return "image/gif"
+	}
+	// WebP: 52 49 46 46 ... 57 45 42 50
+	if b[0] == 0x52 && b[1] == 0x49 && b[2] == 0x46 && b[3] == 0x46 {
+		return "image/webp"
+	}
+	return "image/png"
 }
 
 func ollamaToolsToOpenAI(tools []ollamaTool) []Tool {
