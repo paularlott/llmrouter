@@ -27,22 +27,36 @@ func (m *mockProviderClient) ChatCompletion(ctx context.Context, req openai.Chat
 func (m *mockProviderClient) StreamChatCompletion(ctx context.Context, req openai.ChatCompletionRequest) *openai.ChatStream {
 	return nil
 }
-func (m *mockProviderClient) Provider() string { return "mock" }
+func (m *mockProviderClient) Provider() string                   { return "mock" }
 func (m *mockProviderClient) SupportsCapability(cap string) bool { return true }
-func (m *mockProviderClient) GetModels(ctx context.Context) (*openai.ModelsResponse, error) { return nil, nil }
-func (m *mockProviderClient) CreateEmbedding(ctx context.Context, req openai.EmbeddingRequest) (*openai.EmbeddingResponse, error) { return nil, nil }
-func (m *mockProviderClient) StreamResponse(ctx context.Context, req openai.CreateResponseRequest) *openai.ResponseStream { return nil }
-func (m *mockProviderClient) CreateResponse(ctx context.Context, req openai.CreateResponseRequest) (*openai.ResponseObject, error) { return nil, nil }
-func (m *mockProviderClient) GetResponse(ctx context.Context, id string) (*openai.ResponseObject, error) { return nil, nil }
-func (m *mockProviderClient) CancelResponse(ctx context.Context, id string) (*openai.ResponseObject, error) { return nil, nil }
+func (m *mockProviderClient) GetModels(ctx context.Context) (*openai.ModelsResponse, error) {
+	return nil, nil
+}
+func (m *mockProviderClient) CreateEmbedding(ctx context.Context, req openai.EmbeddingRequest) (*openai.EmbeddingResponse, error) {
+	return nil, nil
+}
+func (m *mockProviderClient) StreamResponse(ctx context.Context, req openai.CreateResponseRequest) *openai.ResponseStream {
+	return nil
+}
+func (m *mockProviderClient) CreateResponse(ctx context.Context, req openai.CreateResponseRequest) (*openai.ResponseObject, error) {
+	return nil, nil
+}
+func (m *mockProviderClient) GetResponse(ctx context.Context, id string) (*openai.ResponseObject, error) {
+	return nil, nil
+}
+func (m *mockProviderClient) CancelResponse(ctx context.Context, id string) (*openai.ResponseObject, error) {
+	return nil, nil
+}
 func (m *mockProviderClient) DeleteResponse(ctx context.Context, id string) error { return nil }
-func (m *mockProviderClient) CompactResponse(ctx context.Context, id string) (*openai.ResponseObject, error) { return nil, nil }
+func (m *mockProviderClient) CompactResponse(ctx context.Context, id string) (*openai.ResponseObject, error) {
+	return nil, nil
+}
 func (m *mockProviderClient) Close() error { return nil }
 
 func TestHandleMessages_Conversion(t *testing.T) {
 	mockClient := &mockProviderClient{
 		Response: &openai.ChatCompletionResponse{
-			ID: "msg_123",
+			ID:    "msg_123",
 			Model: "mock-model",
 			Choices: []openai.Choice{
 				{
@@ -58,12 +72,12 @@ func TestHandleMessages_Conversion(t *testing.T) {
 	router := &Router{
 		Providers: map[string]*Provider{
 			"mock-provider": {
-				Name: "mock-provider",
+				Name:         "mock-provider",
 				ProviderType: "openai",
-				Enabled: true,
-				Healthy: true,
-				Models: []string{"mock-model"},
-				Client: mockClient,
+				Enabled:      true,
+				Healthy:      true,
+				Models:       []string{"mock-model"},
+				Client:       mockClient,
 			},
 		},
 		ModelMap: map[string][]string{
@@ -115,6 +129,76 @@ func TestHandleMessages_Conversion(t *testing.T) {
 	}
 	if resp.Content[0].Text != "Mock response text" {
 		t.Fatalf("Expected 'Mock response text', got %s", resp.Content[0].Text)
+	}
+}
+
+func TestHandleChatCompletions_PreservesProviderExtraBody(t *testing.T) {
+	mockClient := &mockProviderClient{
+		Response: &openai.ChatCompletionResponse{
+			ID:    "chatcmpl_123",
+			Model: "mock-model",
+			Choices: []openai.Choice{
+				{
+					Message: openai.Message{
+						Role:    "assistant",
+						Content: "ok",
+					},
+					FinishReason: "stop",
+				},
+			},
+		},
+	}
+
+	router := &Router{
+		Providers: map[string]*Provider{
+			"mock-provider": {
+				Name:         "mock-provider",
+				ProviderType: "openai",
+				Enabled:      true,
+				Healthy:      true,
+				Models:       []string{"mock-model"},
+				Client:       mockClient,
+			},
+		},
+		ModelMap: map[string][]string{
+			"mock-model": {"mock-provider"},
+		},
+		logger: &testLogger{},
+		config: &types.Config{},
+	}
+
+	reqBody := map[string]interface{}{
+		"model": "mock-model",
+		"messages": []map[string]interface{}{
+			{"role": "user", "content": "Hello"},
+		},
+		"thinking": map[string]interface{}{
+			"type": "enabled",
+		},
+		"extra_body": map[string]interface{}{
+			"custom_flag": true,
+		},
+	}
+	reqData, _ := json.Marshal(reqBody)
+
+	req := httptest.NewRequest("POST", "/v1/chat/completions", bytes.NewReader(reqData))
+	rec := httptest.NewRecorder()
+
+	router.HandleChatCompletions(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("Expected 200 OK, got %d. Body: %s", rec.Code, rec.Body.String())
+	}
+
+	thinking, ok := mockClient.LastReq.ExtraBody["thinking"].(map[string]any)
+	if !ok {
+		t.Fatalf("Expected thinking in forwarded ExtraBody, got %#v", mockClient.LastReq.ExtraBody)
+	}
+	if thinking["type"] != "enabled" {
+		t.Fatalf("Expected forwarded thinking.type enabled, got %#v", thinking["type"])
+	}
+	if mockClient.LastReq.ExtraBody["custom_flag"] != true {
+		t.Fatalf("Expected custom_flag in forwarded ExtraBody, got %#v", mockClient.LastReq.ExtraBody)
 	}
 }
 
@@ -272,9 +356,9 @@ func TestHandleMessages_ToolResultConversion(t *testing.T) {
 				"role": "user",
 				"content": []map[string]interface{}{
 					{
-						"type": "tool_result",
+						"type":        "tool_result",
 						"tool_use_id": "call_789",
-						"content": "Sunny and 20 degrees",
+						"content":     "Sunny and 20 degrees",
 					},
 				},
 			},

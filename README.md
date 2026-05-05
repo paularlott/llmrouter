@@ -334,6 +334,8 @@ POST /v1/embeddings
 GET  /health
 ```
 
+OpenAI chat completion requests preserve provider-specific top-level fields when forwarding upstream, including fields produced by client-side `extra_body` options such as ZAi thinking-mode settings.
+
 ### Ollama Compatible
 
 The `/ollama/` base path provides full Ollama API compatibility, allowing tools like VS Code (Copilot), LM Studio, and other Ollama clients to connect directly. Set the Ollama base URL to `http://host:port/ollama`.
