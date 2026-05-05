@@ -29,6 +29,7 @@ func NewRouter(config *types.Config, logger Logger) (*Router, error) {
 		ModelTags:    make(map[string][]string),
 		config:       config,
 		logger:       logger,
+		traceEnabled: strings.EqualFold(config.Logging.Level, "trace"),
 		shutdownChan: make(chan struct{}),
 	}
 
@@ -586,6 +587,7 @@ func (r *Router) CreateChatCompletion(ctx context.Context, req *ChatCompletionRe
 	dispatchReq := *req
 	dispatchReq.Model = r.resolveAliasForProvider(req.Model, providerName)
 	r.logger.Debug("routing chat completion", "alias", req.Model, "model", dispatchReq.Model, "provider", providerName)
+	r.traceRequestPayload("chat completion", &dispatchReq)
 
 	resp, err := provider.Client.ChatCompletion(ctx, dispatchReq)
 	if err != nil {
@@ -625,6 +627,7 @@ func (r *Router) streamChatCompletion(ctx context.Context, providerName string, 
 	r.incrementActiveCompletions(providerName)
 	dispatchReq := *req
 	dispatchReq.Model = r.resolveAliasForProvider(req.Model, providerName)
+	r.traceRequestPayload("streaming chat completion", &dispatchReq)
 	return provider.Client.StreamChatCompletion(ctx, dispatchReq)
 }
 
@@ -655,6 +658,18 @@ func (r *Router) writeStream(w http.ResponseWriter, stream *openai.ChatStream, m
 	fmt.Fprint(w, "data: [DONE]\n\n")
 	flusher.Flush()
 	r.logger.Debug("streaming response completed", "model", model, "provider", providerName)
+}
+
+func (r *Router) traceRequestPayload(label string, req *ChatCompletionRequest) {
+	if !r.traceEnabled {
+		return
+	}
+	payload, err := json.Marshal(req)
+	if err != nil {
+		r.logger.Trace("failed to marshal request payload for logging", "label", label, "error", err)
+		return
+	}
+	r.logger.Trace(label+" request payload", "payload", string(payload))
 }
 
 func (r *Router) isConnectionError(err error) bool {
@@ -941,6 +956,7 @@ func (r *Router) createChatCompletionWithHeaders(ctx context.Context, req *ChatC
 	dispatchReq := *req
 	dispatchReq.Model = r.resolveAliasForProvider(req.Model, providerName)
 	r.logger.Debug("routing chat completion with passthrough headers", "alias", req.Model, "model", dispatchReq.Model, "provider", providerName)
+	r.traceRequestPayload("chat completion (passthrough)", &dispatchReq)
 
 	resp, err := client.ChatCompletion(ctx, dispatchReq)
 	if err != nil {

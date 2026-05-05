@@ -8,7 +8,7 @@ require (
 	github.com/paularlott/cli v0.8.4
 	github.com/paularlott/logger v0.3.0
 	github.com/paularlott/mcp v0.15.7
-	github.com/paularlott/scriptling v0.6.5
+	github.com/paularlott/scriptling v0.6.6
 	github.com/paularlott/snapshotkv v0.3.0
 )
 

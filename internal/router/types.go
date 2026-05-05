@@ -41,6 +41,7 @@ type Router struct {
 	ModelTags            map[string][]string // model_id -> merged tags across all providers
 	config               *types.Config
 	logger               Logger
+	traceEnabled         bool
 	shutdownChan         chan struct{}
 	shutdownOnce         sync.Once
 	wg                   sync.WaitGroup
