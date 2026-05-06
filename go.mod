@@ -7,7 +7,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/paularlott/cli v0.8.4
 	github.com/paularlott/logger v0.3.0
-	github.com/paularlott/mcp v0.15.8
+	github.com/paularlott/mcp v0.16.0
 	github.com/paularlott/scriptling v0.6.6
 	github.com/paularlott/snapshotkv v0.3.0
 )

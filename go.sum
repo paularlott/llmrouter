@@ -29,6 +29,8 @@ github.com/paularlott/logger v0.3.0 h1:QwVUoxmlEFkfHI25y5dn56OJvK4Bpe3OvoJu4GZM7
 github.com/paularlott/logger v0.3.0/go.mod h1:vjAOY1vUvYigmJxxQ0eMclryIjDS6VWNK6FprtTMce0=
 github.com/paularlott/mcp v0.15.8 h1:HS6+yyXevhxMcwtV9rGj4qA1TV0Du3ciMS9ijoOxnXw=
 github.com/paularlott/mcp v0.15.8/go.mod h1:ii8GUsjmU7Z950w8CVrjin3juzLdM4noXYZxGjkzV18=
+github.com/paularlott/mcp v0.16.0 h1:S4qndo0wT4dIVsgdSPAhQqCim9dHo51jiP0WT6RytUw=
+github.com/paularlott/mcp v0.16.0/go.mod h1:ii8GUsjmU7Z950w8CVrjin3juzLdM4noXYZxGjkzV18=
 github.com/paularlott/scriptling v0.6.6 h1:WJ2eOkYSrkCmuKJyLvo5UTnpyuXesAGJSIj3scG1vB0=
 github.com/paularlott/scriptling v0.6.6/go.mod h1:x47Iw/TNFjgRZYJjaqH4ChFTzP6F8av1NpG/bqYYDps=
 github.com/paularlott/snapshotkv v0.3.0 h1:FUxebbnUJJtnJwjd+W8obyD78WX/opvZkSvY6Cc+5xg=
