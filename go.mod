@@ -8,7 +8,7 @@ require (
 	github.com/paularlott/cli v0.8.4
 	github.com/paularlott/logger v0.3.0
 	github.com/paularlott/mcp v0.16.0
-	github.com/paularlott/scriptling v0.7.0
+	github.com/paularlott/scriptling v0.8.0
 	github.com/paularlott/snapshotkv v0.3.0
 )
 
@@ -27,10 +27,10 @@ require (
 	github.com/vmihailenco/msgpack/v5 v5.4.1 // indirect
 	github.com/vmihailenco/tagparser/v2 v2.0.0 // indirect
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
-	golang.org/x/net v0.53.0 // indirect
+	golang.org/x/net v0.54.0 // indirect
 	golang.org/x/oauth2 v0.36.0 // indirect
-	golang.org/x/sys v0.43.0 // indirect
-	golang.org/x/text v0.36.0 // indirect
+	golang.org/x/sys v0.44.0 // indirect
+	golang.org/x/text v0.37.0 // indirect
 	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

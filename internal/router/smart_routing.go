@@ -105,7 +105,7 @@ func (sr *SmartRouter) newVM() *scriptling.Scriptling {
 	if len(sr.vars) > 0 {
 		pairs := make(map[string]object.Object, len(sr.vars))
 		for k, v := range sr.vars {
-			pairs[k] = &object.String{Value: v}
+			pairs[k] = object.NewString(v)
 		}
 		vm.RegisterLibrary(object.NewLibrary("vars", nil, pairs, "User-defined variables from smart_routing config"))
 	}

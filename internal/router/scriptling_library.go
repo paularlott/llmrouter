@@ -31,7 +31,7 @@ func buildRouterLibrary(r *Router) *object.Library {
 			return nil
 		}
 		var m map[string]interface{}
-		_ = json.Unmarshal([]byte(s.Value), &m)
+		_ = json.Unmarshal([]byte(s.StringValue()), &m)
 		return m
 	}
 
@@ -51,9 +51,9 @@ func buildRouterLibrary(r *Router) *object.Library {
 		if env == nil {
 			return
 		}
-		env.Set("output_model", &object.String{Value: modelID})
+		env.Set("output_model", object.NewString(modelID))
 		if hint := kwargs.MustGetString("hint", ""); hint != "" {
-			env.Set("output_provider", &object.String{Value: hint})
+			env.Set("output_provider", object.NewString(hint))
 		}
 	}, "set_model(model_id, hint=provider) - Set the model to route to; hint optionally suggests a provider")
 
