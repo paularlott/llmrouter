@@ -240,6 +240,7 @@ Every routing script has access to all Scriptling standard libraries (`json`, `r
 | `scriptling.mcp` | MCP tool interaction |
 | `scriptling.toon` | TOON encoding/decoding |
 | `scriptling.similarity` | String matching and similarity utilities |
+| `scriptling.net.resolve` | DNS resolution (IP, SRV, srv+http URLs) |
 | `scriptling.template.html` | HTML template rendering |
 | `scriptling.template.text` | Text template rendering |
 | `scriptling.runtime` | Background tasks, KV store, sync primitives |

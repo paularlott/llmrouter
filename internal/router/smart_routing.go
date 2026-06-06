@@ -12,8 +12,9 @@ import (
 	"github.com/paularlott/scriptling/extlibs"
 	"github.com/paularlott/scriptling/extlibs/agent"
 	"github.com/paularlott/scriptling/extlibs/ai"
-	"github.com/paularlott/scriptling/extlibs/similarity"
 	"github.com/paularlott/scriptling/extlibs/mcp"
+	"github.com/paularlott/scriptling/extlibs/net/resolve"
+	"github.com/paularlott/scriptling/extlibs/similarity"
 	"github.com/paularlott/scriptling/libloader"
 	"github.com/paularlott/scriptling/object"
 	"github.com/paularlott/scriptling/stdlib"
@@ -99,6 +100,7 @@ func (sr *SmartRouter) newVM() *scriptling.Scriptling {
 	mcp.Register(vm)
 	mcp.RegisterToon(vm)
 	similarity.Register(vm)
+	resolve.Register(vm, dnsResolver{timeout: 2 * time.Second})
 	extlibs.RegisterTemplateHTMLLibrary(vm)
 	extlibs.RegisterTemplateTextLibrary(vm)
 

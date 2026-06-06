@@ -118,6 +118,7 @@ The following extended libraries are enabled. Filesystem access (`os`, `os.path`
 | `scriptling.runtime`         | Background tasks                                |
 | `scriptling.runtime.kv`   | Thread-safe key-value store                    |
 | `scriptling.runtime.sync` | Named cross-environment concurrency primitives |
+| `scriptling.net.resolve` | DNS resolution (IP, SRV, srv+http URLs)        |
 
 ### Script Variables
 
