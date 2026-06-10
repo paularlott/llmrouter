@@ -74,6 +74,21 @@ var ServerCmd = &cli.Command{
 			Usage:      "Default model when smart routing returns nothing",
 			ConfigPath: []string{"smart_routing.default_model"},
 		},
+		&cli.StringFlag{
+			Name:         "tools-dir",
+			Usage:        "Directory containing scriptling tool definitions (.toml/.py pairs)",
+			ConfigPath:   []string{"scripting.tools_dir"},
+		},
+		&cli.StringSliceFlag{
+			Name:       "plugin-dir",
+			Usage:      "Directory containing scriptling plugin executables (can be repeated)",
+			ConfigPath: []string{"scripting.plugin_dirs"},
+		},
+		&cli.StringSliceFlag{
+			Name:       "libpath",
+			Usage:      "Additional directories to search for scriptling libraries (can be repeated)",
+			ConfigPath: []string{"scripting.lib_paths"},
+		},
 	},
 	Run: func(ctx context.Context, cmd *cli.Command) error {
 		return server.RunServer(ctx, cmd)

@@ -43,6 +43,11 @@ func RunServer(ctx context.Context, cmd *cli.Command) error {
 		Conversations: types.ConversationsConfig{
 			TTLDays: cmd.GetInt("conversations-ttl"),
 		},
+		Scripting: types.ScriptingConfig{
+			ToolsDir:   cmd.GetString("tools-dir"),
+			PluginDirs: cmd.GetStringSlice("plugin-dir"),
+			LibPaths:   cmd.GetStringSlice("libpath"),
+		},
 	}
 
 	log.Configure(config.Logging.Level, config.Logging.Format)
@@ -104,6 +109,11 @@ func RunServer(ctx context.Context, cmd *cli.Command) error {
 			config.SmartRouting.Script = srCfg.GetString("script")
 			config.SmartRouting.DefaultModel = srCfg.GetString("default_model")
 			config.SmartRouting.LibPath = srCfg.GetStringSlice("libpath")
+		}
+		if scriptingCfg := typedConfig.GetObject("scripting"); scriptingCfg != nil {
+			config.Scripting.ToolsDir = scriptingCfg.GetString("tools_dir")
+			config.Scripting.PluginDirs = scriptingCfg.GetStringSlice("plugin_dirs")
+			config.Scripting.LibPaths = scriptingCfg.GetStringSlice("lib_paths")
 		}
 	}
 
