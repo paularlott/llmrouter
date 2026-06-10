@@ -61,7 +61,7 @@ WORKDIR /data
 
 VOLUME [ "/data" ]
 
-EXPOSE 8080/tcp
+EXPOSE 12345/tcp
 
 # Set the entrypoint
 CMD ["/usr/local/bin/llmrouter", "server"]

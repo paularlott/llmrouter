@@ -61,9 +61,9 @@ func newTestRouter(entries []struct {
 			ProviderType: "openai",
 			Client:       &mockClient{e.name},
 			Enabled:      true,
-			Healthy:      true,
 			Weight:       e.weight,
 		}
+		p.Healthy.Store(true)
 		p.ActiveCompletions.Store(e.load)
 		r.Providers[e.name] = p
 		r.ModelMap[e.model] = append(r.ModelMap[e.model], e.name)
@@ -98,8 +98,9 @@ func newSmartTestRouter(t *testing.T, script string) (*Router, *SmartRouter) {
 	for _, name := range []string{"p1", "p2"} {
 		p := &Provider{
 			Name: name, ProviderType: "openai",
-			Client: &mockClient{name}, Enabled: true, Healthy: true, Weight: 1.0,
+			Client: &mockClient{name}, Enabled: true, Weight: 1.0,
 		}
+		p.Healthy.Store(true)
 		r.Providers[name] = p
 	}
 	r.ModelMap["model-a"] = []string{"p1"}
@@ -363,8 +364,9 @@ router.set_model("model-b", hint="p2")
 	// Add a second provider for model-b with zero load
 	r.Providers["p2b"] = &Provider{
 		Name: "p2b", ProviderType: "openai",
-		Client: &mockClient{"p2b"}, Enabled: true, Healthy: true, Weight: 1.0,
+		Client: &mockClient{"p2b"}, Enabled: true, Weight: 1.0,
 	}
+	r.Providers["p2b"].Healthy.Store(true)
 	r.ModelMap["model-b"] = append(r.ModelMap["model-b"], "p2b")
 	// Overload p2 so its score (10) exceeds bestScore (0) + 1.0
 	r.Providers["p2"].ActiveCompletions.Store(10)
@@ -650,10 +652,11 @@ func newRouterWithModels(models []string, allowlist []string, denylist []string)
 	}
 	p := &Provider{
 		Name: "p1", ProviderType: "openai",
-		Client: &mockClient{"p1"}, Enabled: true, Healthy: true, Weight: 1.0,
+		Client: &mockClient{"p1"}, Enabled: true, Weight: 1.0,
 		ModelAllowlist: allowlist,
 		ModelDenylist:  denylist,
 	}
+	p.Healthy.Store(true)
 	r.Providers["p1"] = p
 	r.addProviderModels("p1", models, p)
 	return r
@@ -719,7 +722,7 @@ import router
 if not router.provider_healthy("p1"):
     router.set_model("model-b")
 `)
-	r.Providers["p1"].Healthy = false
+	r.Providers["p1"].Healthy.Store(false)
 	result := sr.Route(context.Background(), &ChatCompletionRequest{Model: "auto"})
 	if result.Model != "model-b" {
 		t.Fatalf("want model-b (p1 unhealthy), got %q", result.Model)
@@ -765,7 +768,7 @@ import router
 if router.has_provider("p1") and not router.provider_healthy("p1"):
     router.set_model("model-b")
 `)
-	r.Providers["p1"].Healthy = false
+	r.Providers["p1"].Healthy.Store(false)
 	result := sr.Route(context.Background(), &ChatCompletionRequest{Model: "auto"})
 	if result.Model != "model-b" {
 		t.Fatalf("want model-b (exists but unhealthy), got %q", result.Model)
@@ -805,8 +808,9 @@ if router.model_load("model-b") == 7:
 	// Add second provider for model-b
 	r.Providers["p2b"] = &Provider{
 		Name: "p2b", ProviderType: "openai",
-		Client: &mockClient{"p2b"}, Enabled: true, Healthy: true, Weight: 1.0,
+		Client: &mockClient{"p2b"}, Enabled: true, Weight: 1.0,
 	}
+	r.Providers["p2b"].Healthy.Store(true)
 	r.ModelMap["model-b"] = append(r.ModelMap["model-b"], "p2b")
 	r.Providers["p2"].ActiveCompletions.Store(3)
 	r.Providers["p2b"].ActiveCompletions.Store(4)
@@ -923,9 +927,10 @@ func newRouterWithAliases(models []string, aliases map[string]string) *Router {
 	}
 	p := &Provider{
 		Name: "p1", ProviderType: "openai",
-		Client: &mockClient{"p1"}, Enabled: true, Healthy: true, Weight: 1.0,
+		Client: &mockClient{"p1"}, Enabled: true, Weight: 1.0,
 		ModelAliases: aliases,
 	}
+	p.Healthy.Store(true)
 	r.Providers["p1"] = p
 	r.addProviderModels("p1", models, p)
 	return r
@@ -986,9 +991,10 @@ func TestAlias_RoundRobin(t *testing.T) {
 		realModel := []string{"gpt-4o-mini", "mistral-small"}[i]
 		p := &Provider{
 			Name: name, ProviderType: "openai",
-			Client: &mockClient{name}, Enabled: true, Healthy: true, Weight: 1.0,
+			Client: &mockClient{name}, Enabled: true, Weight: 1.0,
 			ModelAliases: map[string]string{"fast": realModel},
 		}
+		p.Healthy.Store(true)
 		r.Providers[name] = p
 		r.addProviderModels(name, []string{realModel}, p)
 	}

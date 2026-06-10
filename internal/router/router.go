@@ -58,7 +58,6 @@ func NewRouter(config *types.Config, logger Logger) (*Router, error) {
 			Name:           providerConfig.Name,
 			ProviderType:   providerType,
 			Enabled:        providerConfig.Enabled,
-			Healthy:        true,
 			Client:         client,
 			Models:         providerConfig.Models,
 			ModelAllowlist: providerConfig.ModelAllowlist,
@@ -68,6 +67,7 @@ func NewRouter(config *types.Config, logger Logger) (*Router, error) {
 			ModelTags:      providerConfig.ModelTags,
 			ModelAliases:   providerConfig.ModelAliases,
 		}
+		provider.Healthy.Store(true)
 
 		router.Providers[provider.Name] = provider
 		logger.Info("initialized provider", "name", provider.Name, "type", provider.ProviderType)
@@ -249,8 +249,8 @@ func (r *Router) RefreshModels(ctx context.Context) error {
 		if !provider.Enabled {
 			continue
 		}
-		if !provider.Healthy {
-			r.logger.Debug("skipping provider", "provider", providerName, "enabled", provider.Enabled, "healthy", provider.Healthy)
+		if !provider.Healthy.Load() {
+			r.logger.Debug("skipping provider", "provider", providerName, "enabled", provider.Enabled, "healthy", provider.Healthy.Load())
 			continue
 		}
 		if !provider.Fetching.CompareAndSwap(false, true) {
@@ -353,11 +353,11 @@ func (r *Router) DisableProvider(providerName, reason string) {
 		return
 	}
 
-	if !provider.Healthy {
+	if !provider.Healthy.Load() {
 		return // Already disabled
 	}
 
-	provider.Healthy = false
+	provider.Healthy.Store(false)
 
 	r.logger.Warn("provider disabled", "provider", providerName, "reason", reason)
 
@@ -394,11 +394,11 @@ func (r *Router) EnableProvider(providerName string) {
 		return
 	}
 
-	if provider.Healthy {
+	if provider.Healthy.Load() {
 		return // Already enabled
 	}
 
-	provider.Healthy = true
+	provider.Healthy.Store(true)
 	r.logger.Info("provider re-enabled", "provider", providerName)
 }
 
@@ -448,7 +448,7 @@ func (r *Router) GetProviderForModel(model string, hint string) (string, error) 
 
 	for _, providerName := range providers {
 		provider, exists := r.Providers[providerName]
-		if !exists || !provider.Enabled || !provider.Healthy {
+		if !exists || !provider.Enabled || !provider.Healthy.Load() {
 			continue
 		}
 		w := provider.Weight
@@ -476,7 +476,7 @@ func (r *Router) GetProviderForModel(model string, hint string) (string, error) 
 	// Honour the hint if the hinted provider is healthy and its score is within
 	// bestScore + 1.0 (one extra active completion adjusted for weight).
 	if hint != "" && hint != selectedProvider {
-		if p, ok := r.Providers[hint]; ok && p.Enabled && p.Healthy {
+		if p, ok := r.Providers[hint]; ok && p.Enabled && p.Healthy.Load() {
 			w := p.Weight
 			if w <= 0 {
 				w = 1.0
@@ -1009,7 +1009,7 @@ func (r *Router) HandleHealth(w http.ResponseWriter, req *http.Request) {
 	for name, provider := range r.Providers {
 		providerStatus[name] = map[string]interface{}{
 			"enabled":            provider.Enabled,
-			"healthy":            provider.Healthy,
+			"healthy":            provider.Healthy.Load(),
 			"active_completions": provider.ActiveCompletions.Load(),
 		}
 	}
@@ -1086,7 +1086,7 @@ func (r *Router) checkDisabledProviders() {
 
 	// Find all unhealthy enabled providers
 	for name, provider := range r.Providers {
-		if provider.Enabled && !provider.Healthy {
+		if provider.Enabled && !provider.Healthy.Load() {
 			unhealthyProviders = append(unhealthyProviders, name)
 		}
 	}
@@ -1200,7 +1200,7 @@ func (r *Router) getProviders() []admin.ProviderInfo {
 		providers = append(providers, admin.ProviderInfo{
 			Name:       name,
 			Type:       p.ProviderType,
-			Healthy:    p.Healthy,
+			Healthy:    p.Healthy.Load(),
 			ModelCount: modelCount,
 			Weight:     p.Weight,
 		})
@@ -1299,9 +1299,14 @@ func (r *Router) startMCPCacheRefreshTimer(interval time.Duration) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
-	for range ticker.C {
-		r.logger.Info("auto-refreshing MCP tool cache")
-		r.reloadMCPServers()
+	for {
+		select {
+		case <-r.shutdownChan:
+			return
+		case <-ticker.C:
+			r.logger.Info("auto-refreshing MCP tool cache")
+			r.reloadMCPServers()
+		}
 	}
 }
 

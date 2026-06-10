@@ -1,6 +1,7 @@
 package admin
 
 import (
+	"crypto/subtle"
 	"encoding/json"
 	"net/http"
 	"strings"
@@ -114,7 +115,7 @@ func (a *Admin) HandleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if password != a.password {
+	if subtle.ConstantTimeCompare([]byte(password), []byte(a.password)) != 1 {
 		writeError(w, http.StatusUnauthorized, "invalid password")
 		return
 	}

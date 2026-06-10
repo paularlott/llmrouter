@@ -148,7 +148,7 @@ func buildRouterLibrary(r *Router) *object.Library {
 		result := make([]interface{}, 0, len(names))
 		for _, name := range names {
 			p, ok := r.Providers[name]
-			if !ok || !p.Enabled || !p.Healthy {
+			if !ok || !p.Enabled || !p.Healthy.Load() {
 				continue
 			}
 			result = append(result, map[string]interface{}{
@@ -177,7 +177,7 @@ func buildRouterLibrary(r *Router) *object.Library {
 			w := 1.0
 			if names, ok := r.ModelMap[modelID]; ok {
 				for _, name := range names {
-					if p, ok := r.Providers[name]; ok && p.Enabled && p.Healthy {
+					if p, ok := r.Providers[name]; ok && p.Enabled && p.Healthy.Load() {
 						w = p.Weight
 						break
 					}
@@ -214,7 +214,7 @@ func buildRouterLibrary(r *Router) *object.Library {
 		}
 		result := make([]interface{}, 0, len(r.Providers))
 		for name, p := range r.Providers {
-			if !p.Enabled || !p.Healthy {
+			if !p.Enabled || !p.Healthy.Load() {
 				continue
 			}
 			if filterTag != "" && !hasTag(p.Tags, filterTag) {
@@ -303,7 +303,7 @@ func buildRouterLibrary(r *Router) *object.Library {
 
 	b.FunctionWithHelp("provider_healthy", func(providerName string) bool {
 		p, ok := r.Providers[providerName]
-		return ok && p.Enabled && p.Healthy
+		return ok && p.Enabled && p.Healthy.Load()
 	}, "provider_healthy(name) -> bool - True if the provider exists, is enabled, and is healthy")
 
 	b.FunctionWithHelp("has_provider", func(providerName string) bool {
@@ -317,7 +317,7 @@ func buildRouterLibrary(r *Router) *object.Library {
 		r.ModelMapMu.RUnlock()
 		var total int64
 		for _, name := range names {
-			if p, ok := r.Providers[name]; ok && p.Enabled && p.Healthy {
+			if p, ok := r.Providers[name]; ok && p.Enabled && p.Healthy.Load() {
 				total += p.ActiveCompletions.Load()
 			}
 		}

@@ -32,7 +32,7 @@ func TestDisableProvider_MarksUnhealthy(t *testing.T) {
 
 	r.DisableProvider("p1", "test")
 
-	if r.Providers["p1"].Healthy {
+	if r.Providers["p1"].Healthy.Load() {
 		t.Fatal("provider should be unhealthy after disable")
 	}
 }
@@ -103,7 +103,7 @@ func TestEnableProvider_MarksHealthy(t *testing.T) {
 	r.DisableProvider("p1", "test")
 	r.EnableProvider("p1")
 
-	if !r.Providers["p1"].Healthy {
+	if !r.Providers["p1"].Healthy.Load() {
 		t.Fatal("provider should be healthy after enable")
 	}
 }
@@ -119,7 +119,7 @@ func TestGetProviderForModel_SkipsUnhealthy(t *testing.T) {
 		{"well", "m1", 1.0, 0},
 	})
 	r.logger = &testLogger{}
-	r.Providers["sick"].Healthy = false
+	r.Providers["sick"].Healthy.Store(false)
 
 	got, err := r.GetProviderForModel("m1", "")
 	if err != nil || got != "well" {
@@ -139,8 +139,8 @@ func TestGetProviderForModel_AllUnhealthy(t *testing.T) {
 		{"p2", "m1", 1.0, 0},
 	})
 	r.logger = &testLogger{}
-	r.Providers["p1"].Healthy = false
-	r.Providers["p2"].Healthy = false
+	r.Providers["p1"].Healthy.Store(false)
+	r.Providers["p2"].Healthy.Store(false)
 
 	_, err := r.GetProviderForModel("m1", "")
 	if err == nil {
@@ -287,7 +287,9 @@ func TestAddProviderModels_ConcurrentRefresh(t *testing.T) {
 		logger:    &testLogger{},
 	}
 	for _, name := range []string{"p1", "p2", "p3"} {
-		r.Providers[name] = &Provider{Name: name, Enabled: true, Healthy: true, Weight: 1.0}
+		p := &Provider{Name: name, Enabled: true, Weight: 1.0}
+		p.Healthy.Store(true)
+		r.Providers[name] = p
 	}
 
 	var wg sync.WaitGroup
@@ -329,15 +331,16 @@ func TestCreateChatCompletion_DisablesOnConnectionError(t *testing.T) {
 	r.Providers["p1"] = &Provider{
 		Name: "p1", ProviderType: "openai",
 		Client:  &errorClient{err: errors.New("connection refused")},
-		Enabled: true, Healthy: true, Weight: 1.0,
+		Enabled: true, Weight: 1.0,
 	}
+	r.Providers["p1"].Healthy.Store(true)
 	r.ModelMap["m1"] = []string{"p1"}
 
 	_, err := r.CreateChatCompletion(context.Background(), &ChatCompletionRequest{Model: "m1"})
 	if err == nil {
 		t.Fatal("expected error")
 	}
-	if r.Providers["p1"].Healthy {
+	if r.Providers["p1"].Healthy.Load() {
 		t.Fatal("provider should be disabled after connection error")
 	}
 }
@@ -352,15 +355,16 @@ func TestCreateChatCompletion_DoesNotDisableOnAPIError(t *testing.T) {
 	r.Providers["p1"] = &Provider{
 		Name: "p1", ProviderType: "openai",
 		Client:  &errorClient{err: errors.New("server returned status 500: Model does not exist")},
-		Enabled: true, Healthy: true, Weight: 1.0,
+		Enabled: true, Weight: 1.0,
 	}
+	r.Providers["p1"].Healthy.Store(true)
 	r.ModelMap["m1"] = []string{"p1"}
 
 	_, err := r.CreateChatCompletion(context.Background(), &ChatCompletionRequest{Model: "m1"})
 	if err == nil {
 		t.Fatal("expected error")
 	}
-	if !r.Providers["p1"].Healthy {
+	if !r.Providers["p1"].Healthy.Load() {
 		t.Fatal("provider should remain healthy after non-connection API error")
 	}
 }
@@ -489,8 +493,9 @@ func TestCreateChatCompletion_ParallelLoadBalancing(t *testing.T) {
 		r.Providers[name] = &Provider{
 			Name: name, ProviderType: "openai",
 			Client: &countingClient{name: pName, counter: c},
-			Enabled: true, Healthy: true, Weight: 1.0,
+			Enabled: true, Weight: 1.0,
 		}
+		r.Providers[name].Healthy.Store(true)
 		r.ModelMap["m1"] = append(r.ModelMap["m1"], name)
 	}
 
@@ -542,7 +547,7 @@ func TestCheckDisabledProviders_RecoversStaticModelProviders(t *testing.T) {
 	}
 	// Static model provider (has Models set) — should still be recovered
 	r.Providers["static"] = &Provider{
-		Name: "static", Enabled: true, Healthy: false,
+		Name: "static", Enabled: true,
 		Models: []string{"m1"},
 		Client: &mockClient{"static"},
 		Weight: 1.0,
@@ -551,7 +556,7 @@ func TestCheckDisabledProviders_RecoversStaticModelProviders(t *testing.T) {
 	// Run checkDisabledProviders — static provider SHOULD be re-enabled
 	r.checkDisabledProviders()
 
-	if !r.Providers["static"].Healthy {
+	if !r.Providers["static"].Healthy.Load() {
 		t.Fatal("static model provider should be re-enabled by health check when recovered")
 	}
 }
@@ -566,7 +571,7 @@ func TestCheckDisabledProviders_RecoversDynamicModelProviders(t *testing.T) {
 	}
 	// Dynamic model provider (no Models set) — should be recovered
 	r.Providers["dynamic"] = &Provider{
-		Name: "dynamic", Enabled: true, Healthy: false,
+		Name: "dynamic", Enabled: true,
 		Models: nil, // dynamic discovery
 		Client: &mockClient{"dynamic"},
 		Weight: 1.0,
@@ -574,7 +579,7 @@ func TestCheckDisabledProviders_RecoversDynamicModelProviders(t *testing.T) {
 
 	r.checkDisabledProviders()
 
-	if !r.Providers["dynamic"].Healthy {
+	if !r.Providers["dynamic"].Healthy.Load() {
 		t.Fatal("dynamic model provider should be re-enabled by health check when recovered")
 	}
 }
@@ -598,7 +603,7 @@ func TestCheckDisabledProviders_RemainsUnhealthyOnError(t *testing.T) {
 	}
 	// Provider that will fail health check
 	r.Providers["failing"] = &Provider{
-		Name: "failing", Enabled: true, Healthy: false,
+		Name: "failing", Enabled: true,
 		Models: nil,
 		Client: &errorMockClient{},
 		Weight: 1.0,
@@ -606,7 +611,7 @@ func TestCheckDisabledProviders_RemainsUnhealthyOnError(t *testing.T) {
 
 	r.checkDisabledProviders()
 
-	if r.Providers["failing"].Healthy {
+	if r.Providers["failing"].Healthy.Load() {
 		t.Fatal("provider should remain unhealthy when health check fails")
 	}
 }

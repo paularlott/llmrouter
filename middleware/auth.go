@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"crypto/subtle"
 	"net/http"
 	"strings"
 )
@@ -30,7 +31,7 @@ func Auth(token string) func(http.HandlerFunc) http.HandlerFunc {
 
 			// Extract and validate token
 			providedToken := strings.TrimPrefix(authHeader, "Bearer ")
-			if providedToken != token {
+			if subtle.ConstantTimeCompare([]byte(providedToken), []byte(token)) != 1 {
 				http.Error(w, "Invalid token", http.StatusUnauthorized)
 				return
 			}

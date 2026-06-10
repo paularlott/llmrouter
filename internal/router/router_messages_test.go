@@ -75,7 +75,6 @@ func TestHandleMessages_Conversion(t *testing.T) {
 				Name:         "mock-provider",
 				ProviderType: "openai",
 				Enabled:      true,
-				Healthy:      true,
 				Models:       []string{"mock-model"},
 				Client:       mockClient,
 			},
@@ -86,6 +85,7 @@ func TestHandleMessages_Conversion(t *testing.T) {
 		logger: &testLogger{},
 		config: &types.Config{},
 	}
+	router.Providers["mock-provider"].Healthy.Store(true)
 
 	reqBody := map[string]interface{}{
 		"model": "mock-model",
@@ -155,7 +155,6 @@ func TestHandleChatCompletions_PreservesProviderExtraBody(t *testing.T) {
 				Name:         "mock-provider",
 				ProviderType: "openai",
 				Enabled:      true,
-				Healthy:      true,
 				Models:       []string{"mock-model"},
 				Client:       mockClient,
 			},
@@ -166,6 +165,7 @@ func TestHandleChatCompletions_PreservesProviderExtraBody(t *testing.T) {
 		logger: &testLogger{},
 		config: &types.Config{},
 	}
+	router.Providers["mock-provider"].Healthy.Store(true)
 
 	reqBody := map[string]interface{}{
 		"model": "mock-model",
@@ -234,7 +234,6 @@ func TestHandleMessages_ToolConversion(t *testing.T) {
 				Name:         "mock-provider",
 				ProviderType: "openai",
 				Enabled:      true,
-				Healthy:      true,
 				Models:       []string{"mock-model"},
 				Client:       mockClient,
 			},
@@ -245,6 +244,7 @@ func TestHandleMessages_ToolConversion(t *testing.T) {
 		logger: &testLogger{},
 		config: &types.Config{},
 	}
+	router.Providers["mock-provider"].Healthy.Store(true)
 
 	reqBody := map[string]interface{}{
 		"model": "mock-model",
@@ -336,7 +336,6 @@ func TestHandleMessages_ToolResultConversion(t *testing.T) {
 				Name:         "mock-provider",
 				ProviderType: "openai",
 				Enabled:      true,
-				Healthy:      true,
 				Models:       []string{"mock-model"},
 				Client:       mockClient,
 			},

@@ -22,7 +22,7 @@ type Provider struct {
 	ProviderType      string // openai | claude | gemini | ollama | mistral | zai
 	Client            ai.Client
 	Enabled           bool
-	Healthy           bool
+	Healthy           atomic.Bool
 	ActiveCompletions atomic.Int64
 	Fetching          atomic.Bool
 	Models            []string // static model list; if set, overrides provider API discovery

@@ -30,14 +30,13 @@ func (c *ollamaEmbeddingClient) CreateEmbedding(ctx context.Context, req openai.
 }
 
 func newOllamaHandlerTestRouter(client ai.Client) *Router {
-	return &Router{
+	r := &Router{
 		Providers: map[string]*Provider{
 			"mock-provider": {
 				Name:         "mock-provider",
 				ProviderType: "openai",
 				Client:       client,
 				Enabled:      true,
-				Healthy:      true,
 				Weight:       1,
 				Models:       []string{"llama3.2"},
 			},
@@ -46,6 +45,8 @@ func newOllamaHandlerTestRouter(client ai.Client) *Router {
 		ModelTags: map[string][]string{},
 		logger:    &testLogger{},
 	}
+	r.Providers["mock-provider"].Healthy.Store(true)
+	return r
 }
 
 func TestHandleOllamaVersion(t *testing.T) {
