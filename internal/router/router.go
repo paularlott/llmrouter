@@ -1218,11 +1218,12 @@ func (r *Router) getMCPServers() []admin.MCPServerInfo {
 		servers = append(servers, admin.MCPServerInfo{
 			Namespace:      s.Namespace,
 			URL:            s.URL,
-			Enabled:        true, // Static servers are always enabled
+			Enabled:        true,
 			ToolVisibility: s.ToolVisibility,
 			ToolAllowlist:  s.ToolAllowlist,
 			ToolDenylist:   s.ToolDenylist,
 			StaticServer:   true,
+			RemoteSearch:   s.RemoteSearch,
 		})
 	}
 
@@ -1240,6 +1241,7 @@ func (r *Router) getMCPServers() []admin.MCPServerInfo {
 					ToolAllowlist:  s.ToolAllowlist,
 					ToolDenylist:   s.ToolDenylist,
 					StaticServer:   false,
+					RemoteSearch:   s.RemoteSearch,
 				})
 			}
 		}

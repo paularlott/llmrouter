@@ -229,18 +229,19 @@ func (a *Admin) HandleGetMCPServer(w http.ResponseWriter, r *http.Request) {
 	if a.mcpStorage != nil {
 		server, err := a.mcpStorage.Get(r.Context(), namespace)
 		if err == nil {
-			writeJSON(w, http.StatusOK, MCPServerInfo{
-				Namespace:      server.Namespace,
-				URL:            server.URL,
-				AuthType:       server.AuthType,
-				Enabled:        server.Enabled,
-				ToolVisibility: server.ToolVisibility,
-				ToolAllowlist:  server.ToolAllowlist,
-				ToolDenylist:   server.ToolDenylist,
-				StaticServer:   false,
-			})
-			return
-		}
+		writeJSON(w, http.StatusOK, MCPServerInfo{
+			Namespace:      server.Namespace,
+			URL:            server.URL,
+			AuthType:       server.AuthType,
+			Enabled:        server.Enabled,
+			ToolVisibility: server.ToolVisibility,
+			ToolAllowlist:  server.ToolAllowlist,
+			ToolDenylist:   server.ToolDenylist,
+			StaticServer:   false,
+			RemoteSearch:   server.RemoteSearch,
+		})
+		return
+	}
 	}
 
 	// Then check static servers from config
@@ -264,17 +265,18 @@ func (a *Admin) HandleCreateMCPServer(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		Namespace         string `json:"namespace"`
-		URL               string `json:"url"`
-		AuthType          string `json:"auth_type"`
-		Token             string `json:"token"`
-		OAuthTokenURL     string `json:"oauth_token_url"`
-		OAuthAccessToken  string `json:"oauth_access_token"`
-		OAuthRefreshToken string `json:"oauth_refresh_token"`
-		Enabled           bool   `json:"enabled"`
-		ToolVisibility    string `json:"tool_visibility"`
+		Namespace         string   `json:"namespace"`
+		URL               string   `json:"url"`
+		AuthType          string   `json:"auth_type"`
+		Token             string   `json:"token"`
+		OAuthTokenURL     string   `json:"oauth_token_url"`
+		OAuthAccessToken  string   `json:"oauth_access_token"`
+		OAuthRefreshToken string   `json:"oauth_refresh_token"`
+		Enabled           bool     `json:"enabled"`
+		ToolVisibility    string   `json:"tool_visibility"`
 		ToolAllowlist     []string `json:"tool_allowlist"`
 		ToolDenylist      []string `json:"tool_denylist"`
+		RemoteSearch      bool     `json:"remote_search"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -308,6 +310,7 @@ func (a *Admin) HandleCreateMCPServer(w http.ResponseWriter, r *http.Request) {
 		ToolVisibility:    req.ToolVisibility,
 		ToolAllowlist:     req.ToolAllowlist,
 		ToolDenylist:      req.ToolDenylist,
+		RemoteSearch:      req.RemoteSearch,
 	}
 
 	if err := a.mcpStorage.Create(r.Context(), server); err != nil {
@@ -315,7 +318,6 @@ func (a *Admin) HandleCreateMCPServer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Notify router to reload MCP servers
 	if a.onMCPServerChange != nil {
 		a.onMCPServerChange()
 	}
@@ -329,6 +331,7 @@ func (a *Admin) HandleCreateMCPServer(w http.ResponseWriter, r *http.Request) {
 		ToolAllowlist:  server.ToolAllowlist,
 		ToolDenylist:   server.ToolDenylist,
 		StaticServer:   false,
+		RemoteSearch:   server.RemoteSearch,
 	})
 }
 
@@ -363,6 +366,7 @@ func (a *Admin) HandleUpdateMCPServer(w http.ResponseWriter, r *http.Request) {
 		ToolVisibility    string   `json:"tool_visibility"`
 		ToolAllowlist     []string `json:"tool_allowlist"`
 		ToolDenylist      []string `json:"tool_denylist"`
+		RemoteSearch      bool     `json:"remote_search"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -370,7 +374,6 @@ func (a *Admin) HandleUpdateMCPServer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Update fields
 	if req.URL != "" {
 		server.URL = strings.TrimSuffix(req.URL, "/")
 	}
@@ -398,13 +401,13 @@ func (a *Admin) HandleUpdateMCPServer(w http.ResponseWriter, r *http.Request) {
 	}
 	server.ToolAllowlist = req.ToolAllowlist
 	server.ToolDenylist = req.ToolDenylist
+	server.RemoteSearch = req.RemoteSearch
 
 	if err := a.mcpStorage.Update(r.Context(), server); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to update server")
 		return
 	}
 
-	// Notify router to reload MCP servers
 	if a.onMCPServerChange != nil {
 		a.onMCPServerChange()
 	}
@@ -418,6 +421,7 @@ func (a *Admin) HandleUpdateMCPServer(w http.ResponseWriter, r *http.Request) {
 		ToolAllowlist:  server.ToolAllowlist,
 		ToolDenylist:   server.ToolDenylist,
 		StaticServer:   false,
+		RemoteSearch:   server.RemoteSearch,
 	})
 }
 
@@ -564,7 +568,6 @@ func (a *Admin) HandleToggleMCPServer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Notify router to reload MCP servers
 	if a.onMCPServerChange != nil {
 		a.onMCPServerChange()
 	}
@@ -578,6 +581,7 @@ func (a *Admin) HandleToggleMCPServer(w http.ResponseWriter, r *http.Request) {
 		ToolAllowlist:  server.ToolAllowlist,
 		ToolDenylist:   server.ToolDenylist,
 		StaticServer:   false,
+		RemoteSearch:   server.RemoteSearch,
 	})
 }
 

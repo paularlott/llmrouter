@@ -23,6 +23,7 @@ type pendingOAuth struct {
 	URL            string
 	ToolVisibility string
 	Enabled        bool
+	RemoteSearch   bool
 	ClientID       string
 	TokenURL       string
 	CodeVerifier   string
@@ -66,8 +67,9 @@ func (a *Admin) HandleOAuthStart(w http.ResponseWriter, r *http.Request) {
 		URL            string `json:"url"`
 		ToolVisibility string `json:"tool_visibility"`
 		Enabled        bool   `json:"enabled"`
-		CallbackBase   string `json:"callback_base"` // e.g. "http://localhost:12345"
-		Reauth         bool   `json:"reauth"`        // true = update existing server
+		RemoteSearch   bool   `json:"remote_search"`
+		CallbackBase   string `json:"callback_base"`
+		Reauth         bool   `json:"reauth"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body")
@@ -116,6 +118,7 @@ func (a *Admin) HandleOAuthStart(w http.ResponseWriter, r *http.Request) {
 		URL:            strings.TrimSuffix(req.URL, "/"),
 		ToolVisibility: req.ToolVisibility,
 		Enabled:        req.Enabled,
+		RemoteSearch:   req.RemoteSearch,
 		ClientID:       clientID,
 		TokenURL:       meta.TokenEndpoint,
 		CodeVerifier:   verifier,
@@ -204,6 +207,7 @@ func (a *Admin) HandleOAuthCallback(w http.ResponseWriter, r *http.Request) {
 		OAuthRefreshToken: tokens.RefreshToken,
 		Enabled:           pending.Enabled,
 		ToolVisibility:    pending.ToolVisibility,
+		RemoteSearch:      pending.RemoteSearch,
 	}
 
 	var saveErr error

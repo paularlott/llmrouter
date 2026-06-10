@@ -181,6 +181,7 @@ Alpine.data("mcpServers", () => ({
     oauth_refresh_token: "",
     enabled: true,
     tool_visibility: "native",
+    remote_search: false,
   },
 
   async init() {
@@ -249,6 +250,7 @@ Alpine.data("mcpServers", () => ({
       oauth_refresh_token: "",
       enabled: true,
       tool_visibility: "native",
+      remote_search: false,
     };
     this.editingServer = null;
     this.formError = null;
@@ -266,6 +268,7 @@ Alpine.data("mcpServers", () => ({
       oauth_refresh_token: "",
       enabled: server.enabled,
       tool_visibility: server.tool_visibility || "native",
+      remote_search: server.remote_search || false,
     };
     this.showAddModal = true;
   },
@@ -283,6 +286,7 @@ Alpine.data("mcpServers", () => ({
           url: this.form.url,
           tool_visibility: this.form.tool_visibility,
           enabled: this.form.enabled,
+          remote_search: this.form.remote_search,
           callback_base: window.location.origin,
           reauth: true,
         }),
@@ -314,6 +318,7 @@ Alpine.data("mcpServers", () => ({
             url: this.form.url,
             tool_visibility: this.form.tool_visibility,
             enabled: this.form.enabled,
+            remote_search: this.form.remote_search,
             callback_base: window.location.origin,
           }),
         });

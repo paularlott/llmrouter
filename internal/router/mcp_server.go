@@ -132,8 +132,9 @@ func (m *MCPServer) createRemoteServerEntry(config types.MCPRemoteServerConfig, 
 	}
 
 	return mcp.RemoteServerEntry{
-		Client:     client,
-		Visibility: visibility,
+		Client:       client,
+		Visibility:   visibility,
+		RemoteSearch: config.RemoteSearch,
 	}, rsClient
 }
 
@@ -170,6 +171,7 @@ func (m *MCPServer) ReloadAllServers(storageServers []*storage.MCPServerConfig) 
 			ToolVisibility:    server.ToolVisibility,
 			ToolAllowlist:     server.ToolAllowlist,
 			ToolDenylist:      server.ToolDenylist,
+			RemoteSearch:      server.RemoteSearch,
 		}
 		entry, rsClient := m.createRemoteServerEntry(config, server)
 		m.remoteClients[server.Namespace] = rsClient

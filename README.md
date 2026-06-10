@@ -27,14 +27,14 @@ brew install llmrouter
 
 Download the latest release for your platform from [github.com/paularlott/llmrouter/releases](https://github.com/paularlott/llmrouter/releases):
 
-| Platform | Architecture | Download |
-|----------|-------------|----------|
-| macOS | Intel (AMD64) | `llmrouter-darwin-amd64.zip` |
-| macOS | Apple Silicon (ARM64) | `llmrouter-darwin-arm64.zip` |
-| Linux | AMD64 | `llmrouter-linux-amd64.zip` |
-| Linux | ARM64 | `llmrouter-linux-arm64.zip` |
-| Windows | AMD64 | `llmrouter-windows-amd64.zip` |
-| Windows | ARM64 | `llmrouter-windows-arm64.zip` |
+| Platform | Architecture          | Download                      |
+| -------- | --------------------- | ----------------------------- |
+| macOS    | Intel (AMD64)         | `llmrouter-darwin-amd64.zip`  |
+| macOS    | Apple Silicon (ARM64) | `llmrouter-darwin-arm64.zip`  |
+| Linux    | AMD64                 | `llmrouter-linux-amd64.zip`   |
+| Linux    | ARM64                 | `llmrouter-linux-arm64.zip`   |
+| Windows  | AMD64                 | `llmrouter-windows-amd64.zip` |
+| Windows  | ARM64                 | `llmrouter-windows-arm64.zip` |
 
 Extract the archive and place the binary in your PATH.
 
@@ -226,24 +226,24 @@ See [docs/scriptling-router-library.md](docs/scriptling-router-library.md) for t
 
 Every routing script has access to all Scriptling standard libraries (`json`, `re`, `math`, `random`, `hashlib`, `base64`, `uuid`, `datetime`, `time`, `urllib`, etc.) plus the following extended and Scriptling-specific libraries:
 
-| Library | Description |
-|---------|-------------|
-| `requests` | HTTP client |
-| `secrets` | Cryptographically strong random numbers |
-| `html.parser` | HTML/XHTML parser |
-| `logging` | Logging to the router log |
-| `yaml` | YAML parsing |
-| `toml` | TOML parsing |
-| `sys` | System parameters |
-| `scriptling.ai` | AI/LLM client for OpenAI-compatible APIs |
-| `scriptling.ai.agent` | Agentic AI loop with automatic tool execution |
-| `scriptling.mcp` | MCP tool interaction |
-| `scriptling.toon` | TOON encoding/decoding |
-| `scriptling.similarity` | String matching and similarity utilities |
-| `scriptling.net.resolve` | DNS resolution (IP, SRV, srv+http URLs) |
-| `scriptling.template.html` | HTML template rendering |
-| `scriptling.template.text` | Text template rendering |
-| `scriptling.runtime` | Background tasks, KV store, sync primitives |
+| Library                    | Description                                   |
+| -------------------------- | --------------------------------------------- |
+| `requests`                 | HTTP client                                   |
+| `secrets`                  | Cryptographically strong random numbers       |
+| `html.parser`              | HTML/XHTML parser                             |
+| `logging`                  | Logging to the router log                     |
+| `yaml`                     | YAML parsing                                  |
+| `toml`                     | TOML parsing                                  |
+| `sys`                      | System parameters                             |
+| `scriptling.ai`            | AI/LLM client for OpenAI-compatible APIs      |
+| `scriptling.ai.agent`      | Agentic AI loop with automatic tool execution |
+| `scriptling.mcp`           | MCP tool interaction                          |
+| `scriptling.toon`          | TOON encoding/decoding                        |
+| `scriptling.similarity`    | String matching and similarity utilities      |
+| `scriptling.net.resolve`   | DNS resolution (IP, SRV, srv+http URLs)       |
+| `scriptling.template.html` | HTML template rendering                       |
+| `scriptling.template.text` | Text template rendering                       |
+| `scriptling.runtime`       | Background tasks, KV store, sync primitives   |
 
 Filesystem access (`os`, `pathlib`, `glob`), subprocess execution, and `wait_for` are not available in routing scripts.
 

@@ -25,6 +25,7 @@ type MCPServerConfig struct {
 	ToolAllowlist       []string `json:"tool_allowlist,omitempty"`
 	ToolDenylist        []string `json:"tool_denylist,omitempty"`
 	DisabledTools       []string `json:"disabled_tools,omitempty"` // Tools disabled via UI toggle
+	RemoteSearch        bool     `json:"remote_search,omitempty"`  // Delegate tool_search to this remote
 	CreatedAt           int64    `json:"created_at"`
 	UpdatedAt           int64    `json:"updated_at"`
 }
@@ -157,6 +158,7 @@ func (s *SnapshotMCPStorage) saveServer(key string, server *MCPServerConfig) err
 		"tool_allowlist":       server.ToolAllowlist,
 		"tool_denylist":        server.ToolDenylist,
 		"disabled_tools":       server.DisabledTools,
+		"remote_search":        server.RemoteSearch,
 		"created_at":           server.CreatedAt,
 		"updated_at":           server.UpdatedAt,
 	}
@@ -369,6 +371,9 @@ func parseMCPServerConfig(data map[string]any) (*MCPServerConfig, error) {
 	server.ToolAllowlist = parseStringSlice(data["tool_allowlist"])
 	server.ToolDenylist = parseStringSlice(data["tool_denylist"])
 	server.DisabledTools = parseStringSlice(data["disabled_tools"])
+	if v, ok := data["remote_search"].(bool); ok {
+		server.RemoteSearch = v
+	}
 	if v, ok := data["created_at"].(int64); ok {
 		server.CreatedAt = v
 	}
@@ -422,6 +427,8 @@ func copyMCPServerConfig(server *MCPServerConfig) *MCPServerConfig {
 		OAuthAccessToken:  server.OAuthAccessToken,
 		OAuthRefreshToken: server.OAuthRefreshToken,
 		ToolVisibility:    server.ToolVisibility,
+		Enabled:           server.Enabled,
+		RemoteSearch:      server.RemoteSearch,
 		CreatedAt:         server.CreatedAt,
 		UpdatedAt:         server.UpdatedAt,
 	}
