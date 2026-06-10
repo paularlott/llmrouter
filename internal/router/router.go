@@ -74,7 +74,7 @@ func NewRouter(config *types.Config, logger Logger) (*Router, error) {
 	}
 
 	// Initialize MCP server
-	mcpServer, err := NewMCPServer(config, logger)
+	mcpServer, err := NewMCPServerWithScriptling(config, logger)
 	if err != nil {
 		logger.Warn("failed to initialize MCP server", "error", err)
 		// Continue running even if MCP server fails - it's optional

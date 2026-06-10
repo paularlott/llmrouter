@@ -11,6 +11,7 @@ type Config struct {
 	Responses     ResponsesConfig     `json:"responses"`
 	Conversations ConversationsConfig `json:"conversations"`
 	SmartRouting  SmartRoutingConfig  `json:"smart_routing"`
+	Scripting     ScriptingConfig     `json:"scripting"`
 }
 
 type ServerConfig struct {
@@ -79,4 +80,11 @@ type SmartRoutingConfig struct {
 	DefaultModel string            `json:"default_model,omitempty"`
 	Vars         map[string]string `json:"vars,omitempty"`     // key-value pairs exposed to routing scripts
 	LibPath      []string          `json:"libpath,omitempty"`  // additional directories to search for libraries (script dir is always first)
+}
+
+// ScriptingConfig holds configuration for scriptling-based MCP tools
+type ScriptingConfig struct {
+	ToolsDir   string   `json:"tools_dir,omitempty"`  // Directory containing .toml/.py tool pairs
+	PluginDirs []string `json:"plugin_dirs,omitempty"` // Directories containing plugin executables
+	LibPaths   []string `json:"lib_paths,omitempty"`   // Additional directories to search for libraries
 }

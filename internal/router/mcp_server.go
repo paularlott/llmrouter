@@ -40,6 +40,7 @@ type MCPServer struct {
 	logger               Logger
 	remoteClients        map[string]*remoteServerClient // namespace -> client (for admin UI)
 	pendingStaticEntries []mcp.RemoteServerEntry
+	scriptlingManager    *scriptlingToolManager // Scriptling-based tool manager (if configured)
 }
 
 // NewMCPServer creates a new MCP server instance
@@ -185,11 +186,8 @@ func (m *MCPServer) ReloadAllServers(storageServers []*storage.MCPServerConfig) 
 		}
 	}
 
-	// Atomically replace all servers
-	if len(entries) > 0 {
-		if err := m.server.ReplaceRemoteServers(entries); err != nil {
-			m.logger.Warn("failed to replace remote MCP servers", "error", err)
-		}
+	if err := m.server.ReplaceRemoteServers(entries); err != nil {
+		m.logger.Warn("failed to replace remote MCP servers", "error", err)
 	}
 
 	m.logger.Info("reloaded MCP servers", "static", len(m.config.MCP.RemoteServers), "storage", len(storageServers))
@@ -341,4 +339,32 @@ func (m *MCPServer) GetStorageServerTools(namespace string, server *storage.MCPS
 
 	sort.Slice(result, func(i, j int) bool { return result[i].Name < result[j].Name })
 	return result, nil
+}
+
+// ShutdownScriptlingTools shuts down the scriptling tool manager
+func (m *MCPServer) ShutdownScriptlingTools() {
+	if m.scriptlingManager != nil {
+		m.scriptlingManager.Shutdown()
+	}
+}
+
+// NewMCPServerWithScriptling creates a new MCP server with scriptling tool support
+func NewMCPServerWithScriptling(config *types.Config, logger Logger) (*MCPServer, error) {
+	mcpServer, err := NewMCPServer(config, logger)
+	if err != nil {
+		return nil, err
+	}
+
+	// Setup scriptling tools if configured
+	if config.Scripting.ToolsDir != "" {
+		manager, err := NewScriptlingToolManager(config.Scripting, mcpServer.server, logger)
+		if err != nil {
+			logger.Warn("Failed to setup scriptling tools", "error", err)
+		} else {
+			mcpServer.scriptlingManager = manager
+			logger.Info("Scriptling tools enabled", "tools_dir", config.Scripting.ToolsDir)
+		}
+	}
+
+	return mcpServer, nil
 }

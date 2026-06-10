@@ -1,0 +1,15 @@
+description = "Calculate the sum of two numbers"
+keywords = ["math", "add", "sum", "calculate"]
+discoverable = false
+
+[[parameters]]
+name = "a"
+type = "int"
+description = "First number"
+required = true
+
+[[parameters]]
+name = "b"
+type = "int"
+description = "Second number"
+required = true

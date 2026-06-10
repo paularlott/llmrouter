@@ -305,6 +305,66 @@ tool_visibility = "native"
 tool_denylist = ["delete_message", "ban_user"]  # All tools enabled except these 2
 ```
 
+### Scripting Tools
+
+Define custom MCP tools using `.toml` (metadata) and `.py` (implementation) file pairs. Tools are loaded from a configurable directory and automatically reloaded when files change.
+
+```bash
+./llmrouter server --tools-dir ./tools --plugin-dir ./plugins --libpath ./libs
+```
+
+**Directory structure:**
+
+```
+tools/
+├── calculator.toml
+├── calculator.py
+├── weather.toml
+└── weather.py
+```
+
+**Tool metadata (`.toml`):**
+
+```toml
+description = "Calculate the sum of two numbers"
+keywords = ["math", "add", "sum"]
+
+[[parameters]]
+name = "a"
+type = "int"
+description = "First number"
+required = true
+
+[[parameters]]
+name = "b"
+type = "int"
+description = "Second number"
+required = true
+```
+
+**Tool implementation (`.py`):**
+
+```python
+import scriptling.mcp.tool as tool
+
+a = tool.get_int("a")
+b = tool.get_int("b")
+
+result = a + b
+tool.return_string(f"{a} + {b} = {result}")
+```
+
+**Configuration:**
+
+```toml
+[scripting]
+tools_dir = "./tools"              # Directory containing .toml/.py tool pairs
+plugin_dirs = ["./plugins"]        # Directories containing plugin executables
+lib_paths = ["./libs"]             # Additional directories for scriptling libraries
+```
+
+Tools can be marked as `discoverable = true` to hide them from `tools/list` and make them searchable via `tool_search` only.
+
 ### MCP OAuth Authentication
 
 For MCP servers that require OAuth authentication, configure the OAuth fields instead of `token`:
@@ -408,6 +468,9 @@ Authorization: Bearer your-secret-token
 ./llmrouter -config custom.toml server      # Custom config
 ./llmrouter server -port 8080               # Override port
 ./llmrouter server -token secret123         # Set bearer token
+./llmrouter server --tools-dir ./tools      # Load scriptling MCP tools
+./llmrouter server --plugin-dir ./plugins   # Load scriptling plugins
+./llmrouter server --libpath ./libs         # Add library directories
 ./llmrouter models                          # List available models
 ./llmrouter ask gpt-4o "What is 2+2?"       # Ask a model a question
 ./llmrouter tool calculator '{"op":"add","a":1,"b":2}'  # Execute MCP tool
@@ -438,6 +501,7 @@ Client (OpenAI or Messages protocol)
    ├── Smart Routing   (Scriptling script, tag-based selection, hot-reload)
    ├── Provider Layer  (openai | claude | gemini | ollama | mistral | zai)
    ├── MCP Aggregator  (remote MCP servers with namespace + visibility control)
+   ├── Scripting Tools (local .toml/.py tool pairs with file watching)
    ├── Responses API   (emulated for all providers, in-memory index only)
    └── Conversations   (n8n-compatible, stored in SnapshotKV)
 ```
