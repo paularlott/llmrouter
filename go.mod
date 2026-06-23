@@ -5,10 +5,10 @@ go 1.26.1
 require (
 	github.com/fsnotify/fsnotify v1.10.1
 	github.com/google/uuid v1.6.0
-	github.com/paularlott/cli v0.8.4
+	github.com/paularlott/cli v0.8.5
 	github.com/paularlott/logger v0.3.0
-	github.com/paularlott/mcp v0.17.0
-	github.com/paularlott/scriptling v0.11.0
+	github.com/paularlott/mcp v0.19.0
+	github.com/paularlott/scriptling v0.12.2
 	github.com/paularlott/snapshotkv v0.3.0
 )
 
@@ -26,8 +26,9 @@ require (
 	github.com/tklauser/numcpus v0.12.0 // indirect
 	github.com/vmihailenco/msgpack/v5 v5.4.1 // indirect
 	github.com/vmihailenco/tagparser/v2 v2.0.0 // indirect
+	github.com/yuin/goldmark v1.8.2 // indirect
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
-	golang.org/x/net v0.55.0 // indirect
+	golang.org/x/net v0.56.0 // indirect
 	golang.org/x/oauth2 v0.36.0 // indirect
 	golang.org/x/sys v0.46.0 // indirect
 	golang.org/x/text v0.38.0 // indirect
