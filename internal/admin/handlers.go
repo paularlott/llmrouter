@@ -175,7 +175,6 @@ func (a *Admin) HandleStats(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, a.getStats())
 }
 
-
 // HandleProviders returns provider information
 func (a *Admin) HandleProviders(w http.ResponseWriter, r *http.Request) {
 	if a.getProviders == nil {
@@ -184,6 +183,7 @@ func (a *Admin) HandleProviders(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, a.getProviders())
 }
+
 // HandleModelsPage renders the models page
 func (a *Admin) HandleModelsPage(w http.ResponseWriter, r *http.Request) {
 	data := &TemplateData{
@@ -230,19 +230,19 @@ func (a *Admin) HandleGetMCPServer(w http.ResponseWriter, r *http.Request) {
 	if a.mcpStorage != nil {
 		server, err := a.mcpStorage.Get(r.Context(), namespace)
 		if err == nil {
-		writeJSON(w, http.StatusOK, MCPServerInfo{
-			Namespace:      server.Namespace,
-			URL:            server.URL,
-			AuthType:       server.AuthType,
-			Enabled:        server.Enabled,
-			ToolVisibility: server.ToolVisibility,
-			ToolAllowlist:  server.ToolAllowlist,
-			ToolDenylist:   server.ToolDenylist,
-			StaticServer:   false,
-			RemoteSearch:   server.RemoteSearch,
-		})
-		return
-	}
+			writeJSON(w, http.StatusOK, MCPServerInfo{
+				Namespace:      server.Namespace,
+				URL:            server.URL,
+				AuthType:       server.AuthType,
+				Enabled:        server.Enabled,
+				ToolVisibility: server.ToolVisibility,
+				ToolAllowlist:  server.ToolAllowlist,
+				ToolDenylist:   server.ToolDenylist,
+				StaticServer:   false,
+				RemoteSearch:   server.RemoteSearch,
+			})
+			return
+		}
 	}
 
 	// Then check static servers from config
@@ -268,6 +268,8 @@ func (a *Admin) HandleCreateMCPServer(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Namespace         string   `json:"namespace"`
 		URL               string   `json:"url"`
+		Command           string   `json:"command"`
+		Args              []string `json:"args"`
 		AuthType          string   `json:"auth_type"`
 		Token             string   `json:"token"`
 		OAuthTokenURL     string   `json:"oauth_token_url"`
@@ -278,6 +280,7 @@ func (a *Admin) HandleCreateMCPServer(w http.ResponseWriter, r *http.Request) {
 		ToolAllowlist     []string `json:"tool_allowlist"`
 		ToolDenylist      []string `json:"tool_denylist"`
 		RemoteSearch      bool     `json:"remote_search"`
+		Notifications     bool     `json:"notifications"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -290,8 +293,8 @@ func (a *Admin) HandleCreateMCPServer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.URL == "" {
-		writeError(w, http.StatusBadRequest, "url is required")
+	if req.URL == "" && req.Command == "" {
+		writeError(w, http.StatusBadRequest, "url or command is required")
 		return
 	}
 
@@ -302,6 +305,8 @@ func (a *Admin) HandleCreateMCPServer(w http.ResponseWriter, r *http.Request) {
 	server := &storage.MCPServerConfig{
 		Namespace:         req.Namespace,
 		URL:               strings.TrimSuffix(req.URL, "/"),
+		Command:           req.Command,
+		Args:              req.Args,
 		AuthType:          req.AuthType,
 		Token:             req.Token,
 		OAuthTokenURL:     req.OAuthTokenURL,
@@ -312,6 +317,7 @@ func (a *Admin) HandleCreateMCPServer(w http.ResponseWriter, r *http.Request) {
 		ToolAllowlist:     req.ToolAllowlist,
 		ToolDenylist:      req.ToolDenylist,
 		RemoteSearch:      req.RemoteSearch,
+		Notifications:     req.Notifications,
 	}
 
 	if err := a.mcpStorage.Create(r.Context(), server); err != nil {
@@ -358,6 +364,8 @@ func (a *Admin) HandleUpdateMCPServer(w http.ResponseWriter, r *http.Request) {
 
 	var req struct {
 		URL               string   `json:"url"`
+		Command           string   `json:"command"`
+		Args              []string `json:"args"`
 		AuthType          string   `json:"auth_type"`
 		Token             string   `json:"token"`
 		OAuthTokenURL     string   `json:"oauth_token_url"`
@@ -368,6 +376,7 @@ func (a *Admin) HandleUpdateMCPServer(w http.ResponseWriter, r *http.Request) {
 		ToolAllowlist     []string `json:"tool_allowlist"`
 		ToolDenylist      []string `json:"tool_denylist"`
 		RemoteSearch      bool     `json:"remote_search"`
+		Notifications     bool     `json:"notifications"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -403,6 +412,9 @@ func (a *Admin) HandleUpdateMCPServer(w http.ResponseWriter, r *http.Request) {
 	server.ToolAllowlist = req.ToolAllowlist
 	server.ToolDenylist = req.ToolDenylist
 	server.RemoteSearch = req.RemoteSearch
+	server.Command = req.Command
+	server.Args = req.Args
+	server.Notifications = req.Notifications
 
 	if err := a.mcpStorage.Update(r.Context(), server); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to update server")

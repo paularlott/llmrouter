@@ -173,7 +173,10 @@ Alpine.data("mcpServers", () => ({
   storageWritable: false,
   form: {
     namespace: "",
+    transport: "http",
     url: "",
+    command: "",
+    args: "",
     auth_type: "bearer",
     token: "",
     oauth_token_url: "",
@@ -182,6 +185,7 @@ Alpine.data("mcpServers", () => ({
     enabled: true,
     tool_visibility: "native",
     remote_search: false,
+    notifications: false,
   },
 
   async init() {
@@ -242,7 +246,10 @@ Alpine.data("mcpServers", () => ({
   resetForm() {
     this.form = {
       namespace: "",
+      transport: "http",
       url: "",
+      command: "",
+      args: "",
       auth_type: "bearer",
       token: "",
       oauth_token_url: "",
@@ -251,6 +258,7 @@ Alpine.data("mcpServers", () => ({
       enabled: true,
       tool_visibility: "native",
       remote_search: false,
+      notifications: false,
     };
     this.editingServer = null;
     this.formError = null;
@@ -260,7 +268,10 @@ Alpine.data("mcpServers", () => ({
     this.editingServer = server;
     this.form = {
       namespace: server.namespace,
+      transport: server.command ? "stdio" : "http",
       url: server.url,
+      command: server.command || "",
+      args: (server.args || []).join(" "),
       auth_type: server.auth_type || "bearer",
       token: "",
       oauth_token_url: "",
@@ -269,6 +280,7 @@ Alpine.data("mcpServers", () => ({
       enabled: server.enabled,
       tool_visibility: server.tool_visibility || "native",
       remote_search: server.remote_search || false,
+      notifications: server.notifications || false,
     };
     this.showAddModal = true;
   },
@@ -336,7 +348,22 @@ Alpine.data("mcpServers", () => ({
         : '/admin/api/mcp-servers';
       const method = this.editingServer ? 'PUT' : 'POST';
 
+      // Build body from form, splitting args string into array and clearing
+      // fields that don't apply to the chosen transport.
       const body = { ...this.form };
+      if (body.transport === 'stdio') {
+        body.url = '';
+        body.auth_type = 'bearer';
+        body.token = '';
+        body.args = (body.args || '').trim().split(/\s+/).filter(Boolean);
+      } else {
+        body.command = '';
+        body.args = [];
+        delete body.args;
+      }
+      delete body.transport;
+      delete body.oauth_access_token;
+      delete body.oauth_refresh_token;
       if (this.editingServer && body.auth_type !== 'oauth2' && !body.token) {
         delete body.token;
       }

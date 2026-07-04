@@ -73,6 +73,41 @@ func NewMCPServer(config *types.Config, logger Logger) (*MCPServer, error) {
 // createRemoteServerEntry creates a RemoteServerEntry and remoteServerClient for a server config
 // If storageServer is provided, it's used for disabled tools; otherwise static config is used
 func (m *MCPServer) createRemoteServerEntry(config types.MCPRemoteServerConfig, storageServer *storage.MCPServerConfig) (mcp.RemoteServerEntry, *remoteServerClient) {
+	// stdio server: a local executable launched as a subprocess. No URL/auth.
+	if config.Command != "" {
+		client, err := mcp.NewStdioClient(config.Command, config.Args, config.Namespace)
+		if err != nil {
+			m.logger.Warn("failed to launch stdio MCP server", "namespace", config.Namespace, "command", config.Command, "error", err)
+			// Return an empty entry; ReloadAllServers skips nil clients via the
+			// unfiltered rsClient still being usable for admin listing attempts.
+			return mcp.RemoteServerEntry{Visibility: mcp.ToolVisibilityNative}, &remoteServerClient{config: config}
+		}
+		// Unfiltered client for admin UI listing: a second stdio subprocess is
+		// wasteful, so reuse the same client (the filter only affects listing in
+		// the federated path; admin listing reads the full set directly).
+		unfilteredClient, _ := mcp.NewStdioClient(config.Command, config.Args, config.Namespace)
+
+		visibility := mcp.ToolVisibilityNative
+		if config.ToolVisibility == "ondemand" || config.ToolVisibility == "discoverable" {
+			visibility = mcp.ToolVisibilityDiscoverable
+		}
+
+		if config.Notifications {
+			client.EnableNotifications()
+		}
+
+		rsClient := &remoteServerClient{
+			client:      unfilteredClient,
+			config:      config,
+			initialized: false,
+		}
+		return mcp.RemoteServerEntry{
+			Client:       client,
+			Visibility:   visibility,
+			RemoteSearch: config.RemoteSearch,
+		}, rsClient
+	}
+
 	var auth mcp.AuthProvider
 	if config.AuthType == "oauth2" {
 		auth = mcp.NewOAuth2RefreshTokenAuth(config.OAuthTokenURL, config.OAuthClientID, config.OAuthAccessToken, config.OAuthRefreshToken)
@@ -126,6 +161,15 @@ func (m *MCPServer) createRemoteServerEntry(config types.MCPRemoteServerConfig, 
 		})
 	}
 
+	// Opt the federated client into notifications: it opens an SSE reader and,
+	// via the propagation hook installed at registration, refreshes our merged
+	// tool cache and re-emits listChanged to our own clients when the remote's
+	// tools change. (Only for the federated client; the unfiltered admin client
+	// refreshes on demand instead.)
+	if config.Notifications {
+		client.EnableNotifications()
+	}
+
 	rsClient := &remoteServerClient{
 		client:      unfilteredClient,
 		config:      config,
@@ -163,6 +207,8 @@ func (m *MCPServer) ReloadAllServers(storageServers []*storage.MCPServerConfig) 
 		config := types.MCPRemoteServerConfig{
 			Namespace:         server.Namespace,
 			URL:               server.URL,
+			Command:           server.Command,
+			Args:              server.Args,
 			AuthType:          server.AuthType,
 			Token:             server.Token,
 			OAuthClientID:     server.OAuthClientID,
@@ -173,6 +219,7 @@ func (m *MCPServer) ReloadAllServers(storageServers []*storage.MCPServerConfig) 
 			ToolAllowlist:     server.ToolAllowlist,
 			ToolDenylist:      server.ToolDenylist,
 			RemoteSearch:      server.RemoteSearch,
+			Notifications:     server.Notifications,
 		}
 		entry, rsClient := m.createRemoteServerEntry(config, server)
 		m.remoteClients[server.Namespace] = rsClient
@@ -180,15 +227,23 @@ func (m *MCPServer) ReloadAllServers(storageServers []*storage.MCPServerConfig) 
 		// Only register enabled servers with the MCP server
 		if server.Enabled {
 			entries = append(entries, entry)
-			m.logger.Info("registering storage-based MCP server", "namespace", server.Namespace, "url", server.URL)
+			if server.Command != "" {
+				m.logger.Info("registering storage-based MCP server", "namespace", server.Namespace, "command", server.Command)
+			} else {
+				m.logger.Info("registering storage-based MCP server", "namespace", server.Namespace, "url", server.URL)
+			}
 		} else {
-			m.logger.Info("skipping disabled storage-based MCP server", "namespace", server.Namespace, "url", server.URL)
+			m.logger.Info("skipping disabled storage-based MCP server", "namespace", server.Namespace, "url", server.URL, "command", server.Command)
 		}
 	}
 
 	if err := m.server.ReplaceRemoteServers(entries); err != nil {
 		m.logger.Warn("failed to replace remote MCP servers", "error", err)
 	}
+
+	// The federated tool set just changed (servers added/removed/replaced): tell
+	// connected clients to drop their cached tool list and re-fetch.
+	m.server.NotifyToolsChanged()
 
 	m.logger.Info("reloaded MCP servers", "static", len(m.config.MCP.RemoteServers), "storage", len(storageServers))
 }

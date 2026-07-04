@@ -27,18 +27,18 @@ type LoggingConfig struct {
 }
 
 type ProviderConfig struct {
-	Name     string            `json:"name" toml:"name"`
-	Provider string            `json:"provider" toml:"provider"`           // openai | claude | gemini | ollama | mistral | zai
-	BaseURL  string            `json:"base_url,omitempty" toml:"base_url"` // optional override
-	Token    string            `json:"token" toml:"token"`
-	Enabled  bool              `json:"enabled" toml:"enabled"`
-	Weight   float64           `json:"weight,omitempty" toml:"weight"`     // 0.0-2.0, default 1.0; higher = preferred
-	Models        []string            `json:"models,omitempty" toml:"models"`                    // if set, use these models instead of querying the provider
-	ModelAllowlist []string           `json:"model_allowlist,omitempty" toml:"model_allowlist"`  // if set, only these models are used from auto-discovery
-	Tags          []string            `json:"tags,omitempty" toml:"tags"`                        // arbitrary tags for routing scripts
-	ModelTags     map[string][]string `json:"model_tags,omitempty" toml:"model_tags"`            // model_id -> tags
-	ModelDenylist []string            `json:"model_denylist,omitempty" toml:"model_denylist"`    // models to exclude from auto-discovery
-	ModelAliases  map[string]string   `json:"model_aliases,omitempty" toml:"model_aliases"`      // alias -> real model name
+	Name           string              `json:"name" toml:"name"`
+	Provider       string              `json:"provider" toml:"provider"`           // openai | claude | gemini | ollama | mistral | zai
+	BaseURL        string              `json:"base_url,omitempty" toml:"base_url"` // optional override
+	Token          string              `json:"token" toml:"token"`
+	Enabled        bool                `json:"enabled" toml:"enabled"`
+	Weight         float64             `json:"weight,omitempty" toml:"weight"`                   // 0.0-2.0, default 1.0; higher = preferred
+	Models         []string            `json:"models,omitempty" toml:"models"`                   // if set, use these models instead of querying the provider
+	ModelAllowlist []string            `json:"model_allowlist,omitempty" toml:"model_allowlist"` // if set, only these models are used from auto-discovery
+	Tags           []string            `json:"tags,omitempty" toml:"tags"`                       // arbitrary tags for routing scripts
+	ModelTags      map[string][]string `json:"model_tags,omitempty" toml:"model_tags"`           // model_id -> tags
+	ModelDenylist  []string            `json:"model_denylist,omitempty" toml:"model_denylist"`   // models to exclude from auto-discovery
+	ModelAliases   map[string]string   `json:"model_aliases,omitempty" toml:"model_aliases"`     // alias -> real model name
 }
 
 type MCPConfig struct {
@@ -47,19 +47,22 @@ type MCPConfig struct {
 }
 
 type MCPRemoteServerConfig struct {
-	Namespace           string   `json:"namespace" toml:"namespace"`
-	URL                 string   `json:"url" toml:"url"`
-	AuthType            string   `json:"auth_type,omitempty" toml:"auth_type"`
-	Token               string   `json:"token,omitempty" toml:"token"`
-	OAuthClientID       string   `json:"oauth_client_id,omitempty" toml:"oauth_client_id"`
-	OAuthTokenURL       string   `json:"oauth_token_url,omitempty" toml:"oauth_token_url"`
-	OAuthAccessToken    string   `json:"oauth_access_token,omitempty" toml:"oauth_access_token"`
-	OAuthRefreshToken   string   `json:"oauth_refresh_token,omitempty" toml:"oauth_refresh_token"`
-	ToolVisibility      string   `json:"tool_visibility,omitempty" toml:"tool_visibility"` // "native" (default) or "ondemand"
-	ToolAllowlist       []string `json:"tool_allowlist,omitempty" toml:"tool_allowlist"`   // If set, only these tools are enabled
-	ToolDenylist        []string `json:"tool_denylist,omitempty" toml:"tool_denylist"`     // If set, these tools are disabled
-	StaticServer        bool     `json:"static_server,omitempty" toml:"static_server"`     // If true, server is defined in config (read-only in UI)
-	RemoteSearch        bool     `json:"remote_search,omitempty" toml:"remote_search"`     // Delegate tool_search to this remote server
+	Namespace         string   `json:"namespace" toml:"namespace"`
+	URL               string   `json:"url" toml:"url"`
+	Command           string   `json:"command,omitempty" toml:"command"` // stdio: executable to launch (empty for HTTP)
+	Args              []string `json:"args,omitempty" toml:"args"`       // stdio: command-line arguments
+	AuthType          string   `json:"auth_type,omitempty" toml:"auth_type"`
+	Token             string   `json:"token,omitempty" toml:"token"`
+	OAuthClientID     string   `json:"oauth_client_id,omitempty" toml:"oauth_client_id"`
+	OAuthTokenURL     string   `json:"oauth_token_url,omitempty" toml:"oauth_token_url"`
+	OAuthAccessToken  string   `json:"oauth_access_token,omitempty" toml:"oauth_access_token"`
+	OAuthRefreshToken string   `json:"oauth_refresh_token,omitempty" toml:"oauth_refresh_token"`
+	ToolVisibility    string   `json:"tool_visibility,omitempty" toml:"tool_visibility"` // "native" (default) or "ondemand"
+	ToolAllowlist     []string `json:"tool_allowlist,omitempty" toml:"tool_allowlist"`   // If set, only these tools are enabled
+	ToolDenylist      []string `json:"tool_denylist,omitempty" toml:"tool_denylist"`     // If set, these tools are disabled
+	StaticServer      bool     `json:"static_server,omitempty" toml:"static_server"`     // If true, server is defined in config (read-only in UI)
+	RemoteSearch      bool     `json:"remote_search,omitempty" toml:"remote_search"`     // Delegate tool_search to this remote server
+	Notifications     bool     `json:"notifications,omitempty" toml:"notifications"`     // Accept listChanged notifications from this server and propagate them
 }
 
 type StorageConfig struct {
@@ -78,13 +81,13 @@ type SmartRoutingConfig struct {
 	Enabled      bool              `json:"enabled"`
 	Script       string            `json:"script,omitempty"`
 	DefaultModel string            `json:"default_model,omitempty"`
-	Vars         map[string]string `json:"vars,omitempty"`     // key-value pairs exposed to routing scripts
-	LibPath      []string          `json:"libpath,omitempty"`  // additional directories to search for libraries (script dir is always first)
+	Vars         map[string]string `json:"vars,omitempty"`    // key-value pairs exposed to routing scripts
+	LibPath      []string          `json:"libpath,omitempty"` // additional directories to search for libraries (script dir is always first)
 }
 
 // ScriptingConfig holds configuration for scriptling-based MCP tools
 type ScriptingConfig struct {
-	ToolsDir   string   `json:"tools_dir,omitempty"`  // Directory containing .toml/.py tool pairs
+	ToolsDir   string   `json:"tools_dir,omitempty"`   // Directory containing .toml/.py tool pairs
 	PluginDirs []string `json:"plugin_dirs,omitempty"` // Directories containing plugin executables
 	LibPaths   []string `json:"lib_paths,omitempty"`   // Additional directories to search for libraries
 }
