@@ -9,6 +9,7 @@ import (
 
 	"github.com/paularlott/llmrouter/internal/types"
 	mcp_lib "github.com/paularlott/mcp"
+	mcpcli "github.com/paularlott/scriptling/scriptling-cli/mcp"
 )
 
 func TestScanToolsFolder(t *testing.T) {
@@ -69,9 +70,9 @@ required = false
 	}
 
 	// Scan the folder
-	tools, err := scanToolsFolder(tmpDir)
+	tools, err := mcpcli.ScanToolsFolder(tmpDir)
 	if err != nil {
-		t.Fatalf("scanToolsFolder failed: %v", err)
+		t.Fatalf("ScanToolsFolder failed: %v", err)
 	}
 
 	// Should have found 2 tools
@@ -117,9 +118,9 @@ func TestScanToolsFolder_EmptyDirectory(t *testing.T) {
 	}
 	defer os.RemoveAll(tmpDir)
 
-	tools, err := scanToolsFolder(tmpDir)
+	tools, err := mcpcli.ScanToolsFolder(tmpDir)
 	if err != nil {
-		t.Fatalf("scanToolsFolder failed: %v", err)
+		t.Fatalf("ScanToolsFolder failed: %v", err)
 	}
 	if len(tools) != 0 {
 		t.Errorf("expected 0 tools in empty directory, got %d", len(tools))
@@ -148,9 +149,9 @@ func TestScanToolsFolder_IgnoresNonTOMLFiles(t *testing.T) {
 		t.Fatalf("failed to create subdir: %v", err)
 	}
 
-	tools, err := scanToolsFolder(tmpDir)
+	tools, err := mcpcli.ScanToolsFolder(tmpDir)
 	if err != nil {
-		t.Fatalf("scanToolsFolder failed: %v", err)
+		t.Fatalf("ScanToolsFolder failed: %v", err)
 	}
 
 	if len(tools) != 1 {
@@ -234,9 +235,9 @@ tool.return_string(result)
 		t.Fatalf("failed to write test script: %v", err)
 	}
 
-	handler, err := createMCPToolHandler(scriptPath, nil, nil)
+	handler, err := mcpcli.BuildToolHandler(scriptPath, mcpcli.NewHandlerConfig(nil))
 	if err != nil {
-		t.Fatalf("createMCPToolHandler failed: %v", err)
+		t.Fatalf("BuildToolHandler failed: %v", err)
 	}
 
 	ctx := context.Background()

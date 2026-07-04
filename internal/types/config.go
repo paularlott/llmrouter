@@ -85,9 +85,13 @@ type SmartRoutingConfig struct {
 	LibPath      []string          `json:"libpath,omitempty"` // additional directories to search for libraries (script dir is always first)
 }
 
-// ScriptingConfig holds configuration for scriptling-based MCP tools
+// ScriptingConfig holds configuration for scriptling-served MCP content.
+// Tools, resources and prompts are all optional — set the dir for the kinds
+// you want to serve; leave blank to skip.
 type ScriptingConfig struct {
-	ToolsDir   string   `json:"tools_dir,omitempty"`   // Directory containing .toml/.py tool pairs
-	PluginDirs []string `json:"plugin_dirs,omitempty"` // Directories containing plugin executables
-	LibPaths   []string `json:"lib_paths,omitempty"`   // Additional directories to search for libraries
+	ToolsDir     string   `json:"tools_dir,omitempty"`     // Directory containing .toml/.py tool pairs
+	ResourcesDir string   `json:"resources_dir,omitempty"` // Directory containing static files and resource templates (first segment = URI scheme)
+	PromptsDir   string   `json:"prompts_dir,omitempty"`   // Directory containing .toml+.py dynamic prompts or static .md/.txt prompts
+	PluginDirs   []string `json:"plugin_dirs,omitempty"`   // Directories containing plugin executables
+	LibPaths     []string `json:"lib_paths,omitempty"`     // Additional directories to search for libraries
 }

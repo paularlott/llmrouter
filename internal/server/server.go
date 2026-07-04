@@ -44,9 +44,11 @@ func RunServer(ctx context.Context, cmd *cli.Command) error {
 			TTLDays: cmd.GetInt("conversations-ttl"),
 		},
 		Scripting: types.ScriptingConfig{
-			ToolsDir:   cmd.GetString("tools-dir"),
-			PluginDirs: cmd.GetStringSlice("plugin-dir"),
-			LibPaths:   cmd.GetStringSlice("libpath"),
+			ToolsDir:     cmd.GetString("tools-dir"),
+			ResourcesDir: cmd.GetString("resources-dir"),
+			PromptsDir:   cmd.GetString("prompts-dir"),
+			PluginDirs:   cmd.GetStringSlice("plugin-dir"),
+			LibPaths:     cmd.GetStringSlice("libpath"),
 		},
 	}
 
@@ -112,6 +114,8 @@ func RunServer(ctx context.Context, cmd *cli.Command) error {
 		}
 		if scriptingCfg := typedConfig.GetObject("scripting"); scriptingCfg != nil {
 			config.Scripting.ToolsDir = scriptingCfg.GetString("tools_dir")
+			config.Scripting.ResourcesDir = scriptingCfg.GetString("resources_dir")
+			config.Scripting.PromptsDir = scriptingCfg.GetString("prompts_dir")
 			config.Scripting.PluginDirs = scriptingCfg.GetStringSlice("plugin_dirs")
 			config.Scripting.LibPaths = scriptingCfg.GetStringSlice("lib_paths")
 		}

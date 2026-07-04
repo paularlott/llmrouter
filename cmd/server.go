@@ -79,6 +79,16 @@ var ServerCmd = &cli.Command{
 			Usage:        "Directory containing scriptling tool definitions (.toml/.py pairs)",
 			ConfigPath:   []string{"scripting.tools_dir"},
 		},
+		&cli.StringFlag{
+			Name:         "resources-dir",
+			Usage:        "Directory containing scriptling MCP resources (static files and {var}.py templates)",
+			ConfigPath:   []string{"scripting.resources_dir"},
+		},
+		&cli.StringFlag{
+			Name:         "prompts-dir",
+			Usage:        "Directory containing scriptling MCP prompts (.toml+.py dynamic, or .md/.txt static)",
+			ConfigPath:   []string{"scripting.prompts_dir"},
+		},
 		&cli.StringSliceFlag{
 			Name:       "plugin-dir",
 			Usage:      "Directory containing scriptling plugin executables (can be repeated)",

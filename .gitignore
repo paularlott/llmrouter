@@ -1,4 +1,5 @@
 /llmrouter
+/.codegraph/
 /config.toml
 /router.py
 /.claude/

@@ -10,33 +10,49 @@ import (
 	"time"
 
 	"github.com/fsnotify/fsnotify"
-	"github.com/paularlott/cli"
-	cli_toml "github.com/paularlott/cli/toml"
 	"github.com/paularlott/llmrouter/internal/types"
 	mcp_lib "github.com/paularlott/mcp"
 	"github.com/paularlott/mcp/toolmetadata"
-	"github.com/paularlott/scriptling"
-	scriptlingmcp "github.com/paularlott/scriptling/extlibs/mcp"
-	"github.com/paularlott/scriptling/extlibs/secretprovider"
-	"github.com/paularlott/scriptling/libloader"
 	scriptlingplugin "github.com/paularlott/scriptling/plugin"
-	"github.com/paularlott/scriptling/scriptling-cli/setup"
+	mcpcli "github.com/paularlott/scriptling/scriptling-cli/mcp"
 )
 
+// scriptlingToolManager owns scriptling-served MCP content — tools, resources
+// and prompts — registered on a single *mcp_lib.Server. It scans each
+// configured source folder at startup, registers everything it finds, watches
+// the folders for changes, and reloads in place (mutating the live server so
+// connected clients keep their notification subscriptions). Reload granularity
+// differs per kind: tools are re-registered per name (the only kind with
+// declarative TOML metadata that pairs 1:1 with a .py), while resources and
+// prompts are reloaded as a group because their scan logic interacts across
+// sibling files (e.g. a name.toml shadows a name.md, template URIs depend on
+// neighbouring path segments).
 type scriptlingToolManager struct {
 	logger           Logger
 	config           types.ScriptingConfig
 	toolsDirAbs      string
+	resourcesDirAbs  string
+	promptsDirAbs    string
 	watcher          *fsnotify.Watcher
 	plugins          *scriptlingplugin.Manager
 	debounceDuration time.Duration
-	debounceTimers   map[string]*time.Timer
 	debounceMu       sync.Mutex
+	toolTimers       map[string]*time.Timer // per-name debounce for tool reloads
+	resourceTimer    *time.Timer            // single debounce timer for full resources reload
+	promptTimer      *time.Timer            // single debounce timer for full prompts reload
 	done             chan struct{}
 	wg               sync.WaitGroup
 	mainServer       *mcp_lib.Server
+	handlerCfg       mcpcli.HandlerConfig
+
+	// Tracked keys so reload-in-place can unregister what it previously added.
+	resourceStaticURIs []string // folder-sourced static resource URIs
+	resourceTemplates  []string // folder-sourced resource template URIs
+	promptNames        []string // folder-sourced prompt names
 }
 
+// NewScriptlingToolManager builds a manager, registers every folder-sourced
+// tool / resource / prompt on mainServer, and starts watching for changes.
 func NewScriptlingToolManager(config types.ScriptingConfig, mainServer *mcp_lib.Server, logger Logger) (*scriptlingToolManager, error) {
 	stm := &scriptlingToolManager{
 		config:           config,
@@ -44,21 +60,31 @@ func NewScriptlingToolManager(config types.ScriptingConfig, mainServer *mcp_lib.
 		mainServer:       mainServer,
 		debounceDuration: 500 * time.Millisecond,
 		done:             make(chan struct{}),
-		debounceTimers:   make(map[string]*time.Timer),
+		toolTimers:       make(map[string]*time.Timer),
 	}
 
-	if config.ToolsDir != "" {
-		abs, err := filepath.Abs(config.ToolsDir)
-		if err != nil {
-			abs = config.ToolsDir
+	// Resolve absolute paths for each configured source folder.
+	for _, pair := range []struct {
+		src string
+		dst *string
+	}{
+		{config.ToolsDir, &stm.toolsDirAbs},
+		{config.ResourcesDir, &stm.resourcesDirAbs},
+		{config.PromptsDir, &stm.promptsDirAbs},
+	} {
+		if pair.src != "" {
+			abs, err := filepath.Abs(pair.src)
+			if err != nil {
+				abs = pair.src
+			}
+			*pair.dst = abs
 		}
-		stm.toolsDirAbs = abs
 	}
 
+	// Plugins are shared across every handler built from this manager.
 	stm.plugins = scriptlingplugin.NewManager(logger, func(name string, err error) {
 		logger.Error("Plugin process exited", "plugin", name, "error", err)
 	})
-
 	if len(config.PluginDirs) > 0 {
 		for _, dir := range config.PluginDirs {
 			stm.plugins.AddDir(dir)
@@ -71,50 +97,89 @@ func NewScriptlingToolManager(config types.ScriptingConfig, mainServer *mcp_lib.
 		}
 	}
 
-	if err := stm.setupMCP(); err != nil {
-		return nil, fmt.Errorf("failed to setup MCP server: %w", err)
+	// The shared HandlerConfig drives every folder-sourced tool / resource /
+	// prompt handler. LibPaths provides additional import dirs; the script's
+	// own dir is prepended by each factory. No logger is wired through to the
+	// interpreter (matching the pre-refactor behaviour); script execution
+	// uses a null logger for the logging library.
+	stm.handlerCfg = mcpcli.NewHandlerConfig(config.LibPaths,
+		mcpcli.WithPlugins(stm.plugins),
+	)
+
+	if err := stm.registerAll(); err != nil {
+		return nil, err
 	}
 
-	if stm.toolsDirAbs != "" {
+	if stm.toolsDirAbs != "" || stm.resourcesDirAbs != "" || stm.promptsDirAbs != "" {
 		if err := stm.startWatching(); err != nil {
-			logger.Warn("Failed to start tools watcher, auto-reload disabled", "error", err)
+			logger.Warn("Failed to start source-folder watcher, auto-reload disabled", "error", err)
 		}
 	}
 
 	return stm, nil
 }
 
-func (stm *scriptlingToolManager) setupMCP() error {
-	if stm.toolsDirAbs == "" {
-		return nil
+// registerAll performs the initial scan+register pass for every configured
+// folder. A scan failure on any one folder aborts startup so misconfiguration
+// is surfaced loudly.
+func (stm *scriptlingToolManager) registerAll() error {
+	if stm.toolsDirAbs != "" {
+		tools, err := mcpcli.ScanToolsFolder(stm.toolsDirAbs)
+		if err != nil {
+			return fmt.Errorf("failed to scan tools folder %s: %w", stm.toolsDirAbs, err)
+		}
+		for toolName, meta := range tools {
+			stm.registerTool(toolName, meta)
+		}
 	}
 
-	tools, err := scanToolsFolder(stm.toolsDirAbs)
-	if err != nil {
-		return fmt.Errorf("failed to scan tools folder %s: %w", stm.toolsDirAbs, err)
+	if stm.resourcesDirAbs != "" {
+		staticURIs, templates, err := stm.registerResources()
+		if err != nil {
+			return fmt.Errorf("failed to register resources from %s: %w", stm.resourcesDirAbs, err)
+		}
+		stm.resourceStaticURIs = staticURIs
+		stm.resourceTemplates = templates
 	}
 
-	for toolName, meta := range tools {
-		stm.registerTool(toolName, meta)
+	if stm.promptsDirAbs != "" {
+		names, err := stm.registerPrompts()
+		if err != nil {
+			return fmt.Errorf("failed to register prompts from %s: %w", stm.promptsDirAbs, err)
+		}
+		stm.promptNames = names
 	}
 
 	return nil
 }
 
+// startWatching attaches an fsnotify watcher to every configured source folder
+// and runs watchLoop to dispatch events. Failure to add any single folder is
+// warned about but does not abort — partial watching is better than none.
 func (stm *scriptlingToolManager) startWatching() error {
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
 		return fmt.Errorf("failed to create watcher: %w", err)
 	}
-
 	stm.watcher = watcher
 
-	if err := watcher.Add(stm.toolsDirAbs); err != nil {
-		watcher.Close()
-		return fmt.Errorf("failed to watch tools folder: %w", err)
+	for _, pair := range []struct {
+		dir string
+		kind string
+	}{
+		{stm.toolsDirAbs, "tools"},
+		{stm.resourcesDirAbs, "resources"},
+		{stm.promptsDirAbs, "prompts"},
+	} {
+		if pair.dir == "" {
+			continue
+		}
+		if err := watcher.Add(pair.dir); err != nil {
+			stm.logger.Warn("Failed to watch folder, auto-reload disabled for it", "kind", pair.kind, "path", pair.dir, "error", err)
+		} else {
+			stm.logger.Info("Watching folder for changes", "kind", pair.kind, "path", pair.dir)
+		}
 	}
-
-	stm.logger.Info("Watching tools folder for changes", "path", stm.toolsDirAbs)
 
 	stm.wg.Add(1)
 	go stm.watchLoop()
@@ -122,6 +187,11 @@ func (stm *scriptlingToolManager) startWatching() error {
 	return nil
 }
 
+// watchLoop dispatches fsnotify events to the right per-kind reload path.
+// Tools debounce per name (their TOML+.py pairs are independent); resources
+// and prompts debounce as a group because their scan logic depends on sibling
+// files. Only top-level files in each folder trigger reloads — fsnotify is
+// non-recursive and a flat watch matches the scriptling-cli/server behaviour.
 func (stm *scriptlingToolManager) watchLoop() {
 	defer stm.wg.Done()
 
@@ -133,23 +203,7 @@ func (stm *scriptlingToolManager) watchLoop() {
 			if !ok {
 				return
 			}
-			if filepath.Dir(event.Name) != stm.toolsDirAbs {
-				continue
-			}
-
-			ext := filepath.Ext(event.Name)
-			if ext != ".toml" && ext != ".py" {
-				continue
-			}
-
-			toolName := strings.TrimSuffix(filepath.Base(event.Name), ext)
-
-			if event.Op&fsnotify.Remove != 0 || event.Op&fsnotify.Rename != 0 {
-				stm.scheduleToolReload(toolName, true)
-			} else if event.Op&fsnotify.Create != 0 || event.Op&fsnotify.Write != 0 {
-				stm.scheduleToolReload(toolName, false)
-			}
-
+			stm.dispatchEvent(event)
 		case _, ok := <-stm.watcher.Errors:
 			if !ok {
 				return
@@ -158,17 +212,46 @@ func (stm *scriptlingToolManager) watchLoop() {
 	}
 }
 
+func (stm *scriptlingToolManager) dispatchEvent(event fsnotify.Event) {
+	dir := filepath.Dir(event.Name)
+	ext := filepath.Ext(event.Name)
+	isDelete := event.Op&fsnotify.Remove != 0 || event.Op&fsnotify.Rename != 0
+
+	switch {
+	case stm.toolsDirAbs != "" && dir == stm.toolsDirAbs:
+		if ext != ".toml" && ext != ".py" {
+			return
+		}
+		toolName := strings.TrimSuffix(filepath.Base(event.Name), ext)
+		stm.scheduleToolReload(toolName, isDelete)
+
+	case stm.resourcesDirAbs != "" && dir == stm.resourcesDirAbs:
+		// Resources may be static files of any extension or {var}.py templates.
+		// Any change in the resources folder triggers a full reload.
+		stm.scheduleResourcesReload()
+
+	case stm.promptsDirAbs != "" && dir == stm.promptsDirAbs:
+		if ext != ".toml" && ext != ".py" && ext != ".md" && ext != ".txt" {
+			return
+		}
+		stm.schedulePromptsReload()
+	}
+}
+
+// scheduleToolReload debounces a per-tool reload. Delete/Rename events remove
+// the tool if both its .toml and .py are gone; Create/Write events re-register
+// it if both files are present.
 func (stm *scriptlingToolManager) scheduleToolReload(toolName string, isDelete bool) {
 	stm.debounceMu.Lock()
 	defer stm.debounceMu.Unlock()
 
-	if t, ok := stm.debounceTimers[toolName]; ok {
+	if t, ok := stm.toolTimers[toolName]; ok {
 		t.Stop()
 	}
 
-	stm.debounceTimers[toolName] = time.AfterFunc(stm.debounceDuration, func() {
+	stm.toolTimers[toolName] = time.AfterFunc(stm.debounceDuration, func() {
 		stm.debounceMu.Lock()
-		delete(stm.debounceTimers, toolName)
+		delete(stm.toolTimers, toolName)
 		stm.debounceMu.Unlock()
 
 		if isDelete {
@@ -200,12 +283,15 @@ func (stm *scriptlingToolManager) handleToolCreate(toolName string) {
 		return
 	}
 
-	meta, err := loadToolMetadata(tomlPath, stm.toolsDirAbs)
+	tools, err := mcpcli.ScanToolsFolder(stm.toolsDirAbs)
 	if err != nil {
-		stm.logger.Error("Failed to load tool metadata", "tool", toolName, "error", err)
+		stm.logger.Error("Failed to rescan tools folder", "error", err)
 		return
 	}
-
+	meta, ok := tools[toolName]
+	if !ok {
+		return
+	}
 	stm.registerTool(toolName, meta)
 }
 
@@ -217,7 +303,7 @@ func (stm *scriptlingToolManager) registerTool(toolName string, meta *toolmetada
 		stm.logger.Error("Failed to build tool", "tool", toolName, "error", err)
 		return
 	}
-	handler, err := createMCPToolHandler(scriptPath, stm.config.LibPaths, stm.plugins)
+	handler, err := mcpcli.BuildToolHandler(scriptPath, stm.handlerCfg)
 	if err != nil {
 		stm.logger.Error("Failed to load tool handler", "tool", toolName, "error", err)
 		return
@@ -231,14 +317,144 @@ func (stm *scriptlingToolManager) registerTool(toolName string, meta *toolmetada
 	stm.logger.Info("Registered scriptling MCP tool", "name", toolName, "mode", mode)
 }
 
+// scheduleResourcesReload debounces a full resources reload: unregister every
+// previously-registered static resource and template, rescan the folder, and
+// re-register the lot. Notifies connected clients so they re-fetch.
+func (stm *scriptlingToolManager) scheduleResourcesReload() {
+	stm.debounceMu.Lock()
+	defer stm.debounceMu.Unlock()
+
+	if stm.resourceTimer != nil {
+		stm.resourceTimer.Stop()
+	}
+	stm.resourceTimer = time.AfterFunc(stm.debounceDuration, stm.reloadResources)
+}
+
+func (stm *scriptlingToolManager) reloadResources() {
+	for _, uri := range stm.resourceStaticURIs {
+		stm.mainServer.UnregisterResource(uri)
+	}
+	for _, uriTmpl := range stm.resourceTemplates {
+		stm.mainServer.UnregisterResourceTemplate(uriTmpl)
+	}
+	staticURIs, templates, err := stm.registerResources()
+	if err != nil {
+		stm.logger.Error("Failed to reload scriptling resources", "error", err)
+	} else {
+		stm.resourceStaticURIs = staticURIs
+		stm.resourceTemplates = templates
+	}
+	stm.mainServer.NotifyResourcesChanged()
+}
+
+// registerResources scans the resources folder and registers every static
+// resource and template on the live server. Returns the URIs registered so the
+// caller can later unregister them.
+func (stm *scriptlingToolManager) registerResources() (staticURIs, templates []string, err error) {
+	entries, err := mcpcli.ScanResourcesTree(stm.resourcesDirAbs)
+	if err != nil {
+		return nil, nil, err
+	}
+	for _, e := range entries {
+		if e.Template {
+			handler, err := mcpcli.BuildResourceScriptHandler(e.FilePath, e.MimeType, stm.handlerCfg)
+			if err != nil {
+				return nil, nil, fmt.Errorf("failed to load resource template %s: %w", e.URI, err)
+			}
+			stm.mainServer.RegisterResourceTemplate(
+				mcp_lib.NewResourceTemplate(e.URI, e.Name, e.Description, e.MimeType),
+				handler,
+			)
+			templates = append(templates, e.URI)
+			stm.logger.Info("Registered scriptling MCP resource template", "uri", e.URI)
+		} else {
+			handler := mcpcli.BuildStaticResourceHandler(e.FilePath, e.URI, e.MimeType)
+			stm.mainServer.RegisterResource(
+				mcp_lib.NewResource(e.URI, e.Name, e.Description, e.MimeType),
+				handler,
+			)
+			staticURIs = append(staticURIs, e.URI)
+			stm.logger.Info("Registered scriptling MCP resource", "uri", e.URI)
+		}
+	}
+	return staticURIs, templates, nil
+}
+
+// schedulePromptsReload debounces a full prompts reload.
+func (stm *scriptlingToolManager) schedulePromptsReload() {
+	stm.debounceMu.Lock()
+	defer stm.debounceMu.Unlock()
+
+	if stm.promptTimer != nil {
+		stm.promptTimer.Stop()
+	}
+	stm.promptTimer = time.AfterFunc(stm.debounceDuration, stm.reloadPrompts)
+}
+
+func (stm *scriptlingToolManager) reloadPrompts() {
+	for _, name := range stm.promptNames {
+		stm.mainServer.UnregisterPrompt(name)
+	}
+	names, err := stm.registerPrompts()
+	if err != nil {
+		stm.logger.Error("Failed to reload scriptling prompts", "error", err)
+	} else {
+		stm.promptNames = names
+	}
+	stm.mainServer.NotifyPromptsChanged()
+}
+
+// registerPrompts scans the prompts folder and registers every prompt on the
+// live server. Returns the names registered so the caller can later unregister
+// them.
+func (stm *scriptlingToolManager) registerPrompts() ([]string, error) {
+	entries, err := mcpcli.ScanPromptsFolder(stm.promptsDirAbs)
+	if err != nil {
+		return nil, err
+	}
+	var names []string
+	for _, e := range entries {
+		var handler mcp_lib.PromptHandler
+		if e.Static {
+			handler = mcpcli.BuildStaticPromptHandler(e.FilePath)
+		} else {
+			h, err := mcpcli.BuildPromptScriptHandler(e.FilePath, stm.handlerCfg)
+			if err != nil {
+				return nil, fmt.Errorf("failed to load prompt %s: %w", e.Name, err)
+			}
+			handler = h
+		}
+		builder := mcp_lib.NewPrompt(e.Name, e.Description)
+		for _, arg := range e.Arguments {
+			builder.Argument(arg.Name, arg.Description, arg.Required)
+		}
+		stm.mainServer.RegisterPrompt(builder, handler)
+		names = append(names, e.Name)
+		mode := "static"
+		if !e.Static {
+			mode = "dynamic"
+		}
+		stm.logger.Info("Registered scriptling MCP prompt", "prompt", e.Name, "mode", mode, "args", len(e.Arguments))
+	}
+	return names, nil
+}
+
+// Shutdown stops the watcher, cancels pending debounced reloads, closes plugins,
+// and blocks until the watch loop has exited.
 func (stm *scriptlingToolManager) Shutdown() {
 	close(stm.done)
 	if stm.watcher != nil {
 		stm.watcher.Close()
 	}
 	stm.debounceMu.Lock()
-	for _, t := range stm.debounceTimers {
+	for _, t := range stm.toolTimers {
 		t.Stop()
+	}
+	if stm.resourceTimer != nil {
+		stm.resourceTimer.Stop()
+	}
+	if stm.promptTimer != nil {
+		stm.promptTimer.Stop()
 	}
 	stm.debounceMu.Unlock()
 	if stm.plugins != nil {
@@ -250,104 +466,4 @@ func (stm *scriptlingToolManager) Shutdown() {
 func fileExists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil
-}
-
-func scanToolsFolder(toolsFolder string) (map[string]*toolmetadata.ToolMetadata, error) {
-	tools := make(map[string]*toolmetadata.ToolMetadata)
-
-	entries, err := os.ReadDir(toolsFolder)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read tools folder: %w", err)
-	}
-
-	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".toml") {
-			continue
-		}
-
-		toolName := strings.TrimSuffix(entry.Name(), ".toml")
-		tomlPath := filepath.Join(toolsFolder, entry.Name())
-
-		meta, err := loadToolMetadata(tomlPath, toolsFolder)
-		if err != nil {
-			return nil, err
-		}
-
-		tools[toolName] = meta
-	}
-
-	return tools, nil
-}
-
-func loadToolMetadata(tomlPath string, toolsFolder string) (*toolmetadata.ToolMetadata, error) {
-	baseConfig := cli_toml.NewConfigFile(&tomlPath, func() []string { return []string{toolsFolder} })
-	cfg := cli.NewTypedConfigFile(baseConfig)
-	if err := cfg.LoadData(); err != nil {
-		return nil, fmt.Errorf("failed to parse %s: %w", tomlPath, err)
-	}
-
-	meta := &toolmetadata.ToolMetadata{
-		Description:  cfg.GetString("description"),
-		Keywords:     cfg.GetStringSlice("keywords"),
-		Discoverable: cfg.GetBool("discoverable"),
-	}
-
-	paramObjs := cfg.GetObjectSlice("parameters")
-	for _, paramObj := range paramObjs {
-		param := toolmetadata.ToolParameter{
-			Name:        paramObj.GetString("name"),
-			Type:        paramObj.GetString("type"),
-			Description: paramObj.GetString("description"),
-			Required:    paramObj.GetBool("required"),
-		}
-		meta.Parameters = append(meta.Parameters, param)
-	}
-
-	return meta, nil
-}
-
-func createMCPToolHandler(scriptPath string, libPaths []string, pluginManager *scriptlingplugin.Manager) (func(context.Context, *mcp_lib.ToolRequest) (*mcp_lib.ToolResponse, error), error) {
-	script, err := os.ReadFile(scriptPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read script %s: %w", scriptPath, err)
-	}
-
-	scriptDir := filepath.Dir(scriptPath)
-	toolLibDirs := append([]string{scriptDir}, libPaths...)
-
-	handler := func(ctx context.Context, req *mcp_lib.ToolRequest) (*mcp_lib.ToolResponse, error) {
-		params := req.Args()
-
-		p := scriptling.New()
-
-		setup.Scriptling(p, toolLibDirs, false, nil, nil, secretprovider.NewRegistry(), nil, "", "")
-
-		scriptlingmcp.Register(p)
-		scriptlingmcp.RegisterToolHelpers(p)
-
-		scriptlingplugin.RegisterLibraries(p, pluginManager)
-
-		p.SetLibraryLoader(libloader.NewMultiFilesystem(toolLibDirs...))
-
-		response, exitCode, runErr := scriptlingmcp.RunToolScript(ctx, p, string(script), params)
-
-		if response != "" {
-			if exitCode != 0 {
-				return nil, mcp_lib.NewToolErrorInternal(response)
-			}
-			return mcp_lib.NewToolResponseText(response), nil
-		}
-
-		if runErr != nil {
-			return nil, fmt.Errorf("script execution failed: %w", runErr)
-		}
-
-		if exitCode != 0 {
-			return nil, fmt.Errorf("script exited with code %d", exitCode)
-		}
-
-		return mcp_lib.NewToolResponseText(""), nil
-	}
-
-	return handler, nil
 }
