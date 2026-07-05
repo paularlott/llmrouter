@@ -38,6 +38,8 @@ func (a *Admin) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("DELETE /admin/api/mcp-servers/{namespace}", a.requireAuth(a.HandleDeleteMCPServer))
 	mux.HandleFunc("GET /admin/api/mcp-servers/{namespace}/tools", a.requireAuth(a.HandleGetMCPServerTools))
 	mux.HandleFunc("PUT /admin/api/mcp-servers/{namespace}/tools/toggle", a.requireAuth(a.HandleToggleMCPServerTool))
+	mux.HandleFunc("GET /admin/api/mcp-servers/{namespace}/resources", a.requireAuth(a.HandleGetMCPServerResources))
+	mux.HandleFunc("GET /admin/api/mcp-servers/{namespace}/prompts", a.requireAuth(a.HandleGetMCPServerPrompts))
 	mux.HandleFunc("POST /admin/api/mcp-servers/refresh-cache", a.requireAuth(a.HandleRefreshMCPCache))
 	mux.HandleFunc("GET /admin/api/mcp-storage-status", a.requireAuth(a.HandleMCPStorageStatus))
 
@@ -542,6 +544,53 @@ func (a *Admin) HandleToggleMCPServerTool(w http.ResponseWriter, r *http.Request
 	}
 
 	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
+}
+
+// HandleGetMCPServerResources returns resources (static + templates) for an MCP
+// server. Resources are read-only in the UI — there is no storage-level toggle
+// the way there is for tools.
+func (a *Admin) HandleGetMCPServerResources(w http.ResponseWriter, r *http.Request) {
+	namespace := r.PathValue("namespace")
+	if namespace == "" {
+		writeError(w, http.StatusBadRequest, "namespace required")
+		return
+	}
+
+	if a.getMCPResources == nil {
+		writeJSON(w, http.StatusOK, []ResourceInfo{})
+		return
+	}
+
+	resources, err := a.getMCPResources(namespace)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, resources)
+}
+
+// HandleGetMCPServerPrompts returns prompts for an MCP server. Like resources,
+// prompts are read-only in the UI.
+func (a *Admin) HandleGetMCPServerPrompts(w http.ResponseWriter, r *http.Request) {
+	namespace := r.PathValue("namespace")
+	if namespace == "" {
+		writeError(w, http.StatusBadRequest, "namespace required")
+		return
+	}
+
+	if a.getMCPPrompts == nil {
+		writeJSON(w, http.StatusOK, []PromptInfo{})
+		return
+	}
+
+	prompts, err := a.getMCPPrompts(namespace)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, prompts)
 }
 
 // HandleToggleMCPServer toggles an MCP server's enabled state

@@ -30,8 +30,10 @@ type Admin struct {
 	getModels    func() []ModelInfo
 
 	// MCP callbacks (for read-only display of config-based servers)
-	getMCPServers func() []MCPServerInfo
-	getMCPTools   func(namespace string) ([]ToolInfo, error)
+	getMCPServers   func() []MCPServerInfo
+	getMCPTools     func(namespace string) ([]ToolInfo, error)
+	getMCPResources func(namespace string) ([]ResourceInfo, error)
+	getMCPPrompts   func(namespace string) ([]PromptInfo, error)
 
 	// MCP storage (for dynamic server management)
 	mcpStorage         storage.MCPStorage
@@ -84,8 +86,35 @@ type ToolInfo struct {
 	Enabled     bool                   `json:"enabled"`
 }
 
+// ResourceInfo represents a resource (static or template) exposed by an MCP
+// server. Templates carry a URITemplate with {var} placeholders; static
+// resources carry a concrete URI. Both are shown read-only in the UI — the
+// router has no per-resource enable/disable toggle the way it does for tools.
+type ResourceInfo struct {
+	URI         string `json:"uri"`
+	Template    bool   `json:"template"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	MimeType    string `json:"mime_type,omitempty"`
+}
+
+// PromptInfo represents a prompt exposed by an MCP server. Arguments is the
+// (possibly empty) list of named arguments the prompt accepts.
+type PromptInfo struct {
+	Name        string            `json:"name"`
+	Description string            `json:"description"`
+	Arguments   []PromptArgument  `json:"arguments,omitempty"`
+}
+
+// PromptArgument describes one argument a prompt accepts.
+type PromptArgument struct {
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
+	Required    bool   `json:"required"`
+}
+
 // New creates a new Admin handler
-func New(config *types.Config, getStats func() *Stats, getProviders func() []ProviderInfo, getMCPServers func() []MCPServerInfo, getMCPTools func(string) ([]ToolInfo, error), getModels func() []ModelInfo, mcpStorage storage.MCPStorage, mcpStorageWritable bool, onMCPServerChange func(), onMCPCacheRefresh func()) *Admin {
+func New(config *types.Config, getStats func() *Stats, getProviders func() []ProviderInfo, getMCPServers func() []MCPServerInfo, getMCPTools func(string) ([]ToolInfo, error), getMCPResources func(string) ([]ResourceInfo, error), getMCPPrompts func(string) ([]PromptInfo, error), getModels func() []ModelInfo, mcpStorage storage.MCPStorage, mcpStorageWritable bool, onMCPServerChange func(), onMCPCacheRefresh func()) *Admin {
 	if config.Server.AdminPassword == "" {
 		return nil
 	}
@@ -98,6 +127,8 @@ func New(config *types.Config, getStats func() *Stats, getProviders func() []Pro
 		getProviders:       getProviders,
 		getMCPServers:      getMCPServers,
 		getMCPTools:        getMCPTools,
+		getMCPResources:    getMCPResources,
+		getMCPPrompts:      getMCPPrompts,
 		getModels:          getModels,
 		mcpStorage:         mcpStorage,
 		mcpStorageWritable: mcpStorageWritable,

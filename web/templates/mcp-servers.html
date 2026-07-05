@@ -189,6 +189,26 @@
                       </svg>
                     </button>
                     <button
+                      @click="viewResources(server)"
+                      class="p-2 text-slate-500 hover:text-green-600 dark:text-slate-400 dark:hover:text-green-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors cursor-pointer"
+                      :aria-label="'View resources for ' + server.namespace"
+                      title="View Resources"
+                    >
+                      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
+                      </svg>
+                    </button>
+                    <button
+                      @click="viewPrompts(server)"
+                      class="p-2 text-slate-500 hover:text-green-600 dark:text-slate-400 dark:hover:text-green-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors cursor-pointer"
+                      :aria-label="'View prompts for ' + server.namespace"
+                      title="View Prompts"
+                    >
+                      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h-3.5a1.5 1.5 0 010-3H8m0 0V5a2 2 0 012-2h4a2 2 0 012 2v2m-8 0h8m-8 0v3m8-3v3m0 0h3.5a1.5 1.5 0 010 3H16m0 0v3a2 2 0 01-2 2h-4a2 2 0 01-2-2v-3m8 0H8" />
+                      </svg>
+                    </button>
+                    <button
                       x-show="!server.static_server"
                       @click="editServer(server)"
                       class="p-2 text-slate-500 hover:text-blue-600 dark:text-slate-400 dark:hover:text-blue-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors cursor-pointer"
@@ -551,6 +571,155 @@
             <div class="p-4 border-t border-slate-200 dark:border-slate-700 flex justify-end">
               <button
                 @click="showToolsModal = false"
+                class="px-4 py-2 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl transition-colors cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Resources Modal -->
+      <div x-show="showResourcesModal" x-cloak class="fixed inset-0 z-50 overflow-y-auto" @keydown.escape.window="showResourcesModal = false" role="dialog" aria-modal="true" aria-labelledby="resources-modal-title">
+        <div class="flex items-center justify-center min-h-screen px-4">
+          <div class="fixed inset-0 bg-black/50 backdrop-blur-sm transition-opacity" @click="showResourcesModal = false"></div>
+          <div class="relative bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-2xl w-full max-h-[80vh] flex flex-col border border-slate-200 dark:border-slate-700">
+            <div class="p-6 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+              <div>
+                <h2 id="resources-modal-title" class="text-xl font-bold text-slate-900 dark:text-white">
+                  Resources — <span x-text="resourcesServer?.namespace"></span>
+                </h2>
+                <p class="text-sm text-slate-500 dark:text-slate-300 mt-0.5" x-show="!loadingResources && !resourcesError">
+                  <span x-text="resources.length"></span> total (<span x-text="resources.filter(r => !r.template).length"></span> static, <span x-text="resources.filter(r => r.template).length"></span> templates)
+                </p>
+              </div>
+              <button @click="showResourcesModal = false" class="p-2 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors cursor-pointer" aria-label="Close modal">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+              </button>
+            </div>
+
+            <div class="flex-1 overflow-y-auto p-6">
+              <!-- Loading state -->
+              <div x-show="loadingResources" class="flex items-center justify-center py-8">
+                <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+              </div>
+
+              <!-- Error state -->
+              <div x-show="resourcesError" class="flex items-center gap-3 p-4 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-xl text-red-700 dark:text-red-400">
+                <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span x-text="resourcesError"></span>
+              </div>
+
+              <!-- Resources list -->
+              <div x-show="!loadingResources && !resourcesError" class="space-y-2">
+                <template x-if="resources.length === 0">
+                  <p class="text-slate-500 dark:text-slate-300 text-center py-8">No resources available from this server.</p>
+                </template>
+
+                <template x-for="resource in resources" :key="resource.uri">
+                  <div class="border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden">
+                    <div class="flex items-start gap-3 px-4 py-3 bg-slate-50 dark:bg-slate-800">
+                      <!-- Template/static badge -->
+                      <span class="mt-0.5 shrink-0 px-1.5 py-0.5 rounded text-xs font-mono"
+                        :class="resource.template ? 'bg-purple-100 dark:bg-purple-800/60 text-purple-700 dark:text-purple-200' : 'bg-blue-100 dark:bg-blue-800/60 text-blue-700 dark:text-blue-200'"
+                        x-text="resource.template ? 'TEMPLATE' : 'STATIC'"></span>
+                      <div class="flex-1 min-w-0">
+                        <div class="flex items-center gap-2 flex-wrap">
+                          <span class="font-mono text-sm font-semibold text-slate-900 dark:text-white break-all" x-text="resource.uri"></span>
+                          <span x-show="resource.mime_type" class="text-xs text-slate-500 dark:text-slate-400 font-mono" x-text="resource.mime_type"></span>
+                        </div>
+                        <p class="text-sm text-slate-500 dark:text-slate-300 mt-0.5" x-text="resource.name || resource.description || 'No description'"></p>
+                        <p x-show="resource.description && resource.name" class="text-xs text-slate-500 dark:text-slate-400 mt-0.5" x-text="resource.description"></p>
+                      </div>
+                    </div>
+                  </div>
+                </template>
+              </div>
+            </div>
+
+            <div class="p-4 border-t border-slate-200 dark:border-slate-700 flex justify-end">
+              <button
+                @click="showResourcesModal = false"
+                class="px-4 py-2 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl transition-colors cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Prompts Modal -->
+      <div x-show="showPromptsModal" x-cloak class="fixed inset-0 z-50 overflow-y-auto" @keydown.escape.window="showPromptsModal = false" role="dialog" aria-modal="true" aria-labelledby="prompts-modal-title">
+        <div class="flex items-center justify-center min-h-screen px-4">
+          <div class="fixed inset-0 bg-black/50 backdrop-blur-sm transition-opacity" @click="showPromptsModal = false"></div>
+          <div class="relative bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-2xl w-full max-h-[80vh] flex flex-col border border-slate-200 dark:border-slate-700">
+            <div class="p-6 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+              <div>
+                <h2 id="prompts-modal-title" class="text-xl font-bold text-slate-900 dark:text-white">
+                  Prompts — <span x-text="promptsServer?.namespace"></span>
+                </h2>
+                <p class="text-sm text-slate-500 dark:text-slate-300 mt-0.5" x-show="!loadingPrompts && !promptsError">
+                  <span x-text="prompts.length"></span> total
+                </p>
+              </div>
+              <button @click="showPromptsModal = false" class="p-2 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors cursor-pointer" aria-label="Close modal">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+              </button>
+            </div>
+
+            <div class="flex-1 overflow-y-auto p-6">
+              <!-- Loading state -->
+              <div x-show="loadingPrompts" class="flex items-center justify-center py-8">
+                <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+              </div>
+
+              <!-- Error state -->
+              <div x-show="promptsError" class="flex items-center gap-3 p-4 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-xl text-red-700 dark:text-red-400">
+                <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span x-text="promptsError"></span>
+              </div>
+
+              <!-- Prompts list -->
+              <div x-show="!loadingPrompts && !promptsError" class="space-y-2">
+                <template x-if="prompts.length === 0">
+                  <p class="text-slate-500 dark:text-slate-300 text-center py-8">No prompts available from this server.</p>
+                </template>
+
+                <template x-for="prompt in prompts" :key="prompt.name">
+                  <div class="border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden">
+                    <div class="px-4 py-3 bg-slate-50 dark:bg-slate-800">
+                      <span class="font-mono text-sm font-semibold text-slate-900 dark:text-white" x-text="prompt.name"></span>
+                      <p class="text-sm text-slate-500 dark:text-slate-300 mt-0.5" x-text="prompt.description || 'No description'"></p>
+                    </div>
+                    <div x-show="prompt.arguments && prompt.arguments.length > 0" class="px-4 py-3 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700">
+                      <p class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2">Arguments</p>
+                      <div class="space-y-2">
+                        <template x-for="arg in prompt.arguments" :key="arg.name">
+                          <div class="flex items-start gap-2 text-sm">
+                            <span class="font-mono text-blue-600 dark:text-blue-300 shrink-0" x-text="arg.name"></span>
+                            <span class="text-slate-500 dark:text-slate-400 shrink-0" x-show="arg.required">*</span>
+                            <span class="text-slate-600 dark:text-slate-300" x-text="arg.description ? '— ' + arg.description : ''"></span>
+                          </div>
+                        </template>
+                      </div>
+                    </div>
+                    <div x-show="!prompt.arguments || prompt.arguments.length === 0" class="px-4 py-3 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700">
+                      <p class="text-xs text-slate-500 dark:text-slate-400">No arguments</p>
+                    </div>
+                  </div>
+                </template>
+              </div>
+            </div>
+
+            <div class="p-4 border-t border-slate-200 dark:border-slate-700 flex justify-end">
+              <button
+                @click="showPromptsModal = false"
                 class="px-4 py-2 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl transition-colors cursor-pointer"
               >
                 Close

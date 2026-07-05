@@ -223,7 +223,7 @@ func NewRouter(config *types.Config, logger Logger) (*Router, error) {
 	}
 	router.mcpStorage = mcpStorage
 
-	router.admin = admin.New(config, router.getStats, router.getProviders, router.getMCPServers, router.getMCPTools, router.getModels, mcpStorage, mcpStorageWritable, router.reloadMCPServers, router.reloadMCPServers)
+	router.admin = admin.New(config, router.getStats, router.getProviders, router.getMCPServers, router.getMCPTools, router.getMCPResources, router.getMCPPrompts, router.getModels, mcpStorage, mcpStorageWritable, router.reloadMCPServers, router.reloadMCPServers)
 	if router.admin.Enabled() {
 		router.admin.RegisterRoutes(router.mux)
 		logger.Info("admin UI enabled at /admin")
@@ -1268,6 +1268,24 @@ func (r *Router) getMCPTools(namespace string) ([]admin.ToolInfo, error) {
 
 	// Fall back to config-based server
 	return r.mcpServer.GetToolsForAdmin(namespace)
+}
+
+// getMCPResources returns resources (static + templates) for an MCP server for
+// the admin UI. Mirrors getMCPTools: storage-based and config-based servers
+// resolve through the same remote client, so a single call covers both.
+func (r *Router) getMCPResources(namespace string) ([]admin.ResourceInfo, error) {
+	if r.mcpServer == nil {
+		return nil, fmt.Errorf("MCP server not available")
+	}
+	return r.mcpServer.GetResourcesForAdmin(namespace)
+}
+
+// getMCPPrompts returns prompts for an MCP server for the admin UI.
+func (r *Router) getMCPPrompts(namespace string) ([]admin.PromptInfo, error) {
+	if r.mcpServer == nil {
+		return nil, fmt.Errorf("MCP server not available")
+	}
+	return r.mcpServer.GetPromptsForAdmin(namespace)
 }
 
 // reloadMCPServers reloads MCP servers from storage

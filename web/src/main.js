@@ -160,12 +160,22 @@ Alpine.data("mcpServers", () => ({
   showAddModal: false,
   showDeleteModal: false,
   showToolsModal: false,
+  showResourcesModal: false,
+  showPromptsModal: false,
   editingServer: null,
   deletingServer: null,
   toolsServer: null,
   tools: [],
   loadingTools: false,
   toolsError: null,
+  resourcesServer: null,
+  resources: [],
+  loadingResources: false,
+  resourcesError: null,
+  promptsServer: null,
+  prompts: [],
+  loadingPrompts: false,
+  promptsError: null,
   saving: false,
   deleting: false,
   refreshing: false,
@@ -509,6 +519,70 @@ Alpine.data("mcpServers", () => ({
       this.toolsError = err.message;
       // Reload tools to get correct state
       this.loadTools();
+    }
+  },
+
+  viewResources(server) {
+    this.resourcesServer = server;
+    this.resources = [];
+    this.resourcesError = null;
+    this.showResourcesModal = true;
+    this.loadResources();
+  },
+
+  async loadResources() {
+    this.loadingResources = true;
+    this.resourcesError = null;
+
+    try {
+      const response = await fetch(
+        `/admin/api/mcp-servers/${this.resourcesServer.namespace}/resources`,
+        {}
+      );
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || "Failed to load resources");
+      }
+
+      const data = await response.json();
+      this.resources = Array.isArray(data) ? data : [];
+    } catch (err) {
+      this.resourcesError = err.message;
+    } finally {
+      this.loadingResources = false;
+    }
+  },
+
+  viewPrompts(server) {
+    this.promptsServer = server;
+    this.prompts = [];
+    this.promptsError = null;
+    this.showPromptsModal = true;
+    this.loadPrompts();
+  },
+
+  async loadPrompts() {
+    this.loadingPrompts = true;
+    this.promptsError = null;
+
+    try {
+      const response = await fetch(
+        `/admin/api/mcp-servers/${this.promptsServer.namespace}/prompts`,
+        {}
+      );
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || "Failed to load prompts");
+      }
+
+      const data = await response.json();
+      this.prompts = Array.isArray(data) ? data : [];
+    } catch (err) {
+      this.promptsError = err.message;
+    } finally {
+      this.loadingPrompts = false;
     }
   },
 

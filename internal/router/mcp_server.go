@@ -396,6 +396,112 @@ func (m *MCPServer) GetStorageServerTools(namespace string, server *storage.MCPS
 	return result, nil
 }
 
+// GetResourcesForAdmin returns resources (static + templates) exposed by the
+// remote server behind namespace. Resources are read-only in the UI — the
+// router has no per-resource enable/disable toggle the way it does for tools.
+// Static resources and templates are merged into a single list; templates carry
+// Template=true and a URITemplate in URI. The namespace prefix is stripped so
+// the UI shows the upstream names.
+func (m *MCPServer) GetResourcesForAdmin(namespace string) ([]admin.ResourceInfo, error) {
+	result := make([]admin.ResourceInfo, 0)
+
+	rsClient, exists := m.remoteClients[namespace]
+	if !exists {
+		return result, nil
+	}
+
+	ctx := context.Background()
+	if err := rsClient.ensureInitialized(ctx); err != nil {
+		m.logger.Warn("failed to initialize MCP client for resources listing", "namespace", namespace, "url", rsClient.config.URL, "error", err)
+		return result, nil
+	}
+
+	prefix := namespace + mcp.DefaultNamespaceSeparator
+
+	static, err := rsClient.client.ListResources(ctx)
+	if err != nil {
+		m.logger.Warn("failed to list resources from remote server", "namespace", namespace, "error", err)
+		// Continue to templates rather than bailing — some servers expose only
+		// templates and silence resources/list, others do the opposite.
+	}
+	for _, r := range static {
+		uri := strings.TrimPrefix(r.URI, prefix)
+		result = append(result, admin.ResourceInfo{
+			URI:         uri,
+			Template:    false,
+			Name:        r.Name,
+			Description: r.Description,
+			MimeType:    r.MimeType,
+		})
+	}
+
+	templates, err := rsClient.client.ListResourceTemplates(ctx)
+	if err != nil {
+		m.logger.Warn("failed to list resource templates from remote server", "namespace", namespace, "error", err)
+	}
+	for _, t := range templates {
+		uri := strings.TrimPrefix(t.URITemplate, prefix)
+		result = append(result, admin.ResourceInfo{
+			URI:         uri,
+			Template:    true,
+			Name:        t.Name,
+			Description: t.Description,
+			MimeType:    t.MimeType,
+		})
+	}
+
+	sort.Slice(result, func(i, j int) bool {
+		if result[i].Template != result[j].Template {
+			return !result[i].Template // static first, then templates
+		}
+		return result[i].URI < result[j].URI
+	})
+	return result, nil
+}
+
+// GetPromptsForAdmin returns prompts exposed by the remote server behind
+// namespace. Like resources, prompts are read-only in the UI.
+func (m *MCPServer) GetPromptsForAdmin(namespace string) ([]admin.PromptInfo, error) {
+	result := make([]admin.PromptInfo, 0)
+
+	rsClient, exists := m.remoteClients[namespace]
+	if !exists {
+		return result, nil
+	}
+
+	ctx := context.Background()
+	if err := rsClient.ensureInitialized(ctx); err != nil {
+		m.logger.Warn("failed to initialize MCP client for prompts listing", "namespace", namespace, "url", rsClient.config.URL, "error", err)
+		return result, nil
+	}
+
+	prompts, err := rsClient.client.ListPrompts(ctx)
+	if err != nil {
+		m.logger.Warn("failed to list prompts from remote server", "namespace", namespace, "error", err)
+		return result, nil
+	}
+
+	prefix := namespace + mcp.DefaultNamespaceSeparator
+	for _, p := range prompts {
+		name := strings.TrimPrefix(p.Name, prefix)
+		info := admin.PromptInfo{
+			Name:        name,
+			Description: p.Description,
+		}
+		for _, arg := range p.Arguments {
+			info.Arguments = append(info.Arguments, admin.PromptArgument{
+				Name:        arg.Name,
+				Description: arg.Description,
+				Required:    arg.Required,
+			})
+		}
+		result = append(result, info)
+	}
+
+	sort.Slice(result, func(i, j int) bool { return result[i].Name < result[j].Name })
+	return result, nil
+}
+
 // ShutdownScriptlingTools shuts down the scriptling tool manager
 func (m *MCPServer) ShutdownScriptlingTools() {
 	if m.scriptlingManager != nil {
