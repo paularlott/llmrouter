@@ -25,6 +25,7 @@ func RunServer(ctx context.Context, cmd *cli.Command) error {
 			Port:          cmd.GetInt("port"),
 			Token:         cmd.GetString("token"),
 			AdminPassword: cmd.GetString("admin-password"),
+			ChatPassword:  cmd.GetString("chat-password"),
 		},
 		Logging: types.LoggingConfig{
 			Level:  cmd.GetString("log-level"),
@@ -49,6 +50,10 @@ func RunServer(ctx context.Context, cmd *cli.Command) error {
 			PromptsDir:   cmd.GetString("prompts-dir"),
 			PluginDirs:   cmd.GetStringSlice("plugin-dir"),
 			LibPaths:     cmd.GetStringSlice("libpath"),
+		},
+		Chat: types.ChatConfig{
+			PersonasDir: cmd.GetString("personas-dir"),
+			CommandsDir: cmd.GetString("commands-dir"),
 		},
 	}
 
@@ -118,6 +123,13 @@ func RunServer(ctx context.Context, cmd *cli.Command) error {
 			config.Scripting.PromptsDir = scriptingCfg.GetString("prompts_dir")
 			config.Scripting.PluginDirs = scriptingCfg.GetStringSlice("plugin_dirs")
 			config.Scripting.LibPaths = scriptingCfg.GetStringSlice("lib_paths")
+		}
+		if chatCfg := typedConfig.GetObject("chat"); chatCfg != nil {
+			config.Chat.PersonasDir = chatCfg.GetString("personas_dir")
+			config.Chat.CommandsDir = chatCfg.GetString("commands_dir")
+		}
+		if srvCfg := typedConfig.GetObject("server"); srvCfg != nil {
+			config.Server.ChatPassword = srvCfg.GetString("chat_password")
 		}
 	}
 

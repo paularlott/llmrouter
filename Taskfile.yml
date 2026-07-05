@@ -142,7 +142,10 @@ tasks:
     desc: Run the server in development mode
     deps: [assets]
     cmds:
-      - go run . server
+      - >-
+        go run . server
+        --personas-dir ./examples/personas
+        --commands-dir ./examples/commands
 
   watch:
     desc: Watch for changes and rebuild

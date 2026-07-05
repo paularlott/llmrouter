@@ -99,6 +99,21 @@ var ServerCmd = &cli.Command{
 			Usage:      "Additional directories to search for scriptling libraries (can be repeated)",
 			ConfigPath: []string{"scripting.lib_paths"},
 		},
+		&cli.StringFlag{
+			Name:         "chat-password",
+			Usage:        "Password to gate the /chat page (admin password always works; empty = open if no admin password either)",
+			ConfigPath:   []string{"server.chat_password"},
+		},
+		&cli.StringFlag{
+			Name:         "personas-dir",
+			Usage:        "Directory of chat persona .toml files (system_prompt, default_model, [params] table)",
+			ConfigPath:   []string{"chat.personas_dir"},
+		},
+		&cli.StringFlag{
+			Name:         "commands-dir",
+			Usage:        "Directory of slash-command .md files (use $ARGUMENTS to splice user input)",
+			ConfigPath:   []string{"chat.commands_dir"},
+		},
 	},
 	Run: func(ctx context.Context, cmd *cli.Command) error {
 		return server.RunServer(ctx, cmd)

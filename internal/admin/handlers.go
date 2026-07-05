@@ -21,8 +21,15 @@ func (a *Admin) RegisterRoutes(mux *http.ServeMux) {
 	// Pages - use requirePageAuth which redirects to login
 	mux.HandleFunc("/admin/login", a.HandleLoginPage)
 	mux.HandleFunc("/admin/", a.requirePageAuth(a.HandleDashboard))
-	mux.HandleFunc("/admin/mcp-servers", a.requirePageAuth(a.HandleMCPServersPage))
+	mux.HandleFunc("/admin/mcp-servers", a.requireReadOnlyPageAuth(a.HandleMCPServersPage))
 	mux.HandleFunc("/admin/models", a.requirePageAuth(a.HandleModelsPage))
+
+	// Chat page. Both admin and chat-role sessions can reach it; if no
+	// chat_password is configured ChatAuthMiddleware is nil and the page
+	// is open. The page itself is rendered from web/templates/chat.html
+	// (NOT from webchat's example template) so Tailwind's source scan
+	// picks up every utility class used in it.
+	mux.HandleFunc("/chat", a.ChatPageHandler())
 
 	// API endpoints - use requireAuth which returns 401
 	mux.HandleFunc("POST /admin/api/login", a.HandleLogin)
@@ -87,16 +94,23 @@ func (a *Admin) Serve404(w http.ResponseWriter, r *http.Request) {
 	a.templates.Render(w, "404.html", data)
 }
 
-// HandleMCPServersPage renders the MCP servers page
+// HandleMCPServersPage renders the MCP servers page. Both admin and chat
+// sessions may view it; the template uses Role to render read-only affordances
+// for chat users.
 func (a *Admin) HandleMCPServersPage(w http.ResponseWriter, r *http.Request) {
 	data := &TemplateData{
 		CSSFile: "/admin/assets/main.css",
 		JSFile:  "/admin/assets/main.js",
+		Role:    string(a.sessionRoleFromRequest(r)),
 	}
 	a.templates.Render(w, "mcp-servers.html", data)
 }
 
-// HandleLogin handles login requests
+// HandleLogin handles login requests. It accepts either the admin password
+// (which authenticates an admin session) or the chat password (which
+// authenticates a chat-only session). When both passwords are unset the
+// login endpoint is effectively unreachable — chat routes are mounted open
+// and admin routes aren't mounted at all.
 func (a *Admin) HandleLogin(w http.ResponseWriter, r *http.Request) {
 	// Parse password based on content type
 	var password string
@@ -108,7 +122,7 @@ func (a *Admin) HandleLogin(w http.ResponseWriter, r *http.Request) {
 			password = creds.Password
 		}
 	} else {
-		r.ParseForm()
+		_ = r.ParseForm()
 		password = r.FormValue("password")
 	}
 
@@ -117,12 +131,21 @@ func (a *Admin) HandleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if subtle.ConstantTimeCompare([]byte(password), []byte(a.password)) != 1 {
+	// Try admin password first; fall through to chat password. Each branch
+	// creates a session with the appropriate role so the rest of the auth
+	// middleware can distinguish them.
+	var role Role
+	switch {
+	case a.password != "" && subtle.ConstantTimeCompare([]byte(password), []byte(a.password)) == 1:
+		role = RoleAdmin
+	case a.chatPassword != "" && subtle.ConstantTimeCompare([]byte(password), []byte(a.chatPassword)) == 1:
+		role = RoleChat
+	default:
 		writeError(w, http.StatusUnauthorized, "invalid password")
 		return
 	}
 
-	token, err := a.createSession()
+	token, err := a.createSession(role)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to create session")
 		return
@@ -137,18 +160,22 @@ func (a *Admin) HandleLogin(w http.ResponseWriter, r *http.Request) {
 		SameSite: http.SameSiteStrictMode,
 	})
 
-	// Check if this is an API request (expects JSON) or form submission
 	accept := r.Header.Get("Accept")
 	if strings.Contains(accept, "application/json") {
-		writeJSON(w, http.StatusOK, map[string]string{"token": token})
-	} else {
-		// Form submission - redirect to return URL or dashboard
-		returnURL := r.URL.Query().Get("return")
-		if returnURL == "" {
-			returnURL = "/admin/"
-		}
-		http.Redirect(w, r, returnURL, http.StatusFound)
+		writeJSON(w, http.StatusOK, map[string]any{"token": token, "role": string(role)})
+		return
 	}
+
+	// Form submission — redirect to the right landing page per role.
+	returnURL := r.URL.Query().Get("return")
+	if returnURL == "" {
+		if role == RoleAdmin {
+			returnURL = "/admin/"
+		} else {
+			returnURL = "/chat"
+		}
+	}
+	http.Redirect(w, r, returnURL, http.StatusFound)
 }
 
 // HandleLogout invalidates the session

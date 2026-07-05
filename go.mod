@@ -10,7 +10,12 @@ require (
 	github.com/paularlott/mcp v0.21.1
 	github.com/paularlott/scriptling v0.16.1
 	github.com/paularlott/snapshotkv v0.4.0
+	github.com/paularlott/webchat v0.0.0-00010101000000-000000000000
 )
+
+// TODO: remove before merging — replace with a published webchat release
+// (>= v0.1.0) once the webchat module is tagged.
+replace github.com/paularlott/webchat => ../webchat
 
 require (
 	github.com/BurntSushi/toml v1.6.0 // indirect

@@ -47,6 +47,14 @@ func NewTemplateRenderer(fsys fs.FS) *TemplateRenderer {
 type TemplateData struct {
 	CSSFile string
 	JSFile  string
+	// Prefix is the webchat mount path (e.g. "/chat" or "/webchat"). The
+	// chat template uses it for the JS asset path and passes it to the
+	// Alpine component so all API calls resolve correctly.
+	Prefix string
+	// Role is the authenticated session's role ("admin" or "chat") for pages
+	// that take role-based behaviour (e.g. read-only MCP view for chat users).
+	// Empty when no session is attached.
+	Role string
 }
 
 // Render renders a template with the given data

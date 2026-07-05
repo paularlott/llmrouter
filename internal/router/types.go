@@ -13,6 +13,7 @@ import (
 	"github.com/paularlott/logger"
 	"github.com/paularlott/mcp/ai"
 	"github.com/paularlott/mcp/ai/openai"
+	"github.com/paularlott/webchat"
 )
 
 type Logger = logger.Logger
@@ -52,6 +53,7 @@ type Router struct {
 	conversationsService *conversations.Service
 	smartRouter          *SmartRouter
 	admin                *admin.Admin
+	chatServer           *webchat.Server
 	mcpStorage           storage.MCPStorage
 }
 

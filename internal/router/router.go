@@ -20,6 +20,7 @@ import (
 	"github.com/paularlott/llmrouter/middleware"
 	"github.com/paularlott/mcp/ai/claude"
 	"github.com/paularlott/mcp/ai/openai"
+	"github.com/paularlott/webchat"
 )
 
 func NewRouter(config *types.Config, logger Logger) (*Router, error) {
@@ -227,6 +228,32 @@ func NewRouter(config *types.Config, logger Logger) (*Router, error) {
 	if router.admin.Enabled() {
 		router.admin.RegisterRoutes(router.mux)
 		logger.Info("admin UI enabled at /admin")
+	}
+
+	// Mount chat UI. Mount unconditionally — the host adapter handles the
+	// no-models case gracefully, and auth (if any) is decided by
+	// ChatAuthMiddleware which returns nil when chat_password is empty.
+	host := newChatHost(router,
+		fmt.Sprintf("http://%s:%d", hostFrom(config.Server.Host), config.Server.Port),
+		config.Server.Token,
+	)
+		chatServer, err := webchat.New(webchat.Config{
+			Prefix:         "/chat",
+			PersonasDir:    config.Chat.PersonasDir,
+			CommandsDir:    config.Chat.CommandsDir,
+			Host:           host,
+			AuthMiddleware: router.admin.ChatAuthMiddleware(),
+		})
+	if err != nil {
+		logger.Warn("failed to initialize chat UI", "error", err)
+	} else {
+		router.chatServer = chatServer
+		chatServer.Mount(router.mux)
+		if config.Chat.PersonasDir != "" {
+			logger.Info("chat UI enabled at /chat", "personas_dir", config.Chat.PersonasDir)
+		} else {
+			logger.Info("chat UI enabled at /chat")
+		}
 	}
 
 	// Start MCP tool cache refresh timer if configured
