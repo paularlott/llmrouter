@@ -578,16 +578,18 @@
                   @blur="setTimeout(() => slashOpen = false, 150)"
                   rows="1"
                   placeholder="Type a message... (/ for commands, shift+enter for newline, ↑/↓ for history)"
-                  class="flex-1 resize-none rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-2 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 max-h-40 overflow-y-auto"
+                  style="min-height: 2.75rem;"
+                  class="flex-1 resize-none rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-2.5 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 ></textarea>
                 <button x-show="!streaming" @click="send()" :disabled="streaming || !draft.trim()"
-                        class="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 dark:disabled:bg-slate-700 disabled:cursor-not-allowed text-white text-sm font-medium cursor-pointer">
-                  Send
+                        class="w-11 h-11 shrink-0 rounded-full bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 dark:disabled:bg-slate-700 disabled:cursor-not-allowed text-white flex items-center justify-center cursor-pointer transition-colors"
+                        aria-label="Send message">
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 12L3.5 20.5L21 12L3.5 3.5L6 12Z" /><path stroke-linecap="round" stroke-linejoin="round" d="M6 12H21" /></svg>
                 </button>
                 <button x-show="streaming" @click="cancelStream()"
-                        class="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm font-medium cursor-pointer flex items-center gap-1.5">
-                  <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="1.5" /></svg>
-                  Stop
+                        class="w-11 h-11 shrink-0 rounded-full bg-red-600 hover:bg-red-700 text-white flex items-center justify-center cursor-pointer transition-colors"
+                        aria-label="Stop">
+                  <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2" /></svg>
                 </button>
               </div>
             </div>
