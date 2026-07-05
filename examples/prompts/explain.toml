@@ -1,0 +1,11 @@
+description = "Explain a concept at a given complexity level"
+
+[[arguments]]
+name = "concept"
+description = "The concept to explain"
+required = true
+
+[[arguments]]
+name = "level"
+description = "Complexity: simple, intermediate, advanced"
+required = false

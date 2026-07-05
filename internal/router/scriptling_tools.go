@@ -154,8 +154,12 @@ func (stm *scriptlingToolManager) registerAll() error {
 }
 
 // startWatching attaches an fsnotify watcher to every configured source folder
-// and runs watchLoop to dispatch events. Failure to add any single folder is
-// warned about but does not abort — partial watching is better than none.
+// and runs watchLoop to dispatch events. Resources and prompts use a tree
+// structure (first path segment = URI scheme / namespace), so we watch
+// recursively — every subdirectory is added. Tools are flat (single folder
+// of .toml+.py pairs) so no recursion needed. New subdirectories created
+// at runtime are picked up on the next reload (the watcher catches the
+// mkdir event).
 func (stm *scriptlingToolManager) startWatching() error {
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
@@ -163,21 +167,32 @@ func (stm *scriptlingToolManager) startWatching() error {
 	}
 	stm.watcher = watcher
 
+	// Tools: flat watch (no subdirectories).
+	if stm.toolsDirAbs != "" {
+		if err := watcher.Add(stm.toolsDirAbs); err != nil {
+			stm.logger.Warn("Failed to watch folder, auto-reload disabled for it", "kind", "tools", "path", stm.toolsDirAbs, "error", err)
+		} else {
+			stm.logger.Info("Watching folder for changes", "kind", "tools", "path", stm.toolsDirAbs)
+		}
+	}
+
+	// Resources + prompts: recursive watch (subdirectories are part of
+	// the URI scheme / namespace structure).
 	for _, pair := range []struct {
-		dir string
+		dir  string
 		kind string
 	}{
-		{stm.toolsDirAbs, "tools"},
 		{stm.resourcesDirAbs, "resources"},
 		{stm.promptsDirAbs, "prompts"},
 	} {
 		if pair.dir == "" {
 			continue
 		}
-		if err := watcher.Add(pair.dir); err != nil {
-			stm.logger.Warn("Failed to watch folder, auto-reload disabled for it", "kind", pair.kind, "path", pair.dir, "error", err)
+		added := stm.watchRecursive(watcher, pair.dir)
+		if added > 0 {
+			stm.logger.Info("Watching folder tree for changes", "kind", pair.kind, "path", pair.dir, "dirs", added)
 		} else {
-			stm.logger.Info("Watching folder for changes", "kind", pair.kind, "path", pair.dir)
+			stm.logger.Warn("Failed to watch folder, auto-reload disabled for it", "kind", pair.kind, "path", pair.dir)
 		}
 	}
 
@@ -185,6 +200,27 @@ func (stm *scriptlingToolManager) startWatching() error {
 	go stm.watchLoop()
 
 	return nil
+}
+
+// watchRecursive walks dir and adds every subdirectory to the watcher.
+// Returns the number of directories successfully added.
+func (stm *scriptlingToolManager) watchRecursive(watcher *fsnotify.Watcher, dir string) int {
+	count := 0
+	_ = filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil
+		}
+		if !info.IsDir() {
+			return nil
+		}
+		if err := watcher.Add(path); err != nil {
+			stm.logger.Warn("Failed to watch subdirectory", "path", path, "error", err)
+			return nil
+		}
+		count++
+		return nil
+	})
+	return count
 }
 
 // watchLoop dispatches fsnotify events to the right per-kind reload path.
@@ -225,12 +261,16 @@ func (stm *scriptlingToolManager) dispatchEvent(event fsnotify.Event) {
 		toolName := strings.TrimSuffix(filepath.Base(event.Name), ext)
 		stm.scheduleToolReload(toolName, isDelete)
 
-	case stm.resourcesDirAbs != "" && dir == stm.resourcesDirAbs:
-		// Resources may be static files of any extension or {var}.py templates.
-		// Any change in the resources folder triggers a full reload.
+	case stm.resourcesDirAbs != "" && strings.HasPrefix(event.Name, stm.resourcesDirAbs):
+		// Resources use a tree structure (subdirs = URI scheme).
+		// Any file change anywhere in the tree triggers a full reload.
+		// New subdirectories also trigger (mkdir event → reload picks
+		// them up via ScanResourcesTree).
 		stm.scheduleResourcesReload()
 
-	case stm.promptsDirAbs != "" && dir == stm.promptsDirAbs:
+	case stm.promptsDirAbs != "" && strings.HasPrefix(event.Name, stm.promptsDirAbs):
+		// Prompts are flat (.toml+.py pairs or .md/.txt in the root),
+		// but we watch recursively for consistency.
 		if ext != ".toml" && ext != ".py" && ext != ".md" && ext != ".txt" {
 			return
 		}
@@ -331,19 +371,31 @@ func (stm *scriptlingToolManager) scheduleResourcesReload() {
 }
 
 func (stm *scriptlingToolManager) reloadResources() {
+	stm.logger.Info("Reloading scriptling resources",
+		"old_static", len(stm.resourceStaticURIs), "old_templates", len(stm.resourceTemplates))
+
+	// Unregister everything we previously registered.
 	for _, uri := range stm.resourceStaticURIs {
 		stm.mainServer.UnregisterResource(uri)
 	}
 	for _, uriTmpl := range stm.resourceTemplates {
 		stm.mainServer.UnregisterResourceTemplate(uriTmpl)
 	}
+	// Clear tracking BEFORE re-registering. registerResources may
+	// partially succeed (register some, fail on others) — we always
+	// update tracking with whatever was registered so the next reload
+	// can clean up properly.
+	stm.resourceStaticURIs = nil
+	stm.resourceTemplates = nil
+
 	staticURIs, templates, err := stm.registerResources()
+	stm.resourceStaticURIs = staticURIs
+	stm.resourceTemplates = templates
 	if err != nil {
 		stm.logger.Error("Failed to reload scriptling resources", "error", err)
-	} else {
-		stm.resourceStaticURIs = staticURIs
-		stm.resourceTemplates = templates
 	}
+	stm.logger.Info("Resources reloaded",
+		"new_static", len(staticURIs), "new_templates", len(templates))
 	stm.mainServer.NotifyResourcesChanged()
 }
 
