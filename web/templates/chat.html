@@ -370,7 +370,7 @@
             <!-- Messages -->
             <div x-ref="messages" @wheel.passive="onWheel($event)"
                  class="wc-messages flex-1 overflow-y-auto space-y-4 pr-1 relative">
-              <template x-for="(m, idx) in messages" :key="idx">
+              <template x-for="(m, idx) in messages" :key="m.id">
                 <!-- Skip tool-role messages from the main loop. Their result
                      is rendered inline within the originating assistant
                      bubble's Tool calls disclosure (call.result), so showing
