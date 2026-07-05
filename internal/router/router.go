@@ -20,6 +20,7 @@ import (
 	"github.com/paularlott/llmrouter/middleware"
 	"github.com/paularlott/mcp/ai/claude"
 	"github.com/paularlott/mcp/ai/openai"
+	mcplib "github.com/paularlott/mcp"
 	"github.com/paularlott/webchat"
 )
 
@@ -230,20 +231,40 @@ func NewRouter(config *types.Config, logger Logger) (*Router, error) {
 		logger.Info("admin UI enabled at /admin")
 	}
 
-	// Mount chat UI. Mount unconditionally — the host adapter handles the
-	// no-models case gracefully, and auth (if any) is decided by
-	// ChatAuthMiddleware which returns nil when chat_password is empty.
-	host := newChatHost(router,
-		fmt.Sprintf("http://%s:%d", hostFrom(config.Server.Host), config.Server.Port),
-		config.Server.Token,
-	)
-		chatServer, err := webchat.New(webchat.Config{
-			Prefix:         "/chat",
-			PersonasDir:    config.Chat.PersonasDir,
-			CommandsDir:    config.Chat.CommandsDir,
-			Host:           host,
-			AuthMiddleware: router.admin.ChatAuthMiddleware(),
-		})
+	// Mount chat UI. The StandardHost wires webchat to llmrouter's own
+	// OpenAI endpoint (self-loopback) and MCP server. Auth is handled by
+	// ChatAuthMiddleware (nil when no chat_password configured → open).
+	loopbackHost := "127.0.0.1"
+	if config.Server.Host != "" && config.Server.Host != "0.0.0.0" && config.Server.Host != "::" {
+		loopbackHost = config.Server.Host
+	}
+	chatHost := &webchat.StandardHost{
+		ModelsFunc: func(ctx context.Context) ([]webchat.Model, error) {
+			models := make([]webchat.Model, 0)
+			for _, m := range router.getModels() {
+				models = append(models, webchat.Model{
+					ID:       m.ID,
+					Provider: strings.Join(m.Providers, ", "),
+				})
+			}
+			return models, nil
+		},
+		OpenAIBaseURL: fmt.Sprintf("http://%s:%d", loopbackHost, config.Server.Port),
+		OpenAIToken:   config.Server.Token,
+		MCPServer: func(ctx context.Context) *mcplib.Server {
+			if router.mcpServer == nil {
+				return nil
+			}
+			return router.mcpServer.server
+		},
+	}
+	chatServer, err := webchat.New(webchat.Config{
+		Prefix:         "/chat",
+		PersonasDir:    config.Chat.PersonasDir,
+		CommandsDir:    config.Chat.CommandsDir,
+		Host:           chatHost,
+		AuthMiddleware: router.admin.ChatAuthMiddleware(),
+	})
 	if err != nil {
 		logger.Warn("failed to initialize chat UI", "error", err)
 	} else {

@@ -331,30 +331,8 @@ func TestChatAuthMiddlewareReturnsNilWhenNoPasswords(t *testing.T) {
 	a := &Admin{
 		sessions: map[string]*Session{},
 	}
-	if a.ChatEnabled() {
-		t.Fatal("ChatEnabled should be false when no passwords set")
-	}
 	if a.ChatAuthMiddleware() != nil {
 		t.Fatal("ChatAuthMiddleware should be nil when no passwords set")
-	}
-}
-
-// TestChatEnabledReportsTrueWhenEitherPasswordSet covers the truth table.
-func TestChatEnabledReportsTrueWhenEitherPasswordSet(t *testing.T) {
-	cases := []struct {
-		admin, chat string
-		want        bool
-	}{
-		{"", "", false},
-		{"a", "", true},
-		{"", "c", true},
-		{"a", "c", true},
-	}
-	for _, c := range cases {
-		a := &Admin{password: c.admin, chatPassword: c.chat, sessions: map[string]*Session{}}
-		if got := a.ChatEnabled(); got != c.want {
-			t.Errorf("ChatEnabled(admin=%q,chat=%q) = %v want %v", c.admin, c.chat, got, c.want)
-		}
 	}
 }
 

@@ -187,13 +187,6 @@ func (a *Admin) Enabled() bool {
 	return a != nil && a.password != ""
 }
 
-// ChatEnabled reports whether the chat UI is reachable. Chat is enabled when
-// either password is set; if neither is set the host should still mount the
-// chat routes but leave them open (no auth middleware).
-func (a *Admin) ChatEnabled() bool {
-	return a != nil && (a.password != "" || a.chatPassword != "")
-}
-
 // ChatAuthMiddleware returns the auth middleware to wrap webchat routes, or
 // nil if no auth is required. Chat is gated ONLY by chat_password: if no
 // chat_password is configured the chat is open (even when admin_password is
