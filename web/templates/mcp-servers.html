@@ -2,7 +2,6 @@
 <html lang="en" x-data :class="{ 'dark': $store.darkMode.value }">
   <head>
     <script>(()=>{if(localStorage.getItem('darkMode')==='true')document.documentElement.classList.add('dark')})()</script>
-    <script>window.MCP_ROLE = "{{.Role}}";</script>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>MCP Servers - LLM Router Admin</title>
@@ -82,7 +81,7 @@
                 <span x-text="refreshing ? 'Refreshing...' : 'Refresh Tools'"></span>
               </button>
               <button
-                x-show="storageWritable && canEdit"
+                x-show="storageWritable"
                 @click="showAddModal = true"
                 class="px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-xl shadow-lg shadow-blue-500/25 hover:shadow-xl hover:shadow-blue-500/30 transition-all duration-200 flex items-center gap-2 cursor-pointer"
               >
@@ -127,7 +126,7 @@
             <h3 class="text-xl font-semibold text-slate-900 dark:text-white mb-2">No MCP Servers</h3>
             <p class="text-slate-600 dark:text-slate-300 mb-6">Add your first MCP server to extend available tools</p>
             <button
-              x-show="canEdit"
+              x-show="true"
               @click="showAddModal = true"
               class="px-6 py-3 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-xl shadow-lg shadow-blue-500/25 hover:shadow-xl transition-all cursor-pointer"
             >
@@ -190,7 +189,7 @@
                   </div>
                   <div class="flex items-center gap-2">
                     <!-- Enable/Disable toggle (only for non-static servers, admin only) -->
-                    <template x-if="!server.static_server && canEdit">
+                    <template x-if="!server.static_server">
                       <label class="flex items-center cursor-pointer" :aria-label="'Enable or disable ' + server.namespace + ' server'">
                         <input type="checkbox" :checked="server.enabled" @change="toggleServerEnabled(server)" class="sr-only peer" />
                         <div class="relative w-9 h-5 bg-slate-200 dark:bg-slate-600 rounded-full peer peer-checked:bg-green-500 after:content-[''] after:absolute after:top-0.5 after:start-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-4"></div>
@@ -227,7 +226,7 @@
                       </svg>
                     </button>
                     <button
-                      x-show="!server.static_server && canEdit"
+                      x-show="!server.static_server"
                       @click="editServer(server)"
                       class="p-2 text-slate-500 hover:text-blue-600 dark:text-slate-400 dark:hover:text-blue-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors cursor-pointer"
                       :aria-label="'Edit ' + server.namespace"
@@ -238,7 +237,7 @@
                       </svg>
                     </button>
                     <button
-                      x-show="!server.static_server && canEdit"
+                      x-show="!server.static_server"
                       @click="confirmDelete(server)"
                       class="p-2 text-slate-500 hover:text-red-600 dark:text-slate-400 dark:hover:text-red-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors cursor-pointer"
                       :aria-label="'Delete ' + server.namespace"

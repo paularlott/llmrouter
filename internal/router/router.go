@@ -263,7 +263,7 @@ func NewRouter(config *types.Config, logger Logger) (*Router, error) {
 		PersonasDir:    config.Chat.PersonasDir,
 		CommandsDir:    config.Chat.CommandsDir,
 		Host:           chatHost,
-		AuthMiddleware: router.admin.ChatAuthMiddleware(),
+		AuthMiddleware: router.admin.RequireAuthMiddleware(),
 	})
 	if err != nil {
 		logger.Warn("failed to initialize chat UI", "error", err)

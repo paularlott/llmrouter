@@ -157,10 +157,6 @@ Alpine.data("mcpServers", () => ({
   servers: [],
   loading: true,
   error: null,
-  // canEdit gates all interactive affordances. Defaults to true for backward
-  // compat when the page didn't set MCP_ROLE (e.g. legacy admin); set to
-  // false for chat-role sessions viewing the read-only MCP page.
-  canEdit: (typeof window !== "undefined" && window.MCP_ROLE) ? window.MCP_ROLE === "admin" : true,
   showAddModal: false,
   showDeleteModal: false,
   showToolsModal: false,

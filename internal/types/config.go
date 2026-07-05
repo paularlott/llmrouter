@@ -19,8 +19,7 @@ type ServerConfig struct {
 	Host          string `json:"host" toml:"host"`
 	Port          int    `json:"port" toml:"port"`
 	Token         string `json:"token,omitempty" toml:"token"`
-	AdminPassword string `json:"admin_password,omitempty" toml:"admin_password"` // If set, enables admin UI
-	ChatPassword  string `json:"chat_password,omitempty" toml:"chat_password"`   // If set, gates /chat (admin password always works too)
+	AdminPassword string `json:"admin_password,omitempty" toml:"admin_password"` // If set, enables admin UI + chat
 }
 
 type LoggingConfig struct {

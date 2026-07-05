@@ -21,7 +21,7 @@ func (a *Admin) RegisterRoutes(mux *http.ServeMux) {
 	// Pages - use requirePageAuth which redirects to login
 	mux.HandleFunc("/admin/login", a.HandleLoginPage)
 	mux.HandleFunc("/admin/", a.requirePageAuth(a.HandleDashboard))
-	mux.HandleFunc("/admin/mcp-servers", a.requireReadOnlyPageAuth(a.HandleMCPServersPage))
+	mux.HandleFunc("/admin/mcp-servers", a.requirePageAuth(a.HandleMCPServersPage))
 	mux.HandleFunc("/admin/models", a.requirePageAuth(a.HandleModelsPage))
 
 	// Chat page. Both admin and chat-role sessions can reach it; if no
@@ -94,25 +94,17 @@ func (a *Admin) Serve404(w http.ResponseWriter, r *http.Request) {
 	a.templates.Render(w, "404.html", data)
 }
 
-// HandleMCPServersPage renders the MCP servers page. Both admin and chat
-// sessions may view it; the template uses Role to render read-only affordances
-// for chat users.
+// HandleMCPServersPage renders the MCP servers page.
 func (a *Admin) HandleMCPServersPage(w http.ResponseWriter, r *http.Request) {
 	data := &TemplateData{
 		CSSFile: "/admin/assets/main.css",
 		JSFile:  "/admin/assets/main.js",
-		Role:    string(a.sessionRoleFromRequest(r)),
 	}
 	a.templates.Render(w, "mcp-servers.html", data)
 }
 
-// HandleLogin handles login requests. It accepts either the admin password
-// (which authenticates an admin session) or the chat password (which
-// authenticates a chat-only session). When both passwords are unset the
-// login endpoint is effectively unreachable — chat routes are mounted open
-// and admin routes aren't mounted at all.
+// HandleLogin handles login requests. One password, one session type.
 func (a *Admin) HandleLogin(w http.ResponseWriter, r *http.Request) {
-	// Parse password based on content type
 	var password string
 	if strings.Contains(r.Header.Get("Content-Type"), "application/json") {
 		var creds struct {
@@ -131,27 +123,17 @@ func (a *Admin) HandleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Try admin password first; fall through to chat password. Each branch
-	// creates a session with the appropriate role so the rest of the auth
-	// middleware can distinguish them.
-	var role Role
-	switch {
-	case a.password != "" && subtle.ConstantTimeCompare([]byte(password), []byte(a.password)) == 1:
-		role = RoleAdmin
-	case a.chatPassword != "" && subtle.ConstantTimeCompare([]byte(password), []byte(a.chatPassword)) == 1:
-		role = RoleChat
-	default:
+	if subtle.ConstantTimeCompare([]byte(password), []byte(a.password)) != 1 {
 		writeError(w, http.StatusUnauthorized, "invalid password")
 		return
 	}
 
-	token, err := a.createSession(role)
+	token, err := a.createSession()
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to create session")
 		return
 	}
 
-	// Set session cookie
 	http.SetCookie(w, &http.Cookie{
 		Name:     "admin_session",
 		Value:    token,
@@ -162,18 +144,13 @@ func (a *Admin) HandleLogin(w http.ResponseWriter, r *http.Request) {
 
 	accept := r.Header.Get("Accept")
 	if strings.Contains(accept, "application/json") {
-		writeJSON(w, http.StatusOK, map[string]any{"token": token, "role": string(role)})
+		writeJSON(w, http.StatusOK, map[string]string{"token": token})
 		return
 	}
 
-	// Form submission — redirect to the right landing page per role.
 	returnURL := r.URL.Query().Get("return")
 	if returnURL == "" {
-		if role == RoleAdmin {
-			returnURL = "/admin/"
-		} else {
-			returnURL = "/chat"
-		}
+		returnURL = "/admin/"
 	}
 	http.Redirect(w, r, returnURL, http.StatusFound)
 }

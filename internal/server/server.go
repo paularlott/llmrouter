@@ -25,7 +25,6 @@ func RunServer(ctx context.Context, cmd *cli.Command) error {
 			Port:          cmd.GetInt("port"),
 			Token:         cmd.GetString("token"),
 			AdminPassword: cmd.GetString("admin-password"),
-			ChatPassword:  cmd.GetString("chat-password"),
 		},
 		Logging: types.LoggingConfig{
 			Level:  cmd.GetString("log-level"),
@@ -127,9 +126,6 @@ func RunServer(ctx context.Context, cmd *cli.Command) error {
 		if chatCfg := typedConfig.GetObject("chat"); chatCfg != nil {
 			config.Chat.PersonasDir = chatCfg.GetString("personas_dir")
 			config.Chat.CommandsDir = chatCfg.GetString("commands_dir")
-		}
-		if srvCfg := typedConfig.GetObject("server"); srvCfg != nil {
-			config.Server.ChatPassword = srvCfg.GetString("chat_password")
 		}
 	}
 

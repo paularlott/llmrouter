@@ -14,27 +14,15 @@ import (
 	"github.com/paularlott/llmrouter/web"
 )
 
-// Role identifies the access scope of an authenticated session. Admin can
-// reach the management UI and chat; Chat can reach only the chat UI (and the
-// read-only MCP listing APIs the chat UI needs).
-type Role string
-
-const (
-	RoleAdmin Role = "admin"
-	RoleChat  Role = "chat"
-)
-
-// Session represents an authenticated admin or chat session.
+// Session represents an authenticated session.
 type Session struct {
 	Token     string
-	Role      Role
 	CreatedAt time.Time
 }
 
 // Admin handles admin UI requests
 type Admin struct {
-	password     string // admin password ("")
-	chatPassword string // chat-only password ("" = no chat-only access)
+	password     string
 	sessions     map[string]*Session
 	sessionsMu   sync.RWMutex
 	templates    *TemplateRenderer
@@ -134,7 +122,6 @@ func New(config *types.Config, getStats func() *Stats, getProviders func() []Pro
 
 	return &Admin{
 		password:           config.Server.AdminPassword,
-		chatPassword:       config.Server.ChatPassword,
 		sessions:           make(map[string]*Session),
 		templates:          NewTemplateRenderer(web.Templates),
 		getStats:           getStats,
@@ -151,15 +138,10 @@ func New(config *types.Config, getStats func() *Stats, getProviders func() []Pro
 	}
 }
 
-// ChatPageHandler returns the HTTP handler for /chat. It wraps the page
-// renderer with ChatAuthMiddleware (nil when no chat_password is set,
-// meaning open chat). The handler renders web/templates/chat.html — the
-// host's own copy, not webchat's example — so Tailwind's source scan
-// during `npm run build` picks up every utility class used in the
-// template and emits them into dist/assets/main.css. This is the fix for
-// the long-running "icons blow up, layouts break" class of bug.
+// ChatPageHandler returns the HTTP handler for /chat. Uses requirePageAuth
+// (same admin session as every other page). One password, one role.
 func (a *Admin) ChatPageHandler() http.HandlerFunc {
-	render := func(w http.ResponseWriter, r *http.Request) {
+	return a.requirePageAuth(func(w http.ResponseWriter, r *http.Request) {
 		data := &TemplateData{
 			CSSFile: "/admin/assets/main.css",
 			JSFile:  "/admin/assets/main.js",
@@ -172,51 +154,12 @@ func (a *Admin) ChatPageHandler() http.HandlerFunc {
 		if err := a.templates.Render(w, "chat.html", data); err != nil {
 			http.Error(w, "render error", http.StatusInternalServerError)
 		}
-	}
-	mw := a.ChatAuthMiddleware()
-	if mw == nil {
-		return render
-	}
-	return func(w http.ResponseWriter, r *http.Request) {
-		mw(http.HandlerFunc(render)).ServeHTTP(w, r)
-	}
+	})
 }
 
 // Enabled returns true if admin UI is enabled (admin password set).
 func (a *Admin) Enabled() bool {
 	return a != nil && a.password != ""
-}
-
-// ChatAuthMiddleware returns the auth middleware to wrap webchat routes, or
-// nil if no auth is required. Chat is gated ONLY by chat_password: if no
-// chat_password is configured the chat is open (even when admin_password is
-// set, since "logged-in admin" + "no chat password" should still let the
-// admin walk straight into chat without re-authenticating). When chat_password
-// is set, both admin and chat sessions are accepted.
-func (a *Admin) ChatAuthMiddleware() func(http.Handler) http.Handler {
-	if a == nil || a.chatPassword == "" {
-		return nil
-	}
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			token := a.getSessionFromRequest(r)
-			if token == "" {
-				token = a.getSessionFromCookie(r)
-			}
-			if a.sessionRole(token) == "" {
-				// API requests get JSON 401; page requests redirect to the
-				// shared admin login (it accepts both passwords and routes by
-				// role on success).
-				if strings.HasPrefix(r.URL.Path, "/chat/api/") {
-					writeError(w, http.StatusUnauthorized, "unauthorized")
-					return
-				}
-				http.Redirect(w, r, "/admin/login?return="+r.URL.Path, http.StatusFound)
-				return
-			}
-			next.ServeHTTP(w, r)
-		})
-	}
 }
 
 // generateToken generates a random session token
@@ -228,8 +171,8 @@ func generateToken() (string, error) {
 	return hex.EncodeToString(bytes), nil
 }
 
-// createSession creates a new session with the given role and returns the token.
-func (a *Admin) createSession(role Role) (string, error) {
+// createSession creates a new session and returns the token.
+func (a *Admin) createSession() (string, error) {
 	token, err := generateToken()
 	if err != nil {
 		return "", err
@@ -248,38 +191,24 @@ func (a *Admin) createSession(role Role) (string, error) {
 
 	a.sessions[token] = &Session{
 		Token:     token,
-		Role:      role,
 		CreatedAt: now,
 	}
 
 	return token, nil
 }
 
-// validateSession checks if a session token is valid (any role).
+// validateSession checks if a session token is valid.
 func (a *Admin) validateSession(token string) bool {
-	return a.sessionRole(token) != ""
-}
-
-// sessionRole returns the role attached to the session token, or "" if invalid.
-func (a *Admin) sessionRole(token string) Role {
 	if token == "" {
-		return ""
+		return false
 	}
-
 	a.sessionsMu.RLock()
 	defer a.sessionsMu.RUnlock()
-
 	sess, ok := a.sessions[token]
 	if !ok {
-		return ""
+		return false
 	}
-
-	// Check if session is expired (24 hours)
-	if time.Since(sess.CreatedAt) > 24*time.Hour {
-		return ""
-	}
-
-	return sess.Role
+	return time.Since(sess.CreatedAt) <= 24*time.Hour
 }
 
 // deleteSession removes a session
@@ -303,7 +232,6 @@ func writeError(w http.ResponseWriter, status int, message string) {
 
 // getSessionFromRequest extracts the session token from a request
 func (a *Admin) getSessionFromRequest(r *http.Request) string {
-	// Check Authorization header first
 	auth := r.Header.Get("Authorization")
 	if len(auth) > 7 && auth[:7] == "Bearer " {
 		return auth[7:]
@@ -320,16 +248,41 @@ func (a *Admin) getSessionFromCookie(r *http.Request) string {
 	return cookie.Value
 }
 
-// requireAuth is middleware that checks for an authenticated ADMIN session (for
-// admin API endpoints). Chat-only sessions are rejected with 403 so a logged-in
-// chat user can't poke at management APIs.
+// RequireAuthMiddleware returns an http.Handler middleware that checks for
+// a valid session. Used by webchat to gate its API + asset routes with the
+// same admin session as the rest of the app. Returns nil if no admin
+// password is set (open access — for local dev behind a reverse proxy).
+func (a *Admin) RequireAuthMiddleware() func(http.Handler) http.Handler {
+	if a == nil || a.password == "" {
+		return nil
+	}
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			token := a.getSessionFromRequest(r)
+			if token == "" {
+				token = a.getSessionFromCookie(r)
+			}
+			if !a.validateSession(token) {
+				if strings.HasPrefix(r.URL.Path, "/chat/api/") {
+					writeError(w, http.StatusUnauthorized, "unauthorized")
+					return
+				}
+				http.Redirect(w, r, "/admin/login?return="+r.URL.Path, http.StatusFound)
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+// requireAuth is middleware that checks for a valid session (API endpoints).
 func (a *Admin) requireAuth(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		token := a.getSessionFromRequest(r)
 		if token == "" {
 			token = a.getSessionFromCookie(r)
 		}
-		if a.sessionRole(token) != RoleAdmin {
+		if !a.validateSession(token) {
 			writeError(w, http.StatusUnauthorized, "unauthorized")
 			return
 		}
@@ -337,42 +290,15 @@ func (a *Admin) requireAuth(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-// requirePageAuth is middleware that checks for an authenticated ADMIN page
-// request. Redirects to the admin login page if unauthenticated.
+// requirePageAuth is middleware that checks for a valid session (page requests).
+// Redirects to login if unauthenticated.
 func (a *Admin) requirePageAuth(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		token := a.getSessionFromCookie(r)
-		if a.sessionRole(token) != RoleAdmin {
+		if !a.validateSession(token) {
 			http.Redirect(w, r, "/admin/login?return="+r.URL.Path, http.StatusFound)
 			return
 		}
 		next(w, r)
 	}
-}
-
-// requireReadOnlyPageAuth is middleware for admin pages a chat user may also
-// view (e.g. MCP servers listing). Both admin and chat sessions pass;
-// unauthenticated requests redirect to /admin/login so the user gets a chance
-// to authenticate. The handler is expected to consult sessionRole to decide
-// what UI affordances to render.
-func (a *Admin) requireReadOnlyPageAuth(next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		token := a.getSessionFromCookie(r)
-		if a.sessionRole(token) == "" {
-			http.Redirect(w, r, "/admin/login?return="+r.URL.Path, http.StatusFound)
-			return
-		}
-		next(w, r)
-	}
-}
-
-// sessionRoleFromRequest returns the role attached to the request's session
-// (admin or chat), or "" if unauthenticated. Handlers use this to render
-// read-only vs editable UI.
-func (a *Admin) sessionRoleFromRequest(r *http.Request) Role {
-	token := a.getSessionFromRequest(r)
-	if token == "" {
-		token = a.getSessionFromCookie(r)
-	}
-	return a.sessionRole(token)
 }

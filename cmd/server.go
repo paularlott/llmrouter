@@ -100,11 +100,6 @@ var ServerCmd = &cli.Command{
 			ConfigPath: []string{"scripting.lib_paths"},
 		},
 		&cli.StringFlag{
-			Name:         "chat-password",
-			Usage:        "Password to gate the /chat page (admin password always works; empty = open if no admin password either)",
-			ConfigPath:   []string{"server.chat_password"},
-		},
-		&cli.StringFlag{
 			Name:         "personas-dir",
 			Usage:        "Directory of chat persona .toml files (system_prompt, default_model, [params] table)",
 			ConfigPath:   []string{"chat.personas_dir"},

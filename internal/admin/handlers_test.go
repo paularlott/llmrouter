@@ -2,7 +2,6 @@ package admin
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -178,61 +177,43 @@ func TestAdminNewWiresResourceAndPromptCallbacks(t *testing.T) {
 	}
 }
 
-// TestHandleLoginRoleDispatch covers the role-aware login flow: admin
-// password yields RoleAdmin, chat password yields RoleChat, and the role is
-// observable via sessionRole.
-func TestHandleLoginRoleDispatch(t *testing.T) {
+// TestHandleLoginAcceptsPassword verifies the single-password login flow.
+func TestHandleLoginAcceptsPassword(t *testing.T) {
 	cfg := &types.Config{}
-	cfg.Server.AdminPassword = "secret-admin"
-	cfg.Server.ChatPassword = "secret-chat"
+	cfg.Server.AdminPassword = "secret"
 
 	a := New(cfg, nil, nil, nil, nil, nil, nil, nil, nil, false, nil, nil)
 	if a == nil {
 		t.Fatal("New returned nil")
 	}
 
-	cases := []struct {
-		name     string
-		password string
-		want     Role
-	}{
-		{"admin password authenticates admin", "secret-admin", RoleAdmin},
-		{"chat password authenticates chat-only", "secret-chat", RoleChat},
+	body := `{"password":"secret"}`
+	req := httptest.NewRequest(http.MethodPost, "/admin/api/login", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+	rec := httptest.NewRecorder()
+	a.HandleLogin(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status: %d (%s)", rec.Code, rec.Body.String())
 	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			body := fmt.Sprintf(`{"password":%q}`, c.password)
-			req := httptest.NewRequest(http.MethodPost, "/admin/api/login", strings.NewReader(body))
-			req.Header.Set("Content-Type", "application/json")
-			req.Header.Set("Accept", "application/json")
-			rec := httptest.NewRecorder()
-			a.HandleLogin(rec, req)
-			if rec.Code != http.StatusOK {
-				t.Fatalf("status: %d (%s)", rec.Code, rec.Body.String())
-			}
-			var resp struct {
-				Token string `json:"token"`
-				Role  string `json:"role"`
-			}
-			if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
-				t.Fatalf("unmarshal: %v", err)
-			}
-			if resp.Role != string(c.want) {
-				t.Fatalf("role: want %s got %s", c.want, resp.Role)
-			}
-			if a.sessionRole(resp.Token) != c.want {
-				t.Fatalf("sessionRole mismatch for token %s", resp.Token)
-			}
-		})
+	var resp struct {
+		Token string `json:"token"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if resp.Token == "" {
+		t.Fatal("empty token")
+	}
+	if !a.validateSession(resp.Token) {
+		t.Fatal("token not valid")
 	}
 }
 
-// TestHandleLoginRejectsWrongPassword ensures unknown passwords are rejected
-// regardless of which password slot they target.
+// TestHandleLoginRejectsWrongPassword.
 func TestHandleLoginRejectsWrongPassword(t *testing.T) {
 	cfg := &types.Config{}
 	cfg.Server.AdminPassword = "admin"
-	cfg.Server.ChatPassword = "chat"
 	a := New(cfg, nil, nil, nil, nil, nil, nil, nil, nil, false, nil, nil)
 
 	req := httptest.NewRequest(http.MethodPost, "/admin/api/login",
@@ -245,145 +226,11 @@ func TestHandleLoginRejectsWrongPassword(t *testing.T) {
 	}
 }
 
-// TestRequireAuthRejectsChatRole proves the role-aware gate works: a chat-only
-// session must not pass admin API auth.
-func TestRequireAuthRejectsChatRole(t *testing.T) {
-	a := &Admin{
-		password:     "admin",
-		chatPassword: "chat",
-		sessions:     map[string]*Session{},
-	}
-	// Create sessions for each role.
-	tokAdmin, _ := a.createSession(RoleAdmin)
-	tokChat, _ := a.createSession(RoleChat)
-
-	called := false
-	h := a.requireAuth(func(w http.ResponseWriter, r *http.Request) {
-		called = true
-	})
-
-	// Admin token passes.
-	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/admin/api/anything", nil)
-	req.Header.Set("Authorization", "Bearer "+tokAdmin)
-	h(rec, req)
-	if !called {
-		t.Fatal("admin session should pass requireAuth")
-	}
-
-	// Chat token is rejected.
-	called = false
-	rec = httptest.NewRecorder()
-	req = httptest.NewRequest(http.MethodGet, "/admin/api/anything", nil)
-	req.Header.Set("Authorization", "Bearer "+tokChat)
-	h(rec, req)
-	if called {
-		t.Fatal("chat session should not pass requireAuth")
-	}
-	if rec.Code != http.StatusUnauthorized {
-		t.Fatalf("want 401 got %d", rec.Code)
-	}
-}
-
-// TestRequireReadOnlyPageAuthAcceptsBothRoles covers the read-only MCP page
-// gate: both admin and chat sessions pass; unauthenticated requests redirect.
-func TestRequireReadOnlyPageAuthAcceptsBothRoles(t *testing.T) {
-	a := &Admin{
-		password:     "admin",
-		chatPassword: "chat",
-		sessions:     map[string]*Session{},
-	}
-	tokAdmin, _ := a.createSession(RoleAdmin)
-	tokChat, _ := a.createSession(RoleChat)
-
-	called := false
-	h := a.requireReadOnlyPageAuth(func(w http.ResponseWriter, r *http.Request) {
-		called = true
-	})
-
-	for _, tok := range []string{tokAdmin, tokChat} {
-		called = false
-		rec := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodGet, "/admin/mcp-servers", nil)
-		req.AddCookie(&http.Cookie{Name: "admin_session", Value: tok})
-		h(rec, req)
-		if !called {
-			t.Fatalf("token %s should pass read-only auth", tok)
-		}
-	}
-
-	// No cookie -> redirect to login.
-	called = false
-	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/admin/mcp-servers", nil)
-	h(rec, req)
-	if called {
-		t.Fatal("unauthenticated should not pass")
-	}
-	if rec.Code != http.StatusFound {
-		t.Fatalf("want redirect got %d", rec.Code)
-	}
-}
-
-// TestChatAuthMiddlewareReturnsNilWhenNoPasswords ensures that when neither
-// password is configured, the chat middleware is nil (host mounts open chat).
-func TestChatAuthMiddlewareReturnsNilWhenNoPasswords(t *testing.T) {
-	a := &Admin{
-		sessions: map[string]*Session{},
-	}
-	if a.ChatAuthMiddleware() != nil {
-		t.Fatal("ChatAuthMiddleware should be nil when no passwords set")
-	}
-}
-
-// TestChatAuthMiddlewareNilWhenNoChatPassword locks in the rule that the chat
-// UI is open whenever chat_password is empty — even if admin_password is set.
-// This is what lets an admin walk straight into /chat without re-authing when
-// no chat-specific password has been configured.
-func TestChatAuthMiddlewareNilWhenNoChatPassword(t *testing.T) {
-	cases := []struct {
-		admin, chat string
-		wantNil     bool
-	}{
-		{"", "", true},    // no auth at all → open
-		{"a", "", true},   // admin only, no chat password → open (the case the user hit)
-		{"", "c", false},  // chat password only → gated
-		{"a", "c", false}, // both → gated
-	}
-	for _, c := range cases {
-		a := &Admin{password: c.admin, chatPassword: c.chat, sessions: map[string]*Session{}}
-		got := a.ChatAuthMiddleware()
-		if (got == nil) != c.wantNil {
-			t.Errorf("ChatAuthMiddleware(admin=%q,chat=%q) nil=%v want %v", c.admin, c.chat, got == nil, c.wantNil)
-		}
-	}
-}
-
-// TestChatAuthMiddlewareRedirectsToAdminLogin confirms the redirect target
-// is the shared /admin/login (which knows how to handle both password types)
-// rather than a non-existent /chat/login.
-func TestChatAuthMiddlewareRedirectsToAdminLogin(t *testing.T) {
-	a := &Admin{
-		password:     "admin",
-		chatPassword: "chat",
-		sessions:     map[string]*Session{},
-	}
-	mw := a.ChatAuthMiddleware()
-	if mw == nil {
-		t.Fatal("expected non-nil middleware when chat_password is set")
-	}
-
-	req := httptest.NewRequest(http.MethodGet, "/chat", nil)
-	rec := httptest.NewRecorder()
-	mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatal("handler should not be called for unauthenticated request")
-	})).ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusFound {
-		t.Fatalf("want redirect got %d", rec.Code)
-	}
-	loc := rec.Header().Get("Location")
-	if !strings.HasPrefix(loc, "/admin/login") {
-		t.Fatalf("redirect location: %q (want /admin/login?...)", loc)
+// TestRequireAuthMiddlewareReturnsNilWhenNoPassword ensures open access
+// when admin_password is not configured.
+func TestRequireAuthMiddlewareReturnsNilWhenNoPassword(t *testing.T) {
+	a := &Admin{sessions: map[string]*Session{}}
+	if a.RequireAuthMiddleware() != nil {
+		t.Fatal("RequireAuthMiddleware should be nil when no password set")
 	}
 }
