@@ -219,14 +219,23 @@ func NewRouter(config *types.Config, logger Logger) (*Router, error) {
 	// Initialize admin UI if password is configured
 	var mcpStorage storage.MCPStorage
 	var mcpStorageWritable bool
+	var providerStorage storage.ProviderStorage
+	var providerStorageWritable bool
 	if sharedStore != nil {
 		mcpStorage = sharedStore.NewMCPStorage()
 		mcpStorageWritable = !sharedStore.IsMemory()
+		providerStorage = sharedStore.NewProviderStorage()
+		providerStorageWritable = !sharedStore.IsMemory()
 	}
 	router.mcpStorage = mcpStorage
+	router.providerStorage = providerStorage
+
+	// Load stored providers alongside config-file providers
+	router.loadStoredProviders(config, logger)
 
 	router.admin = admin.New(config, router.getStats, router.getProviders, router.getMCPServers, router.getMCPTools, router.getMCPResources, router.getMCPPrompts, router.getModels, mcpStorage, mcpStorageWritable, router.reloadMCPServers, router.reloadMCPServers)
 	if router.admin.Enabled() {
+		router.admin.SetProviderStorage(providerStorage, providerStorageWritable, router.reloadProviders)
 		router.admin.RegisterRoutes(router.mux)
 		logger.Info("admin UI enabled at /admin")
 	}
@@ -257,6 +266,7 @@ func NewRouter(config *types.Config, logger Logger) (*Router, error) {
 			}
 			return router.mcpServer.server
 		},
+		SystemPromptAugmenter: router.augmentSystemPrompt,
 	}
 	// EventBroadcaster for SSE push — cross-tab sync + content-change
 	// notifications. Created once and shared between webchat (for the
@@ -1268,11 +1278,12 @@ func (r *Router) getProviders() []admin.ProviderInfo {
 		r.ModelMapMu.RUnlock()
 
 		providers = append(providers, admin.ProviderInfo{
-			Name:       name,
-			Type:       p.ProviderType,
-			Healthy:    p.Healthy.Load(),
-			ModelCount: modelCount,
-			Weight:     p.Weight,
+			Name:           name,
+			Type:           p.ProviderType,
+			Healthy:        p.Healthy.Load(),
+			ModelCount:     modelCount,
+			Weight:         p.Weight,
+			StaticProvider: !r.storedProviderNames[name],
 		})
 	}
 	sort.Slice(providers, func(i, j int) bool { return providers[i].Name < providers[j].Name })

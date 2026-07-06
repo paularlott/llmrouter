@@ -67,3 +67,10 @@ func (s *Store) NewMCPStorage() MCPStorage {
 	}
 	return NewSnapshotMCPStorage(s.db)
 }
+
+func (s *Store) NewProviderStorage() ProviderStorage {
+	if s.memory {
+		return NewMemoryProviderStorage()
+	}
+	return NewSnapshotProviderStorage(s.db)
+}

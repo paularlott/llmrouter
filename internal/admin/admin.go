@@ -41,6 +41,11 @@ type Admin struct {
 	mcpStorageWritable bool // true if storage is persistent (not memory-only)
 	onMCPServerChange  func()
 	onMCPCacheRefresh  func() // Called to refresh tool cache from remote servers
+
+	// Provider storage (for dynamic provider management via UI)
+	providerStorage         storage.ProviderStorage
+	providerStorageWritable bool
+	onProviderChange        func()
 }
 
 // Stats represents dashboard statistics
@@ -53,11 +58,12 @@ type Stats struct {
 
 // ProviderInfo represents provider information for the UI
 type ProviderInfo struct {
-	Name        string  `json:"name"`
-	Type        string  `json:"type"`
-	Healthy     bool    `json:"healthy"`
-	ModelCount  int     `json:"model_count"`
-	Weight      float64 `json:"weight"`
+	Name           string  `json:"name"`
+	Type           string  `json:"type"`
+	Healthy        bool    `json:"healthy"`
+	ModelCount     int     `json:"model_count"`
+	Weight         float64 `json:"weight"`
+	StaticProvider bool    `json:"static_provider"` // true = from config file, false = from UI/storage
 }
 
 // MCPServerInfo represents MCP server information for the UI
@@ -136,6 +142,15 @@ func New(config *types.Config, getStats func() *Stats, getProviders func() []Pro
 		onMCPServerChange:  onMCPServerChange,
 		onMCPCacheRefresh:  onMCPCacheRefresh,
 	}
+}
+
+// SetProviderStorage wires dynamic provider management. Called after New
+// but before RegisterRoutes. If ps is nil, provider management is disabled
+// (config-file providers are still shown read-only).
+func (a *Admin) SetProviderStorage(ps storage.ProviderStorage, writable bool, onChange func()) {
+	a.providerStorage = ps
+	a.providerStorageWritable = writable
+	a.onProviderChange = onChange
 }
 
 // ChatPageHandler returns the HTTP handler for /chat. Uses requirePageAuth

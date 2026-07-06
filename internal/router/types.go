@@ -55,6 +55,8 @@ type Router struct {
 	admin                *admin.Admin
 	chatServer           *webchat.Server
 	mcpStorage           storage.MCPStorage
+	providerStorage      storage.ProviderStorage
+	storedProviderNames  map[string]bool // tracks which providers came from KV storage
 }
 
 type (

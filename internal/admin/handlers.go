@@ -50,6 +50,14 @@ func (a *Admin) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /admin/api/mcp-servers/refresh-cache", a.requireAuth(a.HandleRefreshMCPCache))
 	mux.HandleFunc("GET /admin/api/mcp-storage-status", a.requireAuth(a.HandleMCPStorageStatus))
 
+	// Provider management
+	mux.HandleFunc("/admin/providers", a.requirePageAuth(a.HandleProvidersPage))
+	mux.HandleFunc("GET /admin/api/providers/list", a.requireAuth(a.HandleListProviders))
+	mux.HandleFunc("POST /admin/api/providers", a.requireAuth(a.HandleCreateProvider))
+	mux.HandleFunc("GET /admin/api/providers/{name}", a.requireAuth(a.HandleGetProvider))
+	mux.HandleFunc("PUT /admin/api/providers/{name}", a.requireAuth(a.HandleUpdateProvider))
+	mux.HandleFunc("DELETE /admin/api/providers/{name}", a.requireAuth(a.HandleDeleteProvider))
+
 	// OAuth2 PKCE flow for MCP servers
 	mux.HandleFunc("POST /admin/api/mcp-servers/oauth/start", a.requireAuth(a.HandleOAuthStart))
 	mux.HandleFunc("GET /admin/oauth/callback", a.HandleOAuthCallback)

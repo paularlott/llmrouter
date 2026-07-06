@@ -365,6 +365,16 @@ lib_paths = ["./libs"]             # Additional directories for scriptling libra
 
 Tools can be marked as `discoverable = true` to hide them from `tools/list` and make them searchable via `tool_search` only.
 
+### Chat UI
+
+When `admin_password` is set and a personas directory is configured, a built-in chat interface is available at `/chat` with conversation history, slash commands, MCP tool integration, and markdown rendering.
+
+```bash
+./llmrouter server --personas-dir ./personas --commands-dir ./commands --resources-dir ./resources
+```
+
+**System Prompt Augmentation (Skills):** On every chat request, the router queries the MCP server for resources with a `skill://` URI prefix and appends them to the persona's system prompt as a skill index. This is transient — the stored conversation keeps the original system prompt; the augmentation is recomputed on each request so it always reflects current state. The model can then retrieve skill instructions via a `get_skill` tool (or equivalent MCP tool).
+
 ### MCP OAuth Authentication
 
 For MCP servers that require OAuth authentication, configure the OAuth fields instead of `token`:
