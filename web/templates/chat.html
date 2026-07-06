@@ -190,10 +190,13 @@
             </button>
             <div class="space-y-1 overflow-y-auto" style="max-height: 40vh;">
               <template x-for="c in conversations" :key="c.id">
-                <button @click="loadConversation(c.id); mobileMenuOpen = false"
-                        class="w-full text-left px-3 py-2 rounded-lg text-sm"
-                        :class="c.id === currentId ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'"
-                        x-text="c.title || 'New conversation'"></button>
+                <div class="flex items-center gap-2">
+                  <button @click="loadConversation(c.id); mobileMenuOpen = false"
+                          class="flex-1 text-left px-3 py-2 rounded-lg text-sm"
+                          :class="c.id === currentId ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-200 font-medium' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'"
+                          x-text="c.title || 'New conversation'"></button>
+                  <span x-show="c.unread" class="w-2 h-2 rounded-full bg-blue-500 shrink-0"></span>
+                </div>
               </template>
               <p x-show="conversations.length === 0" class="text-xs text-slate-400 dark:text-slate-500 px-3 py-2">No saved conversations.</p>
             </div>
@@ -214,10 +217,13 @@
           </button>
           <div class="flex-1 overflow-y-auto space-y-1">
             <template x-for="c in conversations" :key="c.id">
-              <button @click="loadConversation(c.id)"
-                      class="w-full text-left px-3 py-2 rounded-lg text-sm transition-colors"
-                      :class="c.id === currentId ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'"
-                      x-text="c.title || 'New conversation'"></button>
+              <div class="flex items-center gap-2">
+                <button @click="loadConversation(c.id)"
+                        class="flex-1 text-left px-3 py-2 rounded-lg text-sm transition-colors"
+                        :class="c.id === currentId ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-200 font-medium border border-blue-200 dark:border-blue-700' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'"
+                        x-text="c.title || 'New conversation'"></button>
+                <span x-show="c.unread" class="w-2 h-2 rounded-full bg-blue-500 shrink-0"></span>
+              </div>
             </template>
             <p x-show="conversations.length === 0" class="text-xs text-slate-400 dark:text-slate-500 px-3 py-2">No saved conversations.</p>
           </div>

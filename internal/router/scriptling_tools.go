@@ -15,6 +15,7 @@ import (
 	"github.com/paularlott/mcp/toolmetadata"
 	scriptlingplugin "github.com/paularlott/scriptling/plugin"
 	mcpcli "github.com/paularlott/scriptling/scriptling-cli/mcp"
+	"github.com/paularlott/webchat"
 )
 
 // scriptlingToolManager owns scriptling-served MCP content — tools, resources
@@ -49,6 +50,25 @@ type scriptlingToolManager struct {
 	resourceStaticURIs []string // folder-sourced static resource URIs
 	resourceTemplates  []string // folder-sourced resource template URIs
 	promptNames        []string // folder-sourced prompt names
+
+	// Optional SSE event broadcaster. When set, reload methods push
+	// "tools_changed" / "resources_changed" / "prompts_changed" events
+	// so all connected browser tabs refresh their cached lists without
+	// polling.
+	eventBroadcaster *webchat.EventBroadcaster
+}
+
+// SetEventBroadcaster wires the SSE push notifier. When set, tool/resource/
+// prompt reloads broadcast change events so all connected browser tabs
+// refresh their cached lists without polling.
+func (stm *scriptlingToolManager) SetEventBroadcaster(b *webchat.EventBroadcaster) {
+	stm.eventBroadcaster = b
+}
+
+func (stm *scriptlingToolManager) broadcast(eventType string) {
+	if stm.eventBroadcaster != nil {
+		stm.eventBroadcaster.Broadcast(webchat.ServerEvent{Type: eventType})
+	}
 }
 
 // NewScriptlingToolManager builds a manager, registers every folder-sourced
@@ -312,6 +332,7 @@ func (stm *scriptlingToolManager) handleToolDelete(toolName string) {
 
 	if stm.mainServer.UnregisterTool(toolName) {
 		stm.logger.Info("Unregistered scriptling MCP tool", "name", toolName)
+		stm.broadcast("tools_changed")
 	}
 }
 
@@ -333,6 +354,7 @@ func (stm *scriptlingToolManager) handleToolCreate(toolName string) {
 		return
 	}
 	stm.registerTool(toolName, meta)
+	stm.broadcast("tools_changed")
 }
 
 func (stm *scriptlingToolManager) registerTool(toolName string, meta *toolmetadata.ToolMetadata) {
@@ -397,6 +419,7 @@ func (stm *scriptlingToolManager) reloadResources() {
 	stm.logger.Info("Resources reloaded",
 		"new_static", len(staticURIs), "new_templates", len(templates))
 	stm.mainServer.NotifyResourcesChanged()
+	if stm.eventBroadcaster != nil { stm.eventBroadcaster.Broadcast(webchat.ServerEvent{Type: "resources_changed"}) }
 }
 
 // registerResources scans the resources folder and registers every static
@@ -454,6 +477,7 @@ func (stm *scriptlingToolManager) reloadPrompts() {
 		stm.promptNames = names
 	}
 	stm.mainServer.NotifyPromptsChanged()
+	if stm.eventBroadcaster != nil { stm.eventBroadcaster.Broadcast(webchat.ServerEvent{Type: "prompts_changed"}) }
 }
 
 // registerPrompts scans the prompts folder and registers every prompt on the

@@ -258,12 +258,34 @@ func NewRouter(config *types.Config, logger Logger) (*Router, error) {
 			return router.mcpServer.server
 		},
 	}
+	// EventBroadcaster for SSE push — cross-tab sync + content-change
+	// notifications. Created once and shared between webchat (for the
+	// /api/events endpoint) and the scriptling watcher (for push on
+	// tools/prompts/resources changes).
+	eventBroadcaster := webchat.NewEventBroadcaster()
+
+	// Wire the broadcaster to the scriptling watcher so tool/resource/prompt
+	// changes push SSE events to all connected browser tabs.
+	if router.mcpServer != nil && router.mcpServer.scriptlingManager != nil {
+		router.mcpServer.scriptlingManager.SetEventBroadcaster(eventBroadcaster)
+	}
+
+	// HistoryStore — uses the same snapshotkv store as everything else.
+	// Memory-only mode (no storage path) falls back to an in-memory map
+	// that lasts for the process lifetime but doesn't persist.
+	var historyStore webchat.HistoryStore
+	if sharedStore != nil {
+		historyStore = newHistoryStore(sharedStore)
+	}
+
 	chatServer, err := webchat.New(webchat.Config{
 		Prefix:         "/chat",
 		PersonasDir:    config.Chat.PersonasDir,
 		CommandsDir:    config.Chat.CommandsDir,
 		Host:           chatHost,
 		AuthMiddleware: router.admin.RequireAuthMiddleware(),
+		History:        historyStore,
+		Events:         eventBroadcaster,
 	})
 	if err != nil {
 		logger.Warn("failed to initialize chat UI", "error", err)
