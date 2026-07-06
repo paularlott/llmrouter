@@ -54,11 +54,10 @@ func (r *Router) listSkillResources(ctx context.Context) string {
 		if !strings.HasPrefix(res.URI, "skill://") {
 			continue
 		}
-		name := strings.TrimPrefix(res.URI, "skill://")
 		if res.Description != "" {
-			lines = append(lines, "- "+name+": "+res.Description)
+			lines = append(lines, "- "+res.URI+": "+res.Description)
 		} else {
-			lines = append(lines, "- "+name)
+			lines = append(lines, "- "+res.URI)
 		}
 	}
 
@@ -67,7 +66,7 @@ func (r *Router) listSkillResources(ctx context.Context) string {
 	}
 
 	var b strings.Builder
-	b.WriteString("The following skills are available. Use the get_skill tool with a skill name to retrieve detailed instructions:\n")
+	b.WriteString("The following skills are available. Call the webchat__get_skill tool with the skill URI to retrieve detailed instructions:\n")
 	for _, line := range lines {
 		b.WriteString(line)
 		b.WriteByte('\n')

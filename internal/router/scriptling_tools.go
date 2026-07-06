@@ -52,7 +52,7 @@ type scriptlingToolManager struct {
 	promptNames        []string // folder-sourced prompt names
 
 	// Optional SSE event broadcaster. When set, reload methods push
-	// "tools_changed" / "resources_changed" / "prompts_changed" events
+	// "resources_changed" / "prompts_changed" events
 	// so all connected browser tabs refresh their cached lists without
 	// polling.
 	eventBroadcaster *webchat.EventBroadcaster
@@ -332,7 +332,6 @@ func (stm *scriptlingToolManager) handleToolDelete(toolName string) {
 
 	if stm.mainServer.UnregisterTool(toolName) {
 		stm.logger.Info("Unregistered scriptling MCP tool", "name", toolName)
-		stm.broadcast("tools_changed")
 	}
 }
 
@@ -354,7 +353,6 @@ func (stm *scriptlingToolManager) handleToolCreate(toolName string) {
 		return
 	}
 	stm.registerTool(toolName, meta)
-	stm.broadcast("tools_changed")
 }
 
 func (stm *scriptlingToolManager) registerTool(toolName string, meta *toolmetadata.ToolMetadata) {
