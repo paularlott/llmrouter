@@ -50,6 +50,10 @@ func RunServer(ctx context.Context, cmd *cli.Command) error {
 			PluginDirs:   cmd.GetStringSlice("plugin-dir"),
 			LibPaths:     cmd.GetStringSlice("libpath"),
 		},
+		Chat: types.ChatConfig{
+			PersonasDir: cmd.GetString("personas-dir"),
+			CommandsDir: cmd.GetString("commands-dir"),
+		},
 	}
 
 	log.Configure(config.Logging.Level, config.Logging.Format)
@@ -118,6 +122,10 @@ func RunServer(ctx context.Context, cmd *cli.Command) error {
 			config.Scripting.PromptsDir = scriptingCfg.GetString("prompts_dir")
 			config.Scripting.PluginDirs = scriptingCfg.GetStringSlice("plugin_dirs")
 			config.Scripting.LibPaths = scriptingCfg.GetStringSlice("lib_paths")
+		}
+		if chatCfg := typedConfig.GetObject("chat"); chatCfg != nil {
+			config.Chat.PersonasDir = chatCfg.GetString("personas_dir")
+			config.Chat.CommandsDir = chatCfg.GetString("commands_dir")
 		}
 	}
 

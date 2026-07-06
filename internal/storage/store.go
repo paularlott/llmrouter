@@ -38,6 +38,10 @@ func NewStore(path string, conversationTTL time.Duration) (*Store, error) {
 
 func (s *Store) IsMemory() bool { return s.memory }
 
+// DB returns the underlying snapshotkv database, or nil in memory mode.
+// Used by packages that need direct KV access (e.g. chat history store).
+func (s *Store) DB() *snapshotkv.DB { return s.db }
+
 func (s *Store) RunGC() error {
 	// snapshotkv handles its own cleanup via TTL
 	return nil
@@ -62,4 +66,11 @@ func (s *Store) NewMCPStorage() MCPStorage {
 		return NewMemoryMCPStorage()
 	}
 	return NewSnapshotMCPStorage(s.db)
+}
+
+func (s *Store) NewProviderStorage() ProviderStorage {
+	if s.memory {
+		return NewMemoryProviderStorage()
+	}
+	return NewSnapshotProviderStorage(s.db)
 }

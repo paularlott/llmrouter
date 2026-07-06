@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -13,7 +14,7 @@ import (
 	"github.com/paularlott/llmrouter/web"
 )
 
-// Session represents an admin session
+// Session represents an authenticated session.
 type Session struct {
 	Token     string
 	CreatedAt time.Time
@@ -40,6 +41,11 @@ type Admin struct {
 	mcpStorageWritable bool // true if storage is persistent (not memory-only)
 	onMCPServerChange  func()
 	onMCPCacheRefresh  func() // Called to refresh tool cache from remote servers
+
+	// Provider storage (for dynamic provider management via UI)
+	providerStorage         storage.ProviderStorage
+	providerStorageWritable bool
+	onProviderChange        func()
 }
 
 // Stats represents dashboard statistics
@@ -52,11 +58,12 @@ type Stats struct {
 
 // ProviderInfo represents provider information for the UI
 type ProviderInfo struct {
-	Name        string  `json:"name"`
-	Type        string  `json:"type"`
-	Healthy     bool    `json:"healthy"`
-	ModelCount  int     `json:"model_count"`
-	Weight      float64 `json:"weight"`
+	Name           string  `json:"name"`
+	Type           string  `json:"type"`
+	Healthy        bool    `json:"healthy"`
+	ModelCount     int     `json:"model_count"`
+	Weight         float64 `json:"weight"`
+	StaticProvider bool    `json:"static_provider"` // true = from config file, false = from UI/storage
 }
 
 // MCPServerInfo represents MCP server information for the UI
@@ -137,7 +144,35 @@ func New(config *types.Config, getStats func() *Stats, getProviders func() []Pro
 	}
 }
 
-// Enabled returns true if admin UI is enabled
+// SetProviderStorage wires dynamic provider management. Called after New
+// but before RegisterRoutes. If ps is nil, provider management is disabled
+// (config-file providers are still shown read-only).
+func (a *Admin) SetProviderStorage(ps storage.ProviderStorage, writable bool, onChange func()) {
+	a.providerStorage = ps
+	a.providerStorageWritable = writable
+	a.onProviderChange = onChange
+}
+
+// ChatPageHandler returns the HTTP handler for /chat. Uses requirePageAuth
+// (same admin session as every other page). One password, one role.
+func (a *Admin) ChatPageHandler() http.HandlerFunc {
+	return a.requirePageAuth(func(w http.ResponseWriter, r *http.Request) {
+		data := &TemplateData{
+			CSSFile: "/admin/assets/main.css",
+			JSFile:  "/admin/assets/main.js",
+			Prefix:  "/chat",
+		}
+		if a.templates == nil {
+			http.Error(w, "templates not configured", http.StatusInternalServerError)
+			return
+		}
+		if err := a.templates.Render(w, "chat.html", data); err != nil {
+			http.Error(w, "render error", http.StatusInternalServerError)
+		}
+	})
+}
+
+// Enabled returns true if admin UI is enabled (admin password set).
 func (a *Admin) Enabled() bool {
 	return a != nil && a.password != ""
 }
@@ -151,7 +186,7 @@ func generateToken() (string, error) {
 	return hex.EncodeToString(bytes), nil
 }
 
-// createSession creates a new session and returns the token
+// createSession creates a new session and returns the token.
 func (a *Admin) createSession() (string, error) {
 	token, err := generateToken()
 	if err != nil {
@@ -177,26 +212,18 @@ func (a *Admin) createSession() (string, error) {
 	return token, nil
 }
 
-// validateSession checks if a session token is valid
+// validateSession checks if a session token is valid.
 func (a *Admin) validateSession(token string) bool {
 	if token == "" {
 		return false
 	}
-
 	a.sessionsMu.RLock()
 	defer a.sessionsMu.RUnlock()
-
 	sess, ok := a.sessions[token]
 	if !ok {
 		return false
 	}
-
-	// Check if session is expired (24 hours)
-	if time.Since(sess.CreatedAt) > 24*time.Hour {
-		return false
-	}
-
-	return true
+	return time.Since(sess.CreatedAt) <= 24*time.Hour
 }
 
 // deleteSession removes a session
@@ -220,7 +247,6 @@ func writeError(w http.ResponseWriter, status int, message string) {
 
 // getSessionFromRequest extracts the session token from a request
 func (a *Admin) getSessionFromRequest(r *http.Request) string {
-	// Check Authorization header first
 	auth := r.Header.Get("Authorization")
 	if len(auth) > 7 && auth[:7] == "Bearer " {
 		return auth[7:]
@@ -237,7 +263,34 @@ func (a *Admin) getSessionFromCookie(r *http.Request) string {
 	return cookie.Value
 }
 
-// requireAuth is middleware that checks for valid authentication (for API endpoints)
+// RequireAuthMiddleware returns an http.Handler middleware that checks for
+// a valid session. Used by webchat to gate its API + asset routes with the
+// same admin session as the rest of the app. Returns nil if no admin
+// password is set (open access — for local dev behind a reverse proxy).
+func (a *Admin) RequireAuthMiddleware() func(http.Handler) http.Handler {
+	if a == nil || a.password == "" {
+		return nil
+	}
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			token := a.getSessionFromRequest(r)
+			if token == "" {
+				token = a.getSessionFromCookie(r)
+			}
+			if !a.validateSession(token) {
+				if strings.HasPrefix(r.URL.Path, "/chat/api/") {
+					writeError(w, http.StatusUnauthorized, "unauthorized")
+					return
+				}
+				http.Redirect(w, r, "/admin/login?return="+r.URL.Path, http.StatusFound)
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+// requireAuth is middleware that checks for a valid session (API endpoints).
 func (a *Admin) requireAuth(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		token := a.getSessionFromRequest(r)
@@ -252,16 +305,13 @@ func (a *Admin) requireAuth(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-// requirePageAuth is middleware that checks for valid authentication (for page requests)
-// Redirects to login page if not authenticated
+// requirePageAuth is middleware that checks for a valid session (page requests).
+// Redirects to login if unauthenticated.
 func (a *Admin) requirePageAuth(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// Check cookie for page requests
 		token := a.getSessionFromCookie(r)
 		if !a.validateSession(token) {
-			// Redirect to login page with return URL
-			returnURL := r.URL.Path
-			http.Redirect(w, r, "/admin/login?return="+returnURL, http.StatusFound)
+			http.Redirect(w, r, "/admin/login?return="+r.URL.Path, http.StatusFound)
 			return
 		}
 		next(w, r)

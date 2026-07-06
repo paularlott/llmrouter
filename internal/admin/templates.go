@@ -47,6 +47,7 @@ func NewTemplateRenderer(fsys fs.FS) *TemplateRenderer {
 type TemplateData struct {
 	CSSFile string
 	JSFile  string
+	Prefix  string
 }
 
 // Render renders a template with the given data

@@ -20,6 +20,8 @@ import (
 	"github.com/paularlott/llmrouter/middleware"
 	"github.com/paularlott/mcp/ai/claude"
 	"github.com/paularlott/mcp/ai/openai"
+	mcplib "github.com/paularlott/mcp"
+	"github.com/paularlott/webchat"
 )
 
 func NewRouter(config *types.Config, logger Logger) (*Router, error) {
@@ -217,16 +219,94 @@ func NewRouter(config *types.Config, logger Logger) (*Router, error) {
 	// Initialize admin UI if password is configured
 	var mcpStorage storage.MCPStorage
 	var mcpStorageWritable bool
+	var providerStorage storage.ProviderStorage
+	var providerStorageWritable bool
 	if sharedStore != nil {
 		mcpStorage = sharedStore.NewMCPStorage()
 		mcpStorageWritable = !sharedStore.IsMemory()
+		providerStorage = sharedStore.NewProviderStorage()
+		providerStorageWritable = !sharedStore.IsMemory()
 	}
 	router.mcpStorage = mcpStorage
+	router.providerStorage = providerStorage
+
+	// Load stored providers alongside config-file providers
+	router.loadStoredProviders(config, logger)
 
 	router.admin = admin.New(config, router.getStats, router.getProviders, router.getMCPServers, router.getMCPTools, router.getMCPResources, router.getMCPPrompts, router.getModels, mcpStorage, mcpStorageWritable, router.reloadMCPServers, router.reloadMCPServers)
 	if router.admin.Enabled() {
+		router.admin.SetProviderStorage(providerStorage, providerStorageWritable, router.reloadProviders)
 		router.admin.RegisterRoutes(router.mux)
 		logger.Info("admin UI enabled at /admin")
+	}
+
+	// Mount chat UI. The StandardHost wires webchat to llmrouter's own
+	// OpenAI endpoint (self-loopback) and MCP server. Auth is handled by
+	// ChatAuthMiddleware (nil when no chat_password configured → open).
+	loopbackHost := "127.0.0.1"
+	if config.Server.Host != "" && config.Server.Host != "0.0.0.0" && config.Server.Host != "::" {
+		loopbackHost = config.Server.Host
+	}
+	chatHost := &webchat.StandardHost{
+		ModelsFunc: func(ctx context.Context) ([]webchat.Model, error) {
+			models := make([]webchat.Model, 0)
+			for _, m := range router.getModels() {
+				models = append(models, webchat.Model{
+					ID:       m.ID,
+					Provider: strings.Join(m.Providers, ", "),
+				})
+			}
+			return models, nil
+		},
+		OpenAIBaseURL: fmt.Sprintf("http://%s:%d", loopbackHost, config.Server.Port),
+		OpenAIToken:   config.Server.Token,
+		MCPServer: func(ctx context.Context) *mcplib.Server {
+			if router.mcpServer == nil {
+				return nil
+			}
+			return router.mcpServer.server
+		},
+		SystemPromptAugmenter: router.augmentSystemPrompt,
+	}
+	// EventBroadcaster for SSE push — cross-tab sync + content-change
+	// notifications. Created once and shared between webchat (for the
+	// /api/events endpoint) and the scriptling watcher (for push on
+	// tools/prompts/resources changes).
+	eventBroadcaster := webchat.NewEventBroadcaster()
+
+	// Wire the broadcaster to the scriptling watcher so tool/resource/prompt
+	// changes push SSE events to all connected browser tabs.
+	if router.mcpServer != nil && router.mcpServer.scriptlingManager != nil {
+		router.mcpServer.scriptlingManager.SetEventBroadcaster(eventBroadcaster)
+	}
+
+	// HistoryStore — uses the same snapshotkv store as everything else.
+	// Memory-only mode (no storage path) falls back to an in-memory map
+	// that lasts for the process lifetime but doesn't persist.
+	var historyStore webchat.HistoryStore
+	if sharedStore != nil {
+		historyStore = newHistoryStore(sharedStore)
+	}
+
+	chatServer, err := webchat.New(webchat.Config{
+		Prefix:         "/chat",
+		PersonasDir:    config.Chat.PersonasDir,
+		CommandsDir:    config.Chat.CommandsDir,
+		Host:           chatHost,
+		AuthMiddleware: router.admin.RequireAuthMiddleware(),
+		History:        historyStore,
+		Events:         eventBroadcaster,
+	})
+	if err != nil {
+		logger.Warn("failed to initialize chat UI", "error", err)
+	} else {
+		router.chatServer = chatServer
+		chatServer.Mount(router.mux)
+		if config.Chat.PersonasDir != "" {
+			logger.Info("chat UI enabled at /chat", "personas_dir", config.Chat.PersonasDir)
+		} else {
+			logger.Info("chat UI enabled at /chat")
+		}
 	}
 
 	// Start MCP tool cache refresh timer if configured
@@ -437,18 +517,26 @@ func (r *Router) GetProviderForModel(model string, hint string) (string, error) 
 	}
 
 	if len(providers) == 1 {
+		r.logger.Debug("single provider for model", "model", model, "provider", providers[0])
 		return providers[0], nil
 	}
 
 	// Select provider with best score: lowest load adjusted by weight
 	// score = ActiveCompletions / weight (lower is better)
-	// Ties are broken randomly to ensure distribution under concurrent load.
+	// Score ties favour the higher weight so a heavier provider wins at idle;
+	// remaining ties (same score and weight) are broken randomly.
 	var tiedProviders []string
 	bestScore := float64(-1)
+	bestWeight := float64(0)
 
 	for _, providerName := range providers {
 		provider, exists := r.Providers[providerName]
-		if !exists || !provider.Enabled || !provider.Healthy.Load() {
+		if !exists {
+			r.logger.Debug("provider not registered", "model", model, "provider", providerName)
+			continue
+		}
+		if !provider.Enabled || !provider.Healthy.Load() {
+			r.logger.Debug("skipping provider for model", "model", model, "provider", providerName, "enabled", provider.Enabled, "healthy", provider.Healthy.Load())
 			continue
 		}
 		w := provider.Weight
@@ -456,11 +544,18 @@ func (r *Router) GetProviderForModel(model string, hint string) (string, error) 
 			w = 1.0
 		}
 		score := float64(provider.ActiveCompletions.Load()) / w
+		r.logger.Debug("provider candidate", "model", model, "provider", providerName, "weight", w, "active", provider.ActiveCompletions.Load(), "score", score)
 		if bestScore < 0 || score < bestScore {
 			bestScore = score
+			bestWeight = w
 			tiedProviders = []string{providerName}
 		} else if score == bestScore {
-			tiedProviders = append(tiedProviders, providerName)
+			if w > bestWeight {
+				bestWeight = w
+				tiedProviders = []string{providerName}
+			} else if w == bestWeight {
+				tiedProviders = append(tiedProviders, providerName)
+			}
 		}
 	}
 
@@ -470,11 +565,19 @@ func (r *Router) GetProviderForModel(model string, hint string) (string, error) 
 
 	selectedProvider := tiedProviders[0]
 	if len(tiedProviders) > 1 {
-		selectedProvider = tiedProviders[rand.Intn(len(tiedProviders))]
+		// Among equally-scored, equally-weighted providers, prefer one that
+		// already has the requested model loaded (warm-cache affinity).
+		if warm := localityWinner(tiedProviders, model, r.Providers); warm != "" {
+			selectedProvider = warm
+		} else {
+			selectedProvider = tiedProviders[rand.Intn(len(tiedProviders))]
+		}
 	}
+	r.logger.Debug("selected provider", "model", model, "provider", selectedProvider, "best_score", bestScore, "best_weight", bestWeight, "tied", tiedProviders)
 
-	// Honour the hint if the hinted provider is healthy and its score is within
-	// bestScore + 1.0 (one extra active completion adjusted for weight).
+	// Honour the hint if the hinted provider is healthy, no lower priority
+	// (weight) than the winner, and its load score is within bestScore + 1.0
+	// (one extra active completion adjusted for weight).
 	if hint != "" && hint != selectedProvider {
 		if p, ok := r.Providers[hint]; ok && p.Enabled && p.Healthy.Load() {
 			w := p.Weight
@@ -482,7 +585,7 @@ func (r *Router) GetProviderForModel(model string, hint string) (string, error) 
 				w = 1.0
 			}
 			hintScore := float64(p.ActiveCompletions.Load()) / w
-			if hintScore <= bestScore+1.0 {
+			if w >= bestWeight && hintScore <= bestScore+1.0 {
 				selectedProvider = hint
 			}
 		}
@@ -581,6 +684,7 @@ func (r *Router) CreateChatCompletion(ctx context.Context, req *ChatCompletionRe
 
 	provider := r.Providers[providerName]
 	r.incrementActiveCompletions(providerName)
+	r.recordModelUse(providerName, req.Model)
 	defer r.decrementActiveCompletions(providerName)
 
 	// Resolve alias to the real model name for this specific provider
@@ -625,6 +729,7 @@ func (r *Router) CreateEmbedding(ctx context.Context, req *EmbeddingRequest) (*E
 func (r *Router) streamChatCompletion(ctx context.Context, providerName string, req *ChatCompletionRequest) *openai.ChatStream {
 	provider := r.Providers[providerName]
 	r.incrementActiveCompletions(providerName)
+	r.recordModelUse(providerName, req.Model)
 	dispatchReq := *req
 	dispatchReq.Model = r.resolveAliasForProvider(req.Model, providerName)
 	r.traceRequestPayload("streaming chat completion", &dispatchReq)
@@ -723,6 +828,36 @@ func (r *Router) decrementActiveCompletions(providerName string) {
 	if provider, exists := r.Providers[providerName]; exists {
 		provider.ActiveCompletions.Add(-1)
 	}
+}
+
+// recordModelUse notes that providerName just served model, so future
+// same-weight ties can prefer the server that already has it loaded.
+func (r *Router) recordModelUse(providerName, model string) {
+	if provider, exists := r.Providers[providerName]; exists {
+		provider.Locality.Store(&modelLocality{model: model, at: time.Now().UnixNano()})
+	}
+}
+
+// localityWinner returns the candidate that most recently served model (and so
+// likely still has it loaded), or "" if none of the candidates has it warm.
+func localityWinner(candidates []string, model string, providers map[string]*Provider) string {
+	var best string
+	var bestAt int64
+	for _, name := range candidates {
+		p, ok := providers[name]
+		if !ok {
+			continue
+		}
+		loc := p.Locality.Load()
+		if loc == nil || loc.model != model {
+			continue
+		}
+		if best == "" || loc.at > bestAt {
+			best = name
+			bestAt = loc.at
+		}
+	}
+	return best
 }
 
 // HTTP Handlers
@@ -951,6 +1086,7 @@ func (r *Router) createChatCompletionWithHeaders(ctx context.Context, req *ChatC
 	}
 
 	r.incrementActiveCompletions(providerName)
+	r.recordModelUse(providerName, req.Model)
 	defer r.decrementActiveCompletions(providerName)
 
 	dispatchReq := *req
@@ -1198,11 +1334,12 @@ func (r *Router) getProviders() []admin.ProviderInfo {
 		r.ModelMapMu.RUnlock()
 
 		providers = append(providers, admin.ProviderInfo{
-			Name:       name,
-			Type:       p.ProviderType,
-			Healthy:    p.Healthy.Load(),
-			ModelCount: modelCount,
-			Weight:     p.Weight,
+			Name:           name,
+			Type:           p.ProviderType,
+			Healthy:        p.Healthy.Load(),
+			ModelCount:     modelCount,
+			Weight:         p.Weight,
+			StaticProvider: !r.storedProviderNames[name],
 		})
 	}
 	sort.Slice(providers, func(i, j int) bool { return providers[i].Name < providers[j].Name })

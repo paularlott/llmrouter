@@ -1,0 +1,11 @@
+description = "Summarise a block of text in a given style"
+
+[[arguments]]
+name = "text"
+description = "The text to summarise"
+required = true
+
+[[arguments]]
+name = "style"
+description = "Summarisation style: brief, detailed, bullet-points"
+required = false

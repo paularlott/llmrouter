@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/paularlott/llmrouter/internal/types"
@@ -173,5 +174,63 @@ func TestAdminNewWiresResourceAndPromptCallbacks(t *testing.T) {
 	}
 	if len(gotPrompts) != 1 || gotPrompts[0].Name != "ns-p" {
 		t.Fatalf("prompt callback not as wired: %+v", gotPrompts)
+	}
+}
+
+// TestHandleLoginAcceptsPassword verifies the single-password login flow.
+func TestHandleLoginAcceptsPassword(t *testing.T) {
+	cfg := &types.Config{}
+	cfg.Server.AdminPassword = "secret"
+
+	a := New(cfg, nil, nil, nil, nil, nil, nil, nil, nil, false, nil, nil)
+	if a == nil {
+		t.Fatal("New returned nil")
+	}
+
+	body := `{"password":"secret"}`
+	req := httptest.NewRequest(http.MethodPost, "/admin/api/login", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+	rec := httptest.NewRecorder()
+	a.HandleLogin(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status: %d (%s)", rec.Code, rec.Body.String())
+	}
+	var resp struct {
+		Token string `json:"token"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if resp.Token == "" {
+		t.Fatal("empty token")
+	}
+	if !a.validateSession(resp.Token) {
+		t.Fatal("token not valid")
+	}
+}
+
+// TestHandleLoginRejectsWrongPassword.
+func TestHandleLoginRejectsWrongPassword(t *testing.T) {
+	cfg := &types.Config{}
+	cfg.Server.AdminPassword = "admin"
+	a := New(cfg, nil, nil, nil, nil, nil, nil, nil, nil, false, nil, nil)
+
+	req := httptest.NewRequest(http.MethodPost, "/admin/api/login",
+		strings.NewReader(`{"password":"nope"}`))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	a.HandleLogin(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("want 401 got %d", rec.Code)
+	}
+}
+
+// TestRequireAuthMiddlewareReturnsNilWhenNoPassword ensures open access
+// when admin_password is not configured.
+func TestRequireAuthMiddlewareReturnsNilWhenNoPassword(t *testing.T) {
+	a := &Admin{sessions: map[string]*Session{}}
+	if a.RequireAuthMiddleware() != nil {
+		t.Fatal("RequireAuthMiddleware should be nil when no password set")
 	}
 }

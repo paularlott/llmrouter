@@ -12,13 +12,14 @@ type Config struct {
 	Conversations ConversationsConfig `json:"conversations"`
 	SmartRouting  SmartRoutingConfig  `json:"smart_routing"`
 	Scripting     ScriptingConfig     `json:"scripting"`
+	Chat          ChatConfig          `json:"chat"`
 }
 
 type ServerConfig struct {
 	Host          string `json:"host" toml:"host"`
 	Port          int    `json:"port" toml:"port"`
 	Token         string `json:"token,omitempty" toml:"token"`
-	AdminPassword string `json:"admin_password,omitempty" toml:"admin_password"` // If set, enables admin UI
+	AdminPassword string `json:"admin_password,omitempty" toml:"admin_password"` // If set, enables admin UI + chat
 }
 
 type LoggingConfig struct {
@@ -94,4 +95,12 @@ type ScriptingConfig struct {
 	PromptsDir   string   `json:"prompts_dir,omitempty"`   // Directory containing .toml+.py dynamic prompts or static .md/.txt prompts
 	PluginDirs   []string `json:"plugin_dirs,omitempty"`   // Directories containing plugin executables
 	LibPaths     []string `json:"lib_paths,omitempty"`     // Additional directories to search for libraries
+}
+
+// ChatConfig configures the /chat UI. When PersonasDir or CommandsDir is
+// empty the corresponding feature is disabled (e.g. only the built-in Default
+// persona is offered).
+type ChatConfig struct {
+	PersonasDir string `json:"personas_dir,omitempty" toml:"personas_dir"` // Directory of persona .toml files (empty = Default only)
+	CommandsDir string `json:"commands_dir,omitempty" toml:"commands_dir"` // Directory of slash-command .md files (empty = no commands)
 }

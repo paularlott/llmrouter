@@ -13,6 +13,7 @@ import (
 	"github.com/paularlott/logger"
 	"github.com/paularlott/mcp/ai"
 	"github.com/paularlott/mcp/ai/openai"
+	"github.com/paularlott/webchat"
 )
 
 type Logger = logger.Logger
@@ -32,6 +33,14 @@ type Provider struct {
 	Tags              []string            // provider-level tags
 	ModelTags         map[string][]string // model_id -> tags
 	ModelAliases      map[string]string   // alias -> real model name
+	Locality          atomic.Pointer[modelLocality] // last model served + when (warm-cache affinity)
+}
+
+// modelLocality records the most recent model a provider served, used to prefer
+// servers that already have the requested model loaded (avoids re-loading).
+type modelLocality struct {
+	model string
+	at    int64 // unix nano
 }
 
 type Router struct {
@@ -52,7 +61,10 @@ type Router struct {
 	conversationsService *conversations.Service
 	smartRouter          *SmartRouter
 	admin                *admin.Admin
+	chatServer           *webchat.Server
 	mcpStorage           storage.MCPStorage
+	providerStorage      storage.ProviderStorage
+	storedProviderNames  map[string]bool // tracks which providers came from KV storage
 }
 
 type (

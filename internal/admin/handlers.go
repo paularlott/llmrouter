@@ -24,6 +24,13 @@ func (a *Admin) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/admin/mcp-servers", a.requirePageAuth(a.HandleMCPServersPage))
 	mux.HandleFunc("/admin/models", a.requirePageAuth(a.HandleModelsPage))
 
+	// Chat page. Both admin and chat-role sessions can reach it; if no
+	// chat_password is configured ChatAuthMiddleware is nil and the page
+	// is open. The page itself is rendered from web/templates/chat.html
+	// (NOT from webchat's example template) so Tailwind's source scan
+	// picks up every utility class used in it.
+	mux.HandleFunc("/chat", a.ChatPageHandler())
+
 	// API endpoints - use requireAuth which returns 401
 	mux.HandleFunc("POST /admin/api/login", a.HandleLogin)
 	mux.HandleFunc("POST /admin/api/logout", a.HandleLogout)
@@ -42,6 +49,14 @@ func (a *Admin) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /admin/api/mcp-servers/{namespace}/prompts", a.requireAuth(a.HandleGetMCPServerPrompts))
 	mux.HandleFunc("POST /admin/api/mcp-servers/refresh-cache", a.requireAuth(a.HandleRefreshMCPCache))
 	mux.HandleFunc("GET /admin/api/mcp-storage-status", a.requireAuth(a.HandleMCPStorageStatus))
+
+	// Provider management
+	mux.HandleFunc("/admin/providers", a.requirePageAuth(a.HandleProvidersPage))
+	mux.HandleFunc("GET /admin/api/providers/list", a.requireAuth(a.HandleListProviders))
+	mux.HandleFunc("POST /admin/api/providers", a.requireAuth(a.HandleCreateProvider))
+	mux.HandleFunc("GET /admin/api/providers/{name}", a.requireAuth(a.HandleGetProvider))
+	mux.HandleFunc("PUT /admin/api/providers/{name}", a.requireAuth(a.HandleUpdateProvider))
+	mux.HandleFunc("DELETE /admin/api/providers/{name}", a.requireAuth(a.HandleDeleteProvider))
 
 	// OAuth2 PKCE flow for MCP servers
 	mux.HandleFunc("POST /admin/api/mcp-servers/oauth/start", a.requireAuth(a.HandleOAuthStart))
@@ -87,7 +102,7 @@ func (a *Admin) Serve404(w http.ResponseWriter, r *http.Request) {
 	a.templates.Render(w, "404.html", data)
 }
 
-// HandleMCPServersPage renders the MCP servers page
+// HandleMCPServersPage renders the MCP servers page.
 func (a *Admin) HandleMCPServersPage(w http.ResponseWriter, r *http.Request) {
 	data := &TemplateData{
 		CSSFile: "/admin/assets/main.css",
@@ -96,9 +111,8 @@ func (a *Admin) HandleMCPServersPage(w http.ResponseWriter, r *http.Request) {
 	a.templates.Render(w, "mcp-servers.html", data)
 }
 
-// HandleLogin handles login requests
+// HandleLogin handles login requests. One password, one session type.
 func (a *Admin) HandleLogin(w http.ResponseWriter, r *http.Request) {
-	// Parse password based on content type
 	var password string
 	if strings.Contains(r.Header.Get("Content-Type"), "application/json") {
 		var creds struct {
@@ -108,7 +122,7 @@ func (a *Admin) HandleLogin(w http.ResponseWriter, r *http.Request) {
 			password = creds.Password
 		}
 	} else {
-		r.ParseForm()
+		_ = r.ParseForm()
 		password = r.FormValue("password")
 	}
 
@@ -128,7 +142,6 @@ func (a *Admin) HandleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Set session cookie
 	http.SetCookie(w, &http.Cookie{
 		Name:     "admin_session",
 		Value:    token,
@@ -137,18 +150,17 @@ func (a *Admin) HandleLogin(w http.ResponseWriter, r *http.Request) {
 		SameSite: http.SameSiteStrictMode,
 	})
 
-	// Check if this is an API request (expects JSON) or form submission
 	accept := r.Header.Get("Accept")
 	if strings.Contains(accept, "application/json") {
 		writeJSON(w, http.StatusOK, map[string]string{"token": token})
-	} else {
-		// Form submission - redirect to return URL or dashboard
-		returnURL := r.URL.Query().Get("return")
-		if returnURL == "" {
-			returnURL = "/admin/"
-		}
-		http.Redirect(w, r, returnURL, http.StatusFound)
+		return
 	}
+
+	returnURL := r.URL.Query().Get("return")
+	if returnURL == "" {
+		returnURL = "/admin/"
+	}
+	http.Redirect(w, r, returnURL, http.StatusFound)
 }
 
 // HandleLogout invalidates the session

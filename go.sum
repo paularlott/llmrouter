@@ -37,6 +37,8 @@ github.com/paularlott/scriptling v0.16.1 h1:s12ZkWKpXWlczj2geT0xkGKWHhquojHd/TLp
 github.com/paularlott/scriptling v0.16.1/go.mod h1:pC8RIGxXnKj0Rdvfb3yw/F8stetYP5cW94JsLExdYmk=
 github.com/paularlott/snapshotkv v0.4.0 h1:IsFyQ0hmycGkMUzbR4E4vvHzZeKbaE+LM6jqZdeBP0g=
 github.com/paularlott/snapshotkv v0.4.0/go.mod h1:X2ONJRnGTRUV2j8tIdO187y0QLm4n7bnCbdnV/mTWUQ=
+github.com/paularlott/webchat v0.1.0 h1:VJeac4fbrbRbS7Bzrz9zJ5bFoKUnSEnfRusqqh9zwRs=
+github.com/paularlott/webchat v0.1.0/go.mod h1:G++Bqek3GrXquv6wIg5ODPyt6AEHxlSKx8HGvZvN98E=
 github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/power-devops/perfstat v0.0.0-20240221224432-82ca36839d55 h1:o4JXh1EVt9k/+g42oCprj/FisM4qX9L3sZB3upGN2ZU=
@@ -78,6 +80,8 @@ golang.org/x/term v0.44.0 h1:0rLvDRCtNj0gZkyIXhCyOb2OAzEhLVqc4B+hrsBhrmc=
 golang.org/x/term v0.44.0/go.mod h1:7ze4MdzUzLXpSAoFP1H0bOI9aXDqveSvatT5vKcFh2Y=
 golang.org/x/text v0.38.0 h1:sXmwo9DwP3OK9EZ7PqAdaooSGozfl/3a6/xJcbzPRhE=
 golang.org/x/text v0.38.0/go.mod h1:YXZt3QhHUKYT53r2lLKFIVi6Ao1jdzrTR/KQ09qyxF4=
+golang.org/x/text v0.39.0 h1:UbZz4pLOvn600D6Oh6GGEI6VAmndrEBLv8/6BEXzyus=
+golang.org/x/text v0.39.0/go.mod h1:3UwRclnC2g0TU9x8PZiyfOajCd1zaUNHF9cvqcQZ+ZM=
 gopkg.in/check.v1 v0.0.0-20161208181325-20d25e280405/go.mod h1:Co6ibVJAznAaIkqp8huTwlJQCZ016jof/cbN4VW5Yz0=
 gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c h1:Hei/4ADfdWqJk1ZMxUNpqntNwaWcugrBjAiHlqqRiVk=
 gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c/go.mod h1:JHkPIbrfpd72SG/EVd6muEfDQjcINNoR0C8j2r3qZ4Q=
