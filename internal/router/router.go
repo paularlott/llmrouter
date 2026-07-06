@@ -565,7 +565,13 @@ func (r *Router) GetProviderForModel(model string, hint string) (string, error) 
 
 	selectedProvider := tiedProviders[0]
 	if len(tiedProviders) > 1 {
-		selectedProvider = tiedProviders[rand.Intn(len(tiedProviders))]
+		// Among equally-scored, equally-weighted providers, prefer one that
+		// already has the requested model loaded (warm-cache affinity).
+		if warm := localityWinner(tiedProviders, model, r.Providers); warm != "" {
+			selectedProvider = warm
+		} else {
+			selectedProvider = tiedProviders[rand.Intn(len(tiedProviders))]
+		}
 	}
 	r.logger.Debug("selected provider", "model", model, "provider", selectedProvider, "best_score", bestScore, "best_weight", bestWeight, "tied", tiedProviders)
 
@@ -678,6 +684,7 @@ func (r *Router) CreateChatCompletion(ctx context.Context, req *ChatCompletionRe
 
 	provider := r.Providers[providerName]
 	r.incrementActiveCompletions(providerName)
+	r.recordModelUse(providerName, req.Model)
 	defer r.decrementActiveCompletions(providerName)
 
 	// Resolve alias to the real model name for this specific provider
@@ -722,6 +729,7 @@ func (r *Router) CreateEmbedding(ctx context.Context, req *EmbeddingRequest) (*E
 func (r *Router) streamChatCompletion(ctx context.Context, providerName string, req *ChatCompletionRequest) *openai.ChatStream {
 	provider := r.Providers[providerName]
 	r.incrementActiveCompletions(providerName)
+	r.recordModelUse(providerName, req.Model)
 	dispatchReq := *req
 	dispatchReq.Model = r.resolveAliasForProvider(req.Model, providerName)
 	r.traceRequestPayload("streaming chat completion", &dispatchReq)
@@ -820,6 +828,36 @@ func (r *Router) decrementActiveCompletions(providerName string) {
 	if provider, exists := r.Providers[providerName]; exists {
 		provider.ActiveCompletions.Add(-1)
 	}
+}
+
+// recordModelUse notes that providerName just served model, so future
+// same-weight ties can prefer the server that already has it loaded.
+func (r *Router) recordModelUse(providerName, model string) {
+	if provider, exists := r.Providers[providerName]; exists {
+		provider.Locality.Store(&modelLocality{model: model, at: time.Now().UnixNano()})
+	}
+}
+
+// localityWinner returns the candidate that most recently served model (and so
+// likely still has it loaded), or "" if none of the candidates has it warm.
+func localityWinner(candidates []string, model string, providers map[string]*Provider) string {
+	var best string
+	var bestAt int64
+	for _, name := range candidates {
+		p, ok := providers[name]
+		if !ok {
+			continue
+		}
+		loc := p.Locality.Load()
+		if loc == nil || loc.model != model {
+			continue
+		}
+		if best == "" || loc.at > bestAt {
+			best = name
+			bestAt = loc.at
+		}
+	}
+	return best
 }
 
 // HTTP Handlers
@@ -1048,6 +1086,7 @@ func (r *Router) createChatCompletionWithHeaders(ctx context.Context, req *ChatC
 	}
 
 	r.incrementActiveCompletions(providerName)
+	r.recordModelUse(providerName, req.Model)
 	defer r.decrementActiveCompletions(providerName)
 
 	dispatchReq := *req

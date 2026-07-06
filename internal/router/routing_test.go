@@ -255,6 +255,62 @@ func TestGetProviderForModel_HintDoesNotDefeatHigherWeight(t *testing.T) {
 	}
 }
 
+// LocalityTiebreak: among same-weight idle providers, prefer the one that most
+// recently served the requested model (warm-cache affinity).
+func TestGetProviderForModel_LocalityTiebreak(t *testing.T) {
+	r := newTestRouter([]struct {
+		name   string
+		model  string
+		weight float64
+		load   int64
+	}{
+		{"p_a", "m1", 1.0, 0},
+		{"p_b", "m1", 1.0, 0},
+	})
+
+	// No warm info yet: selection is random but must be one of the two.
+	got, err := r.GetProviderForModel("m1", "")
+	if err != nil || (got != "p_a" && got != "p_b") {
+		t.Fatalf("want p_a or p_b, got %q err %v", got, err)
+	}
+
+	// p_b last served m1 → it should win every subsequent tie.
+	r.recordModelUse("p_b", "m1")
+	for i := 0; i < 50; i++ {
+		got, err := r.GetProviderForModel("m1", "")
+		if err != nil || got != "p_b" {
+			t.Fatalf("iter %d: want p_b (warm), got %q err %v", i, got, err)
+		}
+	}
+
+	// A different model warm on p_a must not make p_a win for m1.
+	r.recordModelUse("p_a", "m2")
+	got, err = r.GetProviderForModel("m1", "")
+	if err != nil || got != "p_b" {
+		t.Fatalf("want p_b (only m1 warm there), got %q err %v", got, err)
+	}
+}
+
+// LocalityDoesNotOverrideWeight: a warm lower-weight provider must not beat a
+// cold higher-weight provider at idle.
+func TestGetProviderForModel_LocalityDoesNotOverrideWeight(t *testing.T) {
+	r := newTestRouter([]struct {
+		name   string
+		model  string
+		weight float64
+		load   int64
+	}{
+		{"cold_heavy", "m1", 2.0, 0},
+		{"warm_light", "m1", 1.0, 0},
+	})
+	r.recordModelUse("warm_light", "m1")
+
+	got, err := r.GetProviderForModel("m1", "")
+	if err != nil || got != "cold_heavy" {
+		t.Fatalf("weight must beat locality, want cold_heavy got %q err %v", got, err)
+	}
+}
+
 // HintHonoured: hinted provider score (1.0) is within bestScore (0) + 1.0 threshold.
 func TestGetProviderForModel_HintHonoured(t *testing.T) {
 	r := newTestRouter([]struct {
