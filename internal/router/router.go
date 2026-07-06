@@ -517,18 +517,26 @@ func (r *Router) GetProviderForModel(model string, hint string) (string, error) 
 	}
 
 	if len(providers) == 1 {
+		r.logger.Debug("single provider for model", "model", model, "provider", providers[0])
 		return providers[0], nil
 	}
 
 	// Select provider with best score: lowest load adjusted by weight
 	// score = ActiveCompletions / weight (lower is better)
-	// Ties are broken randomly to ensure distribution under concurrent load.
+	// Score ties favour the higher weight so a heavier provider wins at idle;
+	// remaining ties (same score and weight) are broken randomly.
 	var tiedProviders []string
 	bestScore := float64(-1)
+	bestWeight := float64(0)
 
 	for _, providerName := range providers {
 		provider, exists := r.Providers[providerName]
-		if !exists || !provider.Enabled || !provider.Healthy.Load() {
+		if !exists {
+			r.logger.Debug("provider not registered", "model", model, "provider", providerName)
+			continue
+		}
+		if !provider.Enabled || !provider.Healthy.Load() {
+			r.logger.Debug("skipping provider for model", "model", model, "provider", providerName, "enabled", provider.Enabled, "healthy", provider.Healthy.Load())
 			continue
 		}
 		w := provider.Weight
@@ -536,11 +544,18 @@ func (r *Router) GetProviderForModel(model string, hint string) (string, error) 
 			w = 1.0
 		}
 		score := float64(provider.ActiveCompletions.Load()) / w
+		r.logger.Debug("provider candidate", "model", model, "provider", providerName, "weight", w, "active", provider.ActiveCompletions.Load(), "score", score)
 		if bestScore < 0 || score < bestScore {
 			bestScore = score
+			bestWeight = w
 			tiedProviders = []string{providerName}
 		} else if score == bestScore {
-			tiedProviders = append(tiedProviders, providerName)
+			if w > bestWeight {
+				bestWeight = w
+				tiedProviders = []string{providerName}
+			} else if w == bestWeight {
+				tiedProviders = append(tiedProviders, providerName)
+			}
 		}
 	}
 
@@ -552,9 +567,11 @@ func (r *Router) GetProviderForModel(model string, hint string) (string, error) 
 	if len(tiedProviders) > 1 {
 		selectedProvider = tiedProviders[rand.Intn(len(tiedProviders))]
 	}
+	r.logger.Debug("selected provider", "model", model, "provider", selectedProvider, "best_score", bestScore, "best_weight", bestWeight, "tied", tiedProviders)
 
-	// Honour the hint if the hinted provider is healthy and its score is within
-	// bestScore + 1.0 (one extra active completion adjusted for weight).
+	// Honour the hint if the hinted provider is healthy, no lower priority
+	// (weight) than the winner, and its load score is within bestScore + 1.0
+	// (one extra active completion adjusted for weight).
 	if hint != "" && hint != selectedProvider {
 		if p, ok := r.Providers[hint]; ok && p.Enabled && p.Healthy.Load() {
 			w := p.Weight
@@ -562,7 +579,7 @@ func (r *Router) GetProviderForModel(model string, hint string) (string, error) 
 				w = 1.0
 			}
 			hintScore := float64(p.ActiveCompletions.Load()) / w
-			if hintScore <= bestScore+1.0 {
+			if w >= bestWeight && hintScore <= bestScore+1.0 {
 				selectedProvider = hint
 			}
 		}

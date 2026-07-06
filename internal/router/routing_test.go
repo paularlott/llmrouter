@@ -54,6 +54,7 @@ func newTestRouter(entries []struct {
 		Providers: make(map[string]*Provider),
 		ModelMap:  make(map[string][]string),
 		ModelTags: make(map[string][]string),
+		logger:    &testLogger{},
 	}
 	for _, e := range entries {
 		p := &Provider{
@@ -171,6 +172,86 @@ func TestGetProviderForModel_WeightedRouting(t *testing.T) {
 	got, err := r.GetProviderForModel("m1", "")
 	if err != nil || got != "p_heavy" {
 		t.Fatalf("want p_heavy (lower score), got %q err %v", got, err)
+	}
+}
+
+// WeightedAtIdle: at idle both providers score 0, so the higher weight wins the
+// tie. When the heavy provider is busy, the score formula hands selection back
+// to the lower-weight provider until the heavy one is free.
+func TestGetProviderForModel_WeightedAtIdle(t *testing.T) {
+	r := newTestRouter([]struct {
+		name   string
+		model  string
+		weight float64
+		load   int64
+	}{
+		{"p_normal", "m1", 1.0, 0},
+		{"p_heavy", "m1", 2.0, 0},
+	})
+
+	got, err := r.GetProviderForModel("m1", "")
+	if err != nil || got != "p_heavy" {
+		t.Fatalf("want p_heavy at idle, got %q err %v", got, err)
+	}
+
+	// Heavy provider takes load → normal provider now has the lower score.
+	r.Providers["p_heavy"].ActiveCompletions.Store(3)
+	got, err = r.GetProviderForModel("m1", "")
+	if err != nil || got != "p_normal" {
+		t.Fatalf("want p_normal when heavy is loaded, got %q err %v", got, err)
+	}
+
+	// Heavy provider free again → back to the idle tiebreak.
+	r.Providers["p_heavy"].ActiveCompletions.Store(0)
+	got, err = r.GetProviderForModel("m1", "")
+	if err != nil || got != "p_heavy" {
+		t.Fatalf("want p_heavy again once free, got %q err %v", got, err)
+	}
+}
+
+// WeightedIdleDeterministic: the idle tiebreak must always pick the higher
+// weight regardless of ModelMap slice order or rand draw (run many iterations).
+func TestGetProviderForModel_WeightedIdleDeterministic(t *testing.T) {
+	for _, order := range [][]string{{"config", "ui"}, {"ui", "config"}} {
+		r := &Router{
+			Providers: make(map[string]*Provider),
+			ModelMap:  map[string][]string{"m1": append([]string{}, order...)},
+			logger:    &testLogger{},
+		}
+		for _, name := range order {
+			w := 1.0
+			if name == "ui" {
+				w = 2.0
+			}
+			p := &Provider{Name: name, ProviderType: "openai", Client: &mockClient{name}, Enabled: true, Weight: w}
+			p.Healthy.Store(true)
+			r.Providers[name] = p
+		}
+		for i := 0; i < 200; i++ {
+			got, err := r.GetProviderForModel("m1", "")
+			if err != nil || got != "ui" {
+				t.Fatalf("order=%v iter=%d: want ui (weight 2), got %q err %v", order, i, got, err)
+			}
+		}
+	}
+}
+
+// HintDoesNotDefeatHigherWeight: a smart-routing hint pointing at a lower-weight
+// provider must not override a higher-weight winner at idle.
+func TestGetProviderForModel_HintDoesNotDefeatHigherWeight(t *testing.T) {
+	r := newTestRouter([]struct {
+		name   string
+		model  string
+		weight float64
+		load   int64
+	}{
+		{"config", "m1", 1.0, 0},
+		{"ui", "m1", 2.0, 0},
+	})
+
+	got, err := r.GetProviderForModel("m1", "config")
+	if err != nil || got != "ui" {
+		t.Fatalf("higher weight should win over hint, want ui got %q err %v", got, err)
 	}
 }
 

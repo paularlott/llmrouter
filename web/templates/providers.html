@@ -98,7 +98,7 @@
                 <span x-show="p.healthy" class="flex items-center gap-1 text-green-600 dark:text-green-400"><span class="w-2 h-2 rounded-full bg-green-500"></span> healthy</span>
                 <span x-show="!p.healthy" class="flex items-center gap-1 text-red-600 dark:text-red-400"><span class="w-2 h-2 rounded-full bg-red-500"></span> unhealthy</span>
                 <span x-text="p.model_count + ' models'"></span>
-                <span x-show="p.weight > 0 && p.weight != 1" x-text="'w:' + p.weight"></span>
+                <span x-text="'w:' + p.weight"></span>
               </div>
               <div class="flex items-center gap-1">
                 <button x-show="!p.static_provider" @click="openEdit(p)" title="Edit" class="p-1.5 rounded text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 cursor-pointer transition-colors">
