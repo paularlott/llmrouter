@@ -190,12 +190,36 @@
             </button>
             <div class="space-y-1 overflow-y-auto" style="max-height: 40vh;">
               <template x-for="c in conversations" :key="c.id">
-                <div class="flex items-center gap-2">
-                  <button @click="loadConversation(c.id); mobileMenuOpen = false"
-                          class="flex-1 text-left px-3 py-2 rounded-lg text-sm"
-                          :class="c.id === currentId ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-200 font-medium' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'"
-                          x-text="c.title || 'New conversation'"></button>
+                <div class="flex items-center gap-1 group" x-data="{ confirmDelete: false }">
+                  <template x-if="renamingId === c.id">
+                    <input type="text" x-model="renameDraft"
+                           @keydown.enter="renamingId = null; renameConversation(c.id, renameDraft); mobileMenuOpen = false"
+                           @keydown.escape="renamingId = null; renameDraft = ''"
+                           @blur="renamingId = null; if (renameDraft.trim()) renameConversation(c.id, renameDraft)"
+                           x-init="$nextTick(() => $el.focus())"
+                           class="flex-1 min-w-0 px-3 py-2 rounded-lg text-sm bg-white dark:bg-slate-700 border border-blue-300 dark:border-blue-600 text-slate-900 dark:text-white outline-none" />
+                  </template>
+                  <template x-if="renamingId !== c.id">
+                    <button @click="loadConversation(c.id); mobileMenuOpen = false"
+                            class="flex-1 min-w-0 text-left px-3 py-2 rounded-lg text-sm truncate cursor-pointer"
+                            :class="c.id === currentId ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-200 font-medium' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'"
+                            x-text="c.title || 'New conversation'"></button>
+                  </template>
                   <span x-show="c.unread" class="w-2 h-2 rounded-full bg-blue-500 shrink-0"></span>
+                  <template x-if="renamingId !== c.id">
+                    <div class="flex items-center gap-0.5 shrink-0">
+                      <button @click="renamingId = c.id; renameDraft = c.title || ''" title="Rename"
+                              class="p-1 rounded text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 cursor-pointer transition-colors">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                      </button>
+                      <button @click="if (confirmDelete) { deleteConversation(c.id); } else { confirmDelete = true; setTimeout(() => confirmDelete = false, 3000); }"
+                              :title="confirmDelete ? 'Click again to confirm' : 'Delete'"
+                              class="p-1 rounded cursor-pointer transition-colors"
+                              :class="confirmDelete ? 'text-red-600 dark:text-red-400 bg-red-100 dark:bg-red-900/40' : 'text-slate-400 hover:text-red-600 dark:hover:text-red-300 hover:bg-red-100 dark:hover:bg-red-900/40'">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                      </button>
+                    </div>
+                  </template>
                 </div>
               </template>
               <p x-show="conversations.length === 0" class="text-xs text-slate-400 dark:text-slate-500 px-3 py-2">No saved conversations.</p>
@@ -217,12 +241,36 @@
           </button>
           <div class="flex-1 overflow-y-auto space-y-1">
             <template x-for="c in conversations" :key="c.id">
-              <div class="flex items-center gap-2">
-                <button @click="loadConversation(c.id)"
-                        class="flex-1 text-left px-3 py-2 rounded-lg text-sm transition-colors"
-                        :class="c.id === currentId ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-200 font-medium border border-blue-200 dark:border-blue-700' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'"
-                        x-text="c.title || 'New conversation'"></button>
+              <div class="flex items-center gap-1 group" x-data="{ confirmDelete: false }">
+                <template x-if="renamingId === c.id">
+                  <input type="text" x-model="renameDraft"
+                         @keydown.enter="renamingId = null; renameConversation(c.id, renameDraft)"
+                         @keydown.escape="renamingId = null; renameDraft = ''"
+                         @blur="renamingId = null; if (renameDraft.trim()) renameConversation(c.id, renameDraft)"
+                         x-init="$nextTick(() => $el.focus())"
+                         class="flex-1 min-w-0 px-3 py-2 rounded-lg text-sm bg-white dark:bg-slate-700 border border-blue-300 dark:border-blue-600 text-slate-900 dark:text-white outline-none" />
+                </template>
+                <template x-if="renamingId !== c.id">
+                  <button @click="loadConversation(c.id)"
+                          class="flex-1 min-w-0 text-left px-3 py-2 rounded-lg text-sm transition-colors truncate"
+                          :class="c.id === currentId ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-200 font-medium border border-blue-200 dark:border-blue-700' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'"
+                          x-text="c.title || 'New conversation'"></button>
+                </template>
                 <span x-show="c.unread" class="w-2 h-2 rounded-full bg-blue-500 shrink-0"></span>
+                <template x-if="renamingId !== c.id">
+                  <div class="flex items-center gap-0.5 shrink-0">
+                    <button @click="renamingId = c.id; renameDraft = c.title || ''" title="Rename"
+                            class="p-1 rounded text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 cursor-pointer transition-colors">
+                      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                    </button>
+                    <button @click="if (confirmDelete) { deleteConversation(c.id); } else { confirmDelete = true; setTimeout(() => confirmDelete = false, 3000); }"
+                            :title="confirmDelete ? 'Click again to confirm' : 'Delete'"
+                            class="p-1 rounded cursor-pointer transition-colors"
+                            :class="confirmDelete ? 'text-red-600 dark:text-red-400 bg-red-100 dark:bg-red-900/40' : 'text-slate-400 hover:text-red-600 dark:hover:text-red-300 hover:bg-red-100 dark:hover:bg-red-900/40'">
+                      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                    </button>
+                  </div>
+                </template>
               </div>
             </template>
             <p x-show="conversations.length === 0" class="text-xs text-slate-400 dark:text-slate-500 px-3 py-2">No saved conversations.</p>
@@ -345,10 +393,6 @@
                         class="text-xs px-2 py-1 rounded-md text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
                         :class="{ 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300': showToolsPanel }"
                         x-text="enabledToolsCount + ' tools'"></button>
-                <button @click="deleteCurrent()" title="Delete chat"
-                        class="p-1 text-slate-400 hover:text-red-600 dark:hover:text-red-300 transition-colors cursor-pointer">
-                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                </button>
               </div>
             </div>
 
