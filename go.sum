@@ -37,8 +37,8 @@ github.com/paularlott/scriptling v0.16.1 h1:s12ZkWKpXWlczj2geT0xkGKWHhquojHd/TLp
 github.com/paularlott/scriptling v0.16.1/go.mod h1:pC8RIGxXnKj0Rdvfb3yw/F8stetYP5cW94JsLExdYmk=
 github.com/paularlott/snapshotkv v0.4.0 h1:IsFyQ0hmycGkMUzbR4E4vvHzZeKbaE+LM6jqZdeBP0g=
 github.com/paularlott/snapshotkv v0.4.0/go.mod h1:X2ONJRnGTRUV2j8tIdO187y0QLm4n7bnCbdnV/mTWUQ=
-github.com/paularlott/webchat v0.2.0 h1:RAyiVUZAU5g1VDFe07CxROfXf6WMs+F/5hxLVSkYEGA=
-github.com/paularlott/webchat v0.2.0/go.mod h1:G++Bqek3GrXquv6wIg5ODPyt6AEHxlSKx8HGvZvN98E=
+github.com/paularlott/webchat v0.3.0 h1:rkfx5jUQChCEb1ozwkVXYQzOkUP6TormXUtBZhVU6yY=
+github.com/paularlott/webchat v0.3.0/go.mod h1:G++Bqek3GrXquv6wIg5ODPyt6AEHxlSKx8HGvZvN98E=
 github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/power-devops/perfstat v0.0.0-20240221224432-82ca36839d55 h1:o4JXh1EVt9k/+g42oCprj/FisM4qX9L3sZB3upGN2ZU=

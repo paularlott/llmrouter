@@ -484,6 +484,9 @@
                   Tools — <span x-text="toolsServer?.namespace"></span>
                 </h2>
                 <p class="text-sm text-slate-500 dark:text-slate-300 mt-0.5" x-show="!loadingTools && !toolsError">
+                  <span x-show="toolFilter">
+                    <span x-text="filteredTools.length"></span> of <span x-text="tools.length"></span> shown —
+                  </span>
                   <span x-text="tools.filter(t => t.enabled).length"></span> of <span x-text="tools.length"></span> enabled
                 </p>
               </div>
@@ -503,6 +506,29 @@
             </div>
 
             <div class="flex-1 overflow-y-auto p-6">
+              <!-- Filter -->
+              <div x-show="!loadingTools && !toolsError && tools.length > 0" class="mb-4">
+                <div class="relative">
+                  <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                  <input
+                    type="text"
+                    x-model="toolFilter"
+                    placeholder="Filter tools by name…"
+                    class="input-field pl-9 pr-9"
+                  />
+                  <button
+                    x-show="toolFilter"
+                    @click="toolFilter = ''"
+                    class="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
+                    aria-label="Clear filter"
+                  >
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                  </button>
+                </div>
+              </div>
+
               <!-- Loading state -->
               <div x-show="loadingTools" class="flex items-center justify-center py-8">
                 <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
@@ -522,7 +548,11 @@
                   <p class="text-slate-500 dark:text-slate-300 text-center py-8">No tools available from this server.</p>
                 </template>
 
-                <template x-for="tool in tools" :key="tool.name">
+                <template x-if="tools.length > 0 && filteredTools.length === 0">
+                  <p class="text-slate-500 dark:text-slate-300 text-center py-8">No tools match "<span class="font-mono" x-text="toolFilter"></span>".</p>
+                </template>
+
+                <template x-for="tool in filteredTools" :key="tool.name">
                   <div class="border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden" :class="{ 'opacity-50': !tool.enabled }">
                     <!-- Tool header -->
                     <div class="flex items-start gap-3 px-4 py-3 bg-slate-50 dark:bg-slate-800 cursor-pointer" @click="tool.expanded = !tool.expanded">

@@ -10,7 +10,7 @@ require (
 	github.com/paularlott/mcp v0.21.1
 	github.com/paularlott/scriptling v0.16.1
 	github.com/paularlott/snapshotkv v0.4.0
-	github.com/paularlott/webchat v0.2.0
+	github.com/paularlott/webchat v0.3.0
 )
 
 require (

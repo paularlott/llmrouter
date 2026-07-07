@@ -168,6 +168,7 @@ Alpine.data("mcpServers", () => ({
   tools: [],
   loadingTools: false,
   toolsError: null,
+  toolFilter: "",
   resourcesServer: null,
   resources: [],
   loadingResources: false,
@@ -207,6 +208,12 @@ Alpine.data("mcpServers", () => ({
 
   async init() {
     await Promise.all([this.loadServers(), this.checkStorageStatus()]);
+  },
+
+  get filteredTools() {
+    const q = this.toolFilter.trim().toLowerCase();
+    if (!q) return this.tools;
+    return this.tools.filter((t) => t.name.toLowerCase().includes(q));
   },
 
   async checkStorageStatus() {
@@ -468,6 +475,7 @@ Alpine.data("mcpServers", () => ({
     this.toolsServer = server;
     this.tools = [];
     this.toolsError = null;
+    this.toolFilter = "";
     this.showToolsModal = true;
     this.loadTools();
   },
