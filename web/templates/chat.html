@@ -343,6 +343,7 @@
               <nav class="wc-nav-links flex items-center gap-1">
                 <a href="/admin/" class="nav-link">Dashboard</a>
                 <a href="/chat" class="nav-link nav-link-active">Chat</a>
+                <a href="/admin/personas" class="nav-link">Personas</a>
                 <a href="/admin/models" class="nav-link">Models</a>
                 <a href="/admin/providers" class="nav-link">Providers</a>
                 <a href="/admin/mcp-servers" class="nav-link">MCP Servers</a>
@@ -472,6 +473,11 @@
                 >Chat</a
               >
               <a
+                href="/admin/personas"
+                class="px-3 py-2 rounded-lg text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                >Personas</a
+              >
+              <a
                 href="/admin/models"
                 class="px-3 py-2 rounded-lg text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
                 >Models</a
@@ -512,74 +518,57 @@
               </button>
               <div class="space-y-1 overflow-y-auto" style="max-height: 40vh">
                 <template x-for="c in conversations" :key="c.id">
-                  <div
-                    class="flex items-center gap-1 group"
-                  >
-                    <template x-if="renamingId === c.id">
-                      <input
-                        type="text"
-                        x-model="renameDraft"
-                        @keydown.enter="renamingId = null; renameConversation(c.id, renameDraft); mobileMenuOpen = false"
-                        @keydown.escape="renamingId = null; renameDraft = ''"
-                        @blur="renamingId = null; if (renameDraft.trim()) renameConversation(c.id, renameDraft)"
-                        x-init="$nextTick(() => $el.focus())"
-                        class="flex-1 min-w-0 px-3 py-2 rounded-lg text-sm bg-white dark:bg-slate-700 border border-blue-300 dark:border-blue-600 text-slate-900 dark:text-white outline-none"
-                      />
-                    </template>
-                    <template x-if="renamingId !== c.id">
-                      <button
-                        @click="loadConversation(c.id); mobileMenuOpen = false"
-                        class="flex-1 min-w-0 text-left px-3 py-2 rounded-lg text-sm truncate cursor-pointer"
-                        :class="c.id === currentId ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-200 font-medium' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'"
-                        x-text="c.title || 'New conversation'"
-                      ></button>
-                    </template>
+                  <div class="flex items-center gap-1 group">
+                    <button
+                      @click="loadConversation(c.id); mobileMenuOpen = false"
+                      class="flex-1 min-w-0 text-left px-3 py-2 rounded-lg text-sm truncate cursor-pointer"
+                      :class="c.id === currentId ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-200 font-medium' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'"
+                      x-text="c.title || 'New conversation'"
+                    ></button>
                     <span
                       x-show="c.unread"
                       class="w-2 h-2 rounded-full bg-blue-500 shrink-0"
                     ></span>
-                    <template x-if="renamingId !== c.id">
-                      <div class="flex items-center gap-0.5 shrink-0">
-                        <button
-                          @click="renamingId = c.id; renameDraft = c.title || ''"
-                          title="Rename"
-                          class="p-1 rounded text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 cursor-pointer transition-colors"
+                    <div class="flex items-center gap-0.5 shrink-0">
+                      <button
+                        @click="openEdit(c)"
+                        title="Edit title &amp; model"
+                        class="p-1 rounded text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 cursor-pointer transition-colors"
+                      >
+                        <svg
+                          class="w-3.5 h-3.5"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
                         >
-                          <svg
-                            class="w-3.5 h-3.5"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              stroke-linecap="round"
-                              stroke-linejoin="round"
-                              stroke-width="2"
-                              d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-                            />
-                          </svg>
-                        </button>
-                        <button
-                          @click="deleteConversation(c.id)"
-                          title="Delete"
-                          class="p-1 rounded text-slate-400 hover:text-red-600 dark:hover:text-red-300 hover:bg-red-100 dark:hover:bg-red-900/40 cursor-pointer transition-colors"
+                          <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                          />
+                        </svg>
+                      </button>
+                      <button
+                        @click="deleteConversation(c.id)"
+                        title="Delete"
+                        class="p-1 rounded text-slate-400 hover:text-red-600 dark:hover:text-red-300 hover:bg-red-100 dark:hover:bg-red-900/40 cursor-pointer transition-colors"
+                      >
+                        <svg
+                          class="w-3.5 h-3.5"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
                         >
-                          <svg
-                            class="w-3.5 h-3.5"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              stroke-linecap="round"
-                              stroke-linejoin="round"
-                              stroke-width="2"
-                              d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                            />
-                          </svg>
-                        </button>
-                      </div>
-                    </template>
+                          <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                          />
+                        </svg>
+                      </button>
+                    </div>
                   </div>
                 </template>
                 <p
@@ -625,74 +614,57 @@
           </button>
           <div class="flex-1 overflow-y-auto space-y-1">
             <template x-for="c in conversations" :key="c.id">
-              <div
-                class="flex items-center gap-1 group"
-              >
-                <template x-if="renamingId === c.id">
-                  <input
-                    type="text"
-                    x-model="renameDraft"
-                    @keydown.enter="renamingId = null; renameConversation(c.id, renameDraft)"
-                    @keydown.escape="renamingId = null; renameDraft = ''"
-                    @blur="renamingId = null; if (renameDraft.trim()) renameConversation(c.id, renameDraft)"
-                    x-init="$nextTick(() => $el.focus())"
-                    class="flex-1 min-w-0 px-3 py-2 rounded-lg text-sm bg-white dark:bg-slate-700 border border-blue-300 dark:border-blue-600 text-slate-900 dark:text-white outline-none"
-                  />
-                </template>
-                <template x-if="renamingId !== c.id">
-                  <button
-                    @click="loadConversation(c.id)"
-                    class="flex-1 min-w-0 text-left px-3 py-2 rounded-lg text-sm transition-colors truncate"
-                    :class="c.id === currentId ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-200 font-medium border border-blue-200 dark:border-blue-700' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'"
-                    x-text="c.title || 'New conversation'"
-                  ></button>
-                </template>
+              <div class="flex items-center gap-1 group">
+                <button
+                  @click="loadConversation(c.id)"
+                  class="flex-1 min-w-0 text-left px-3 py-2 rounded-lg text-sm transition-colors truncate"
+                  :class="c.id === currentId ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-200 font-medium border border-blue-200 dark:border-blue-700' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'"
+                  x-text="c.title || 'New conversation'"
+                ></button>
                 <span
                   x-show="c.unread"
                   class="w-2 h-2 rounded-full bg-blue-500 shrink-0"
                 ></span>
-                <template x-if="renamingId !== c.id">
-                  <div class="flex items-center gap-0.5 shrink-0">
-                    <button
-                      @click="renamingId = c.id; renameDraft = c.title || ''"
-                      title="Rename"
-                      class="p-1 rounded text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 cursor-pointer transition-colors"
+                <div class="flex items-center gap-0.5 shrink-0">
+                  <button
+                    @click="openEdit(c)"
+                    title="Edit title &amp; model"
+                    class="p-1 rounded text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 cursor-pointer transition-colors"
+                  >
+                    <svg
+                      class="w-3.5 h-3.5"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
                     >
-                      <svg
-                        class="w-3.5 h-3.5"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          stroke-width="2"
-                          d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-                        />
-                      </svg>
-                    </button>
-                    <button
-                      @click="deleteConversation(c.id)"
-                      title="Delete"
-                      class="p-1 rounded text-slate-400 hover:text-red-600 dark:hover:text-red-300 hover:bg-red-100 dark:hover:bg-red-900/40 cursor-pointer transition-colors"
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                      />
+                    </svg>
+                  </button>
+                  <button
+                    @click="deleteConversation(c.id)"
+                    title="Delete"
+                    class="p-1 rounded text-slate-400 hover:text-red-600 dark:hover:text-red-300 hover:bg-red-100 dark:hover:bg-red-900/40 cursor-pointer transition-colors"
+                  >
+                    <svg
+                      class="w-3.5 h-3.5"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
                     >
-                      <svg
-                        class="w-3.5 h-3.5"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          stroke-width="2"
-                          d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                        />
-                      </svg>
-                    </button>
-                  </div>
-                </template>
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                      />
+                    </svg>
+                  </button>
+                </div>
               </div>
             </template>
             <p
@@ -1570,7 +1542,143 @@
           </div>
         </div>
       </div>
-    </div>
+
+      <!-- Edit conversation modal (title + persona + model + params).
+           Opened from the sidebar pencil button. Mirrors the new-chat setup
+           screen so any metadata of an existing chat can be changed. -->
+      <div x-show="showEditModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div class="absolute inset-0 bg-black/50" @click="showEditModal = false"></div>
+        <div class="relative bg-white dark:bg-slate-900 rounded-2xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto" @click.stop>
+          <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+            <h2 class="text-lg font-bold text-slate-900 dark:text-white">Edit conversation</h2>
+            <button @click="showEditModal = false" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+            </button>
+          </div>
+          <div class="p-6 space-y-4">
+            <div>
+              <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Title</label>
+              <input
+                type="text"
+                x-model="editTitle"
+                @keydown.enter="saveEdit()"
+                class="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm"
+              />
+            </div>
+
+            <!-- Persona: searchable dropdown -->
+            <div>
+              <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Persona</label>
+              <div class="relative mb-1">
+                <input
+                  type="text"
+                  x-model="editPersonaSearch"
+                  @focus="editPersonaOpen = true; editPersonaIndex = 0"
+                  @keydown="onEditPersonaKeydown($event)"
+                  @input="editPersonaOpen = true; editPersonaIndex = 0"
+                  @blur="setTimeout(() => editPersonaOpen = false, 150)"
+                  :placeholder="personas.find(p => p.id === editPersonaId)?.name || 'Search personas...'"
+                  class="input-field"
+                />
+                <div
+                  x-show="editPersonaOpen && editPersonaMatches.length > 0"
+                  x-cloak
+                  class="absolute z-20 left-0 right-0 mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg max-h-52 overflow-y-auto"
+                >
+                  <template x-for="(p, i) in editPersonaMatches" :key="p.id">
+                    <button
+                      type="button"
+                      @click="selectEditPersona(p)"
+                      @mouseenter="editPersonaIndex = i"
+                      class="w-full text-left px-3 py-2 text-sm flex items-start gap-2 transition-colors cursor-pointer"
+                      :class="i === editPersonaIndex ? 'bg-blue-50 dark:bg-blue-900/30' : 'hover:bg-slate-50 dark:hover:bg-slate-700/50'"
+                    >
+                      <div class="flex-1 min-w-0">
+                        <div class="font-medium text-slate-900 dark:text-white" x-text="p.name"></div>
+                        <div x-show="p.description" class="text-xs text-slate-500 dark:text-slate-400 truncate" x-text="p.description"></div>
+                      </div>
+                    </button>
+                  </template>
+                </div>
+              </div>
+            </div>
+
+            <!-- Model: searchable dropdown -->
+            <div>
+              <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Model</label>
+              <div class="relative">
+                <input
+                  type="text"
+                  x-model="editModelSearch"
+                  @focus="editModelOpen = true; editModelIndex = 0"
+                  @keydown="onEditModelKeydown($event)"
+                  @input="editModelOpen = true; editModelIndex = 0"
+                  @blur="setTimeout(() => editModelOpen = false, 150)"
+                  :placeholder="editModel || 'Search models...'"
+                  class="input-field"
+                />
+                <div
+                  x-show="editModelOpen && editModelMatches.length > 0"
+                  x-cloak
+                  class="absolute z-20 left-0 right-0 mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg max-h-52 overflow-y-auto"
+                >
+                  <template x-for="(m, i) in editModelMatches" :key="m.id">
+                    <button
+                      type="button"
+                      @click="selectEditModel(m)"
+                      @mouseenter="editModelIndex = i"
+                      class="w-full text-left px-3 py-2 text-sm flex items-center gap-2 transition-colors cursor-pointer"
+                      :class="i === editModelIndex ? 'bg-blue-50 dark:bg-blue-900/30' : 'hover:bg-slate-50 dark:hover:bg-slate-700/50'"
+                    >
+                      <span class="font-mono text-xs text-slate-900 dark:text-white" x-text="m.id"></span>
+                      <span x-show="m.provider" class="text-xs text-slate-400" x-text="m.provider"></span>
+                    </button>
+                  </template>
+                </div>
+              </div>
+            </div>
+
+            <!-- Parameters grid -->
+            <div>
+              <p class="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2.5">
+                Parameters
+                <span class="text-xs text-slate-400 font-normal">(optional — override as needed)</span>
+              </p>
+              <div class="grid grid-cols-2 gap-x-4 gap-y-3">
+                <div>
+                  <label class="block text-xs text-slate-500 dark:text-slate-400 mb-0.5">Temperature</label>
+                  <input type="number" step="0.05" x-model.number="editParams.temperature" placeholder="default" class="input-field text-sm py-1.5" />
+                </div>
+                <div>
+                  <label class="block text-xs text-slate-500 dark:text-slate-400 mb-0.5">Top P</label>
+                  <input type="number" step="0.05" x-model.number="editParams.top_p" placeholder="default" class="input-field text-sm py-1.5" />
+                </div>
+                <div>
+                  <label class="block text-xs text-slate-500 dark:text-slate-400 mb-0.5">Top K</label>
+                  <input type="number" step="1" x-model.number="editParams.top_k" placeholder="default" class="input-field text-sm py-1.5" />
+                </div>
+                <div>
+                  <label class="block text-xs text-slate-500 dark:text-slate-400 mb-0.5">Repeat Penalty</label>
+                  <input type="number" step="0.05" x-model.number="editParams.repeat_penalty" placeholder="default" class="input-field text-sm py-1.5" />
+                </div>
+                <div>
+                  <label class="block text-xs text-slate-500 dark:text-slate-400 mb-0.5">Context Length</label>
+                  <input type="number" step="512" x-model.number="editParams.context_length" placeholder="default" class="input-field text-sm py-1.5" />
+                </div>
+                <div>
+                  <label class="block text-xs text-slate-500 dark:text-slate-400 mb-0.5">Output Length</label>
+                  <input type="number" step="256" x-model.number="editParams.max_tokens" placeholder="default" class="input-field text-sm py-1.5" />
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="px-6 py-4 border-t border-slate-200 dark:border-slate-800 flex justify-end gap-2">
+            <button @click="showEditModal = false" class="px-4 py-2 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors cursor-pointer">Cancel</button>
+            <button @click="saveEdit()" :disabled="!editTitle.trim()" class="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 dark:disabled:bg-slate-700 disabled:cursor-not-allowed text-white text-sm font-medium cursor-pointer transition-colors">Save</button>
+          </div>
+        </div>
+      </div>
+     </div>
 
     <style>
       [x-cloak] {

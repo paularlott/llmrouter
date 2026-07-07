@@ -74,3 +74,10 @@ func (s *Store) NewProviderStorage() ProviderStorage {
 	}
 	return NewSnapshotProviderStorage(s.db)
 }
+
+func (s *Store) NewPersonaStorage() PersonaStorage {
+	if s.memory {
+		return NewMemoryPersonaStorage()
+	}
+	return NewSnapshotPersonaStorage(s.db)
+}

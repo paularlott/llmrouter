@@ -23,6 +23,7 @@ func (a *Admin) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/admin/", a.requirePageAuth(a.HandleDashboard))
 	mux.HandleFunc("/admin/mcp-servers", a.requirePageAuth(a.HandleMCPServersPage))
 	mux.HandleFunc("/admin/models", a.requirePageAuth(a.HandleModelsPage))
+	mux.HandleFunc("/admin/personas", a.requirePageAuth(a.HandlePersonasPage))
 
 	// Chat page. Both admin and chat-role sessions can reach it; if no
 	// chat_password is configured ChatAuthMiddleware is nil and the page
@@ -57,6 +58,13 @@ func (a *Admin) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /admin/api/providers/{name}", a.requireAuth(a.HandleGetProvider))
 	mux.HandleFunc("PUT /admin/api/providers/{name}", a.requireAuth(a.HandleUpdateProvider))
 	mux.HandleFunc("DELETE /admin/api/providers/{name}", a.requireAuth(a.HandleDeleteProvider))
+
+	// Persona management
+	mux.HandleFunc("GET /admin/api/personas", a.requireAuth(a.HandleListPersonas))
+	mux.HandleFunc("POST /admin/api/personas", a.requireAuth(a.HandleCreatePersona))
+	mux.HandleFunc("GET /admin/api/personas/{id}", a.requireAuth(a.HandleGetPersona))
+	mux.HandleFunc("PUT /admin/api/personas/{id}", a.requireAuth(a.HandleUpdatePersona))
+	mux.HandleFunc("DELETE /admin/api/personas/{id}", a.requireAuth(a.HandleDeletePersona))
 
 	// OAuth2 PKCE flow for MCP servers
 	mux.HandleFunc("POST /admin/api/mcp-servers/oauth/start", a.requireAuth(a.HandleOAuthStart))

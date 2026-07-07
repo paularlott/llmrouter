@@ -65,6 +65,9 @@ type Router struct {
 	mcpStorage           storage.MCPStorage
 	providerStorage      storage.ProviderStorage
 	storedProviderNames  map[string]bool // tracks which providers came from KV storage
+	personaStorage       storage.PersonaStorage
+	personaSource        *mergedPersonaSource
+	eventBroadcaster     *webchat.EventBroadcaster
 }
 
 type (

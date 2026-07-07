@@ -46,6 +46,12 @@ type Admin struct {
 	providerStorage         storage.ProviderStorage
 	providerStorageWritable bool
 	onProviderChange        func()
+
+	// Persona storage (for dynamic persona management via UI)
+	personaStorage         storage.PersonaStorage
+	personaStorageWritable bool
+	onPersonaChange        func()
+	getPersonas            func() []PersonaInfo
 }
 
 // Stats represents dashboard statistics
@@ -120,6 +126,19 @@ type PromptArgument struct {
 	Required    bool   `json:"required"`
 }
 
+// PersonaInfo represents a persona for the management UI. Static=true means
+// it came from a .toml file in PersonasDir (read-only); Static=false means it
+// lives in KV storage and supports full CRUD.
+type PersonaInfo struct {
+	ID           string                 `json:"id"`
+	Name         string                 `json:"name"`
+	Description  string                 `json:"description,omitempty"`
+	SystemPrompt string                 `json:"system_prompt,omitempty"`
+	DefaultModel string                 `json:"default_model,omitempty"`
+	Params       map[string]interface{} `json:"params,omitempty"`
+	Static       bool                   `json:"static"`
+}
+
 // New creates a new Admin handler
 func New(config *types.Config, getStats func() *Stats, getProviders func() []ProviderInfo, getMCPServers func() []MCPServerInfo, getMCPTools func(string) ([]ToolInfo, error), getMCPResources func(string) ([]ResourceInfo, error), getMCPPrompts func(string) ([]PromptInfo, error), getModels func() []ModelInfo, mcpStorage storage.MCPStorage, mcpStorageWritable bool, onMCPServerChange func(), onMCPCacheRefresh func()) *Admin {
 	if config.Server.AdminPassword == "" {
@@ -151,6 +170,17 @@ func (a *Admin) SetProviderStorage(ps storage.ProviderStorage, writable bool, on
 	a.providerStorage = ps
 	a.providerStorageWritable = writable
 	a.onProviderChange = onChange
+}
+
+// SetPersonaStorage wires dynamic persona management. Called after New but
+// before RegisterRoutes. getPersonas returns the merged file+stored list for
+// display; CRUD handlers operate on ps directly. If ps is nil, persona
+// management is disabled (config-file personas are still shown read-only).
+func (a *Admin) SetPersonaStorage(ps storage.PersonaStorage, writable bool, onChange func(), getPersonas func() []PersonaInfo) {
+	a.personaStorage = ps
+	a.personaStorageWritable = writable
+	a.onPersonaChange = onChange
+	a.getPersonas = getPersonas
 }
 
 // ChatPageHandler returns the HTTP handler for /chat. Uses requirePageAuth

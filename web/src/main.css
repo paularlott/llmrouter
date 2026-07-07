@@ -43,7 +43,7 @@
   }
 }
 
-/* Responsive nav: below 768px the page nav links (Dashboard, Chat, Models,
+/* Responsive nav: below 1024px the page nav links (Dashboard, Chat, Models,
    MCP Servers) collapse into a hamburger-triggered slide-in panel. Theme
    toggle + Logout stay in the header (they're small icon buttons with
    plenty of room). Uses plain media queries because Tailwind's md:/sm:
@@ -53,7 +53,7 @@
 .wc-sidebar { display: flex; }
 .wc-hamburger { display: none; }
 .wc-mobile-panel { display: none; }
-@media (max-width: 767px) {
+@media (max-width: 1023px) {
   .wc-nav-links { display: none !important; }
   .wc-sidebar { display: none !important; }
   .wc-hamburger { display: flex; }

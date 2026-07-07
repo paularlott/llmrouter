@@ -221,14 +221,27 @@ func NewRouter(config *types.Config, logger Logger) (*Router, error) {
 	var mcpStorageWritable bool
 	var providerStorage storage.ProviderStorage
 	var providerStorageWritable bool
+	var personaStorage storage.PersonaStorage
+	var personaStorageWritable bool
 	if sharedStore != nil {
 		mcpStorage = sharedStore.NewMCPStorage()
 		mcpStorageWritable = !sharedStore.IsMemory()
 		providerStorage = sharedStore.NewProviderStorage()
 		providerStorageWritable = !sharedStore.IsMemory()
+		personaStorage = sharedStore.NewPersonaStorage()
+		personaStorageWritable = !sharedStore.IsMemory()
 	}
 	router.mcpStorage = mcpStorage
 	router.providerStorage = providerStorage
+
+	// Merged persona source: config-file personas (read-only) + KV-stored
+	// personas (UI-managed). Passed to webchat so /api/personas reflects both,
+	// and surfaced to the admin page via getPersonas.
+	router.personaStorage = personaStorage
+	router.personaSource = &mergedPersonaSource{
+		dir:     config.Chat.PersonasDir,
+		storage: personaStorage,
+	}
 
 	// Load stored providers alongside config-file providers
 	router.loadStoredProviders(config, logger)
@@ -236,6 +249,7 @@ func NewRouter(config *types.Config, logger Logger) (*Router, error) {
 	router.admin = admin.New(config, router.getStats, router.getProviders, router.getMCPServers, router.getMCPTools, router.getMCPResources, router.getMCPPrompts, router.getModels, mcpStorage, mcpStorageWritable, router.reloadMCPServers, router.reloadMCPServers)
 	if router.admin.Enabled() {
 		router.admin.SetProviderStorage(providerStorage, providerStorageWritable, router.reloadProviders)
+		router.admin.SetPersonaStorage(personaStorage, personaStorageWritable, router.reloadPersonas, router.getPersonas)
 		router.admin.RegisterRoutes(router.mux)
 		logger.Info("admin UI enabled at /admin")
 	}
@@ -273,6 +287,7 @@ func NewRouter(config *types.Config, logger Logger) (*Router, error) {
 	// /api/events endpoint) and the scriptling watcher (for push on
 	// tools/prompts/resources changes).
 	eventBroadcaster := webchat.NewEventBroadcaster()
+	router.eventBroadcaster = eventBroadcaster
 
 	// Wire the broadcaster to the scriptling watcher so tool/resource/prompt
 	// changes push SSE events to all connected browser tabs.
@@ -290,7 +305,7 @@ func NewRouter(config *types.Config, logger Logger) (*Router, error) {
 
 	chatServer, err := webchat.New(webchat.Config{
 		Prefix:         "/chat",
-		PersonasDir:    config.Chat.PersonasDir,
+		PersonaSource:  router.personaSource,
 		CommandsDir:    config.Chat.CommandsDir,
 		Host:           chatHost,
 		AuthMiddleware: router.admin.RequireAuthMiddleware(),
@@ -1344,6 +1359,27 @@ func (r *Router) getProviders() []admin.ProviderInfo {
 	}
 	sort.Slice(providers, func(i, j int) bool { return providers[i].Name < providers[j].Name })
 	return providers
+}
+
+// getPersonas returns the merged persona list (config-file + KV-stored) for
+// the admin management page. The merged source reads on every call so this
+// always reflects current state.
+func (r *Router) getPersonas() []admin.PersonaInfo {
+	if r.personaSource == nil {
+		return nil
+	}
+	return r.personaSource.infos(context.Background())
+}
+
+// reloadPersonas is called when a persona is created/updated/deleted via the
+// admin UI. The merged persona source reads storage live on each request, so
+// no in-memory reload is needed; we broadcast a personas_changed SSE event so
+// every open chat tab re-fetches its persona list and drops deleted personas
+// without needing a manual page refresh.
+func (r *Router) reloadPersonas() {
+	if r.eventBroadcaster != nil {
+		r.eventBroadcaster.Broadcast(webchat.ServerEvent{Type: "personas_changed"})
+	}
 }
 
 // getMCPServers returns MCP server information for the admin UI
