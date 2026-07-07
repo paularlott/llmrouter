@@ -1258,47 +1258,28 @@
                         </div>
                       </template>
 
-                      <!-- Copy button: below the bubble, always visible. -->
+                      <!-- Copy buttons: below the bubble, always visible. -->
                       <div
                         x-show="m.content && (!streaming || idx !== messages.length - 1)"
-                        class="flex justify-end pr-1 pt-0.5"
+                        class="flex justify-end gap-3 pr-1 pt-0.5"
                       >
                         <button
                           type="button"
                           @click="copyMessage(idx, m.content)"
                           class="text-xs text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300 flex items-center gap-1 cursor-pointer"
                         >
-                          <svg
-                            x-show="copiedIdx !== idx"
-                            class="w-3 h-3"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              stroke-linecap="round"
-                              stroke-linejoin="round"
-                              stroke-width="2"
-                              d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h4a2 2 0 002-2M8 5a2 2 0 012-2h4a2 2 0 012 2m0 0h2a2 2 0 012 2v3"
-                            />
-                          </svg>
-                          <svg
-                            x-show="copiedIdx === idx"
-                            class="w-3 h-3 text-green-500"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              stroke-linecap="round"
-                              stroke-linejoin="round"
-                              stroke-width="2"
-                              d="M5 13l4 4L19 7"
-                            />
-                          </svg>
-                          <span
-                            x-text="copiedIdx === idx ? 'Copied' : 'Copy'"
-                          ></span>
+                          <svg x-show="copiedIdx !== idx" class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h4a2 2 0 002-2M8 5a2 2 0 012-2h4a2 2 0 012 2m0 0h2a2 2 0 012 2v3" /></svg>
+                          <svg x-show="copiedIdx === idx" class="w-3 h-3 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg>
+                          <span x-text="copiedIdx === idx ? 'Copied' : 'Markdown'"></span>
+                        </button>
+                        <button
+                          type="button"
+                          @click="copyMessageHtml(idx, m.content)"
+                          class="text-xs text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300 flex items-center gap-1 cursor-pointer"
+                        >
+                          <svg x-show="copiedHtmlIdx !== idx" class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h4a2 2 0 002-2M8 5a2 2 0 012-2h4a2 2 0 012 2m0 0h2a2 2 0 012 2v3" /></svg>
+                          <svg x-show="copiedHtmlIdx === idx" class="w-3 h-3 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg>
+                          <span x-text="copiedHtmlIdx === idx ? 'Copied' : 'HTML'"></span>
                         </button>
                       </div>
                     </div>
