@@ -35,6 +35,7 @@ type Admin struct {
 	getMCPTools     func(namespace string) ([]ToolInfo, error)
 	getMCPResources func(namespace string) ([]ResourceInfo, error)
 	getMCPPrompts   func(namespace string) ([]PromptInfo, error)
+	callMCPTool     func(namespace, toolName string, args map[string]any) (*ToolCallResult, error)
 
 	// MCP storage (for dynamic server management)
 	mcpStorage         storage.MCPStorage
@@ -97,6 +98,22 @@ type ToolInfo struct {
 	Description string                 `json:"description"`
 	InputSchema map[string]interface{} `json:"input_schema"`
 	Enabled     bool                   `json:"enabled"`
+}
+
+// ToolCallResult represents the result of executing a tool via the admin UI.
+// It mirrors the relevant parts of mcp.ToolResponse without coupling this
+// package to the mcp dependency.
+type ToolCallResult struct {
+	Content           []ToolCallContent `json:"content"`
+	StructuredContent interface{}       `json:"structuredContent,omitempty"`
+}
+
+// ToolCallContent is one content item in a tool call result.
+type ToolCallContent struct {
+	Type     string `json:"type"`
+	Text     string `json:"text,omitempty"`
+	Data     string `json:"data,omitempty"`
+	MimeType string `json:"mimeType,omitempty"`
 }
 
 // ResourceInfo represents a resource (static or template) exposed by an MCP
@@ -181,6 +198,13 @@ func (a *Admin) SetPersonaStorage(ps storage.PersonaStorage, writable bool, onCh
 	a.personaStorageWritable = writable
 	a.onPersonaChange = onChange
 	a.getPersonas = getPersonas
+}
+
+// SetMCPToolCaller wires live tool execution from the admin UI. Called after
+// New but before RegisterRoutes. If fn is nil, the tool-call endpoint returns
+// 503 (tool execution not available).
+func (a *Admin) SetMCPToolCaller(fn func(namespace, toolName string, args map[string]any) (*ToolCallResult, error)) {
+	a.callMCPTool = fn
 }
 
 // ChatPageHandler returns the HTTP handler for /chat. Uses requirePageAuth

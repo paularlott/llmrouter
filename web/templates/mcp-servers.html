@@ -548,9 +548,21 @@
                         </div>
                         <p class="text-sm text-slate-500 dark:text-slate-300 mt-0.5" x-text="tool.description || 'No description'"></p>
                       </div>
+                      <!-- Try tool / Run -->
+                      <button
+                        @click.stop="openToolCall(tool)"
+                        class="p-2 text-slate-500 hover:text-green-600 dark:text-slate-400 dark:hover:text-green-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors cursor-pointer"
+                        :aria-label="'Run ' + tool.name"
+                        title="Run tool"
+                      >
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                      </button>
                       <!-- Expand chevron -->
-                      <button @click.stop="tool.expanded = !tool.expanded" class="p-1 shrink-0 cursor-pointer" :aria-label="(tool.expanded ? 'Collapse' : 'Expand') + ' parameters for ' + tool.name" :aria-expanded="tool.expanded">
-                        <svg class="w-4 h-4 text-slate-400 transition-transform" :class="{ 'rotate-180': tool.expanded }" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <button @click.stop="tool.expanded = !tool.expanded" class="p-2 shrink-0 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors cursor-pointer" :aria-label="(tool.expanded ? 'Collapse' : 'Expand') + ' parameters for ' + tool.name" :aria-expanded="tool.expanded">
+                        <svg class="w-5 h-5 transition-transform" :class="{ 'rotate-180': tool.expanded }" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
                         </svg>
                       </button>
@@ -595,6 +607,161 @@
                 class="px-4 py-2 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl transition-colors cursor-pointer"
               >
                 Close
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tool Call Modal -->
+      <div x-show="showToolCallModal" x-cloak class="fixed inset-0 z-[60] overflow-y-auto" @keydown.escape.window="closeToolCall()" role="dialog" aria-modal="true" aria-labelledby="tool-call-modal-title">
+        <div class="flex items-center justify-center min-h-screen px-4">
+          <div class="fixed inset-0 bg-black/50 backdrop-blur-sm transition-opacity" @click="closeToolCall()"></div>
+          <div class="relative bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-3xl w-full max-h-[85vh] flex flex-col border border-slate-200 dark:border-slate-700">
+            <!-- Header -->
+            <div class="p-6 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between gap-4">
+              <div class="min-w-0">
+                <h2 id="tool-call-modal-title" class="text-xl font-bold text-slate-900 dark:text-white">
+                  Execute — <span class="font-mono" x-text="callingTool?.name"></span>
+                </h2>
+                <p class="text-sm text-slate-500 dark:text-slate-300 mt-0.5 truncate" x-text="callingTool?.description || ''"></p>
+              </div>
+              <button @click="closeToolCall()" class="p-2 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors cursor-pointer shrink-0" aria-label="Close modal">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+              </button>
+            </div>
+
+            <!-- Body -->
+            <div class="flex-1 overflow-y-auto p-6 space-y-6">
+              <!-- Parameters -->
+              <div>
+                <div class="flex items-center justify-between mb-3">
+                  <p class="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Parameters</p>
+                  <button @click="resetToolCallArgs()" class="text-xs text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 cursor-pointer" x-show="callingTool?.input_schema?.properties && Object.keys(callingTool.input_schema.properties).length > 0">Reset</button>
+                </div>
+
+                <!-- No parameters -->
+                <template x-if="!callingTool?.input_schema?.properties || Object.keys(callingTool.input_schema.properties).length === 0">
+                  <p class="text-sm text-slate-500 dark:text-slate-400">This tool takes no parameters.</p>
+                </template>
+
+                <!-- Parameter fields -->
+                <div class="space-y-4">
+                  <template x-for="[name, def] in Object.entries(callingTool?.input_schema?.properties || {})" :key="name">
+                    <div>
+                      <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                        <span class="font-mono" x-text="name"></span>
+                        <span x-show="(callingTool.input_schema.required || []).includes(name)" class="text-red-500">*</span>
+                        <span class="ml-1 text-xs font-normal text-slate-400" x-text="def.type || 'any'"></span>
+                      </label>
+                      <p x-show="def.description" class="text-xs text-slate-500 dark:text-slate-400 mb-1" x-text="def.description"></p>
+
+                      <!-- Boolean -->
+                      <template x-if="def.type === 'boolean'">
+                        <label class="flex items-center gap-2 cursor-pointer">
+                          <input type="checkbox" x-model="toolCallArgs[name]" class="sr-only peer" />
+                          <div class="relative w-9 h-5 bg-slate-200 dark:bg-slate-600 rounded-full peer peer-checked:bg-blue-500 after:content-[''] after:absolute after:top-0.5 after:start-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-4"></div>
+                          <span class="text-sm text-slate-600 dark:text-slate-300" x-text="toolCallArgs[name] ? 'true' : 'false'"></span>
+                        </label>
+                      </template>
+
+                      <!-- Integer / Number -->
+                      <template x-if="def.type === 'integer' || def.type === 'number'">
+                        <input type="number" step="any" x-model="toolCallArgs[name]" class="input-field" />
+                      </template>
+
+                      <!-- Array / Object -->
+                      <template x-if="def.type === 'array' || def.type === 'object'">
+                        <textarea x-model="toolCallArgs[name]" rows="3" class="input-field font-mono text-sm" :placeholder="def.type === 'array' ? '[1, 2, 3]' : '{&quot;key&quot;: &quot;value&quot;}'"></textarea>
+                      </template>
+
+                      <!-- String / other -->
+                      <template x-if="def.type !== 'boolean' && def.type !== 'integer' && def.type !== 'number' && def.type !== 'array' && def.type !== 'object'">
+                        <input type="text" x-model="toolCallArgs[name]" class="input-field" :placeholder="def.default !== undefined ? String(def.default) : ''" />
+                      </template>
+                    </div>
+                  </template>
+                </div>
+              </div>
+
+              <!-- Validation error -->
+              <div x-show="toolCallError" class="flex items-start gap-3 p-4 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-xl text-red-700 dark:text-red-400 text-sm">
+                <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span x-text="toolCallError"></span>
+              </div>
+
+              <!-- Output history -->
+              <div x-show="toolCallHistory.length > 0">
+                <div class="flex items-center justify-between mb-3">
+                  <p class="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                    Output <span class="text-slate-400 font-normal normal-case" x-text="'(' + toolCallHistory.length + ')'"></span>
+                  </p>
+                  <button @click="clearToolCallHistory()" class="text-xs text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 cursor-pointer">Clear history</button>
+                </div>
+                <div class="space-y-3">
+                  <template x-for="(entry, idx) in toolCallHistory" :key="idx">
+                    <div class="border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden">
+                      <!-- Call header -->
+                      <div class="px-4 py-2 bg-slate-50 dark:bg-slate-800 flex items-center justify-between text-xs">
+                        <span class="font-mono text-slate-500 dark:text-slate-400" x-text="entry.at"></span>
+                        <span x-show="entry.error" class="text-red-600 dark:text-red-400 font-medium">error</span>
+                        <span x-show="!entry.error" class="text-green-600 dark:text-green-400 font-medium">ok</span>
+                      </div>
+                      <!-- Args -->
+                      <div class="px-4 py-2 border-b border-slate-100 dark:border-slate-800">
+                        <span class="text-xs text-slate-400">Arguments</span>
+                        <pre class="text-xs font-mono text-slate-600 dark:text-slate-300 mt-1 overflow-x-auto" x-text="JSON.stringify(entry.args, null, 2)"></pre>
+                      </div>
+                      <!-- Error -->
+                      <div x-show="entry.error" class="px-4 py-3 bg-red-50 dark:bg-red-900/20">
+                        <pre class="text-xs font-mono text-red-600 dark:text-red-400 whitespace-pre-wrap break-all" x-text="entry.error"></pre>
+                      </div>
+                      <!-- Result -->
+                      <div x-show="!entry.error" class="px-4 py-3 space-y-2">
+                        <template x-for="(c, ci) in (entry.result?.content || [])" :key="ci">
+                          <div>
+                            <pre x-show="c.type === 'text'" class="text-xs font-mono text-slate-700 dark:text-slate-200 whitespace-pre-wrap break-all" x-text="c.text"></pre>
+                            <div x-show="c.type === 'image'" class="mt-1">
+                              <img :src="'data:' + (c.mimeType || 'image/png') + ';base64,' + c.data" class="max-w-full rounded-lg border border-slate-200 dark:border-slate-700" alt="Tool output image" />
+                            </div>
+                            <div x-show="c.type !== 'text' && c.type !== 'image'" class="text-xs font-mono text-slate-500 dark:text-slate-400" x-text="JSON.stringify(c)"></div>
+                          </div>
+                        </template>
+                        <template x-if="entry.result?.structuredContent != null">
+                          <div class="pt-2 border-t border-slate-100 dark:border-slate-800">
+                            <span class="text-xs text-slate-400">Structured content</span>
+                            <pre class="text-xs font-mono text-slate-600 dark:text-slate-300 mt-1 overflow-x-auto" x-text="JSON.stringify(entry.result.structuredContent, null, 2)"></pre>
+                          </div>
+                        </template>
+                        <p x-show="!entry.result?.content || entry.result.content.length === 0" class="text-xs text-slate-400 italic">Tool returned no content.</p>
+                      </div>
+                    </div>
+                  </template>
+                </div>
+              </div>
+            </div>
+
+            <!-- Footer -->
+            <div class="p-4 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between gap-3">
+              <button @click="closeToolCall()" class="px-4 py-2 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl transition-colors cursor-pointer">
+                Close
+              </button>
+              <button
+                @click="runToolCall()"
+                :disabled="callingToolInProgress"
+                class="px-5 py-2 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-xl shadow-lg shadow-green-500/25 hover:from-green-600 hover:to-emerald-700 transition-all disabled:opacity-50 flex items-center gap-2 cursor-pointer"
+              >
+                <svg x-show="callingToolInProgress" class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <svg x-show="!callingToolInProgress" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span x-text="callingToolInProgress ? 'Running...' : 'Run'"></span>
               </button>
             </div>
           </div>

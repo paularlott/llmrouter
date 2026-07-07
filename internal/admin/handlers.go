@@ -46,6 +46,7 @@ func (a *Admin) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("DELETE /admin/api/mcp-servers/{namespace}", a.requireAuth(a.HandleDeleteMCPServer))
 	mux.HandleFunc("GET /admin/api/mcp-servers/{namespace}/tools", a.requireAuth(a.HandleGetMCPServerTools))
 	mux.HandleFunc("PUT /admin/api/mcp-servers/{namespace}/tools/toggle", a.requireAuth(a.HandleToggleMCPServerTool))
+	mux.HandleFunc("POST /admin/api/mcp-servers/{namespace}/tools/call", a.requireAuth(a.HandleCallMCPServerTool))
 	mux.HandleFunc("GET /admin/api/mcp-servers/{namespace}/resources", a.requireAuth(a.HandleGetMCPServerResources))
 	mux.HandleFunc("GET /admin/api/mcp-servers/{namespace}/prompts", a.requireAuth(a.HandleGetMCPServerPrompts))
 	mux.HandleFunc("POST /admin/api/mcp-servers/refresh-cache", a.requireAuth(a.HandleRefreshMCPCache))
@@ -566,7 +567,48 @@ func (a *Admin) HandleToggleMCPServerTool(w http.ResponseWriter, r *http.Request
 	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
 }
 
-// HandleGetMCPServerResources returns resources (static + templates) for an MCP
+// HandleCallMCPServerTool executes a tool on a remote MCP server and returns
+// the result for display in the admin UI. The popup stays open between calls,
+// so the client may POST repeatedly with different arguments.
+func (a *Admin) HandleCallMCPServerTool(w http.ResponseWriter, r *http.Request) {
+	namespace := r.PathValue("namespace")
+	if namespace == "" {
+		writeError(w, http.StatusBadRequest, "namespace required")
+		return
+	}
+
+	if a.callMCPTool == nil {
+		writeError(w, http.StatusServiceUnavailable, "tool execution not available")
+		return
+	}
+
+	var req struct {
+		ToolName  string         `json:"tool_name"`
+		Arguments map[string]any `json:"arguments"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	if req.ToolName == "" {
+		writeError(w, http.StatusBadRequest, "tool_name is required")
+		return
+	}
+
+	if req.Arguments == nil {
+		req.Arguments = map[string]any{}
+	}
+
+	result, err := a.callMCPTool(namespace, req.ToolName, req.Arguments)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, result)
+}
 // server. Resources are read-only in the UI — there is no storage-level toggle
 // the way there is for tools.
 func (a *Admin) HandleGetMCPServerResources(w http.ResponseWriter, r *http.Request) {

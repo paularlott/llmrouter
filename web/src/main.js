@@ -176,6 +176,13 @@ Alpine.data("mcpServers", () => ({
   prompts: [],
   loadingPrompts: false,
   promptsError: null,
+  // Tool call (live execution) state
+  showToolCallModal: false,
+  callingTool: null,
+  toolCallArgs: {},
+  toolCallHistory: [],
+  callingToolInProgress: false,
+  toolCallError: null,
   saving: false,
   deleting: false,
   refreshing: false,
@@ -520,6 +527,121 @@ Alpine.data("mcpServers", () => ({
       // Reload tools to get correct state
       this.loadTools();
     }
+  },
+
+  openToolCall(tool) {
+    this.callingTool = tool;
+    this.toolCallError = null;
+    this.toolCallHistory = [];
+    this.toolCallArgs = {};
+    // Seed defaults for each parameter so x-model binds cleanly.
+    const props = (tool.input_schema && tool.input_schema.properties) || {};
+    for (const [name, def] of Object.entries(props)) {
+      if (def.type === "boolean") {
+        this.toolCallArgs[name] = false;
+      } else if (def.default !== undefined) {
+        this.toolCallArgs[name] = def.default;
+      } else {
+        this.toolCallArgs[name] = "";
+      }
+    }
+    this.showToolCallModal = true;
+  },
+
+  closeToolCall() {
+    this.showToolCallModal = false;
+  },
+
+  resetToolCallArgs() {
+    if (!this.callingTool) return;
+    const props = (this.callingTool.input_schema && this.callingTool.input_schema.properties) || {};
+    for (const [name, def] of Object.entries(props)) {
+      if (def.type === "boolean") {
+        this.toolCallArgs[name] = false;
+      } else if (def.default !== undefined) {
+        this.toolCallArgs[name] = def.default;
+      } else {
+        this.toolCallArgs[name] = "";
+      }
+    }
+  },
+
+  clearToolCallHistory() {
+    this.toolCallHistory = [];
+  },
+
+  async runToolCall() {
+    if (!this.callingTool || !this.toolsServer) return;
+    this.toolCallError = null;
+
+    const props = (this.callingTool.input_schema && this.callingTool.input_schema.properties) || {};
+    const args = {};
+
+    // Coerce form values to the types declared in the schema. Empty optional
+    // fields are omitted; malformed JSON / numbers surface an inline error.
+    try {
+      for (const [name, def] of Object.entries(props)) {
+        const raw = this.toolCallArgs[name];
+
+        if (def.type === "boolean") {
+          args[name] = !!raw;
+          continue;
+        }
+        if (raw === undefined || raw === null || (typeof raw === "string" && raw.trim() === "")) {
+          continue;
+        }
+
+        if (def.type === "integer") {
+          const n = parseInt(raw, 10);
+          if (isNaN(n)) throw new Error(`"${name}" is not a valid integer: ${raw}`);
+          args[name] = n;
+        } else if (def.type === "number") {
+          const n = parseFloat(raw);
+          if (isNaN(n)) throw new Error(`"${name}" is not a valid number: ${raw}`);
+          args[name] = n;
+        } else if (def.type === "array" || def.type === "object") {
+          if (typeof raw === "string") {
+            try {
+              args[name] = JSON.parse(raw);
+            } catch (e) {
+              throw new Error(`"${name}" is not valid JSON: ${e.message}`);
+            }
+          } else {
+            args[name] = raw;
+          }
+        } else {
+          args[name] = raw;
+        }
+      }
+    } catch (err) {
+      this.toolCallError = err.message;
+      return;
+    }
+
+    this.callingToolInProgress = true;
+    const entry = { args: { ...args }, result: null, error: null, at: new Date().toLocaleTimeString() };
+
+    try {
+      const response = await fetch(
+        `/admin/api/mcp-servers/${this.toolsServer.namespace}/tools/call`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ tool_name: this.callingTool.name, arguments: args }),
+        }
+      );
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || `Request failed (${response.status})`);
+      }
+      entry.result = data;
+    } catch (err) {
+      entry.error = err.message;
+    }
+
+    this.toolCallHistory.unshift(entry);
+    this.callingToolInProgress = false;
   },
 
   viewResources(server) {

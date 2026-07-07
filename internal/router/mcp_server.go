@@ -3,6 +3,7 @@ package router
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"sort"
 	"strings"
@@ -328,7 +329,37 @@ func (m *MCPServer) GetToolsForAdmin(namespace string) ([]admin.ToolInfo, error)
 	return result, nil
 }
 
-// GetStorageServerTools returns tools for a storage-based server with disabled state
+// CallToolForAdmin executes a tool on the remote server behind namespace for the
+// admin UI. toolName is the unprefixed name (as shown in the UI); the remote
+// client strips/ignores the namespace itself. args is forwarded verbatim.
+func (m *MCPServer) CallToolForAdmin(namespace, toolName string, args map[string]any) (*admin.ToolCallResult, error) {
+	rsClient, exists := m.remoteClients[namespace]
+	if !exists {
+		return nil, fmt.Errorf("MCP server %q not found", namespace)
+	}
+
+	ctx := context.Background()
+	if err := rsClient.ensureInitialized(ctx); err != nil {
+		return nil, fmt.Errorf("failed to connect to MCP server: %w", err)
+	}
+
+	resp, err := rsClient.client.CallTool(ctx, toolName, args)
+	if err != nil {
+		return nil, err
+	}
+
+	result := &admin.ToolCallResult{}
+	for _, c := range resp.Content {
+		result.Content = append(result.Content, admin.ToolCallContent{
+			Type:     c.Type,
+			Text:     c.Text,
+			Data:     c.Data,
+			MimeType: c.MimeType,
+		})
+	}
+	result.StructuredContent = resp.StructuredContent
+	return result, nil
+}
 func (m *MCPServer) GetStorageServerTools(namespace string, server *storage.MCPServerConfig) ([]admin.ToolInfo, error) {
 	result := make([]admin.ToolInfo, 0)
 

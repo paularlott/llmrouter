@@ -250,6 +250,7 @@ func NewRouter(config *types.Config, logger Logger) (*Router, error) {
 	if router.admin.Enabled() {
 		router.admin.SetProviderStorage(providerStorage, providerStorageWritable, router.reloadProviders)
 		router.admin.SetPersonaStorage(personaStorage, personaStorageWritable, router.reloadPersonas, router.getPersonas)
+		router.admin.SetMCPToolCaller(router.callMCPTool)
 		router.admin.RegisterRoutes(router.mux)
 		logger.Info("admin UI enabled at /admin")
 	}
@@ -1451,6 +1452,16 @@ func (r *Router) getMCPResources(namespace string) ([]admin.ResourceInfo, error)
 		return nil, fmt.Errorf("MCP server not available")
 	}
 	return r.mcpServer.GetResourcesForAdmin(namespace)
+}
+
+// callMCPTool executes a tool on a remote MCP server for the admin UI. Both
+// storage-based and config-based servers resolve through the same remote
+// client, so a single call covers both.
+func (r *Router) callMCPTool(namespace, toolName string, args map[string]any) (*admin.ToolCallResult, error) {
+	if r.mcpServer == nil {
+		return nil, fmt.Errorf("MCP server not available")
+	}
+	return r.mcpServer.CallToolForAdmin(namespace, toolName, args)
 }
 
 // getMCPPrompts returns prompts for an MCP server for the admin UI.
