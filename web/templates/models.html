@@ -263,11 +263,6 @@
                 >
                   Providers
                 </th>
-                <th
-                  class="text-right px-6 py-3 font-semibold text-slate-700 dark:text-slate-300"
-                >
-                  Count
-                </th>
               </tr>
             </thead>
             <tbody>
@@ -292,15 +287,11 @@
                       </template>
                     </div>
                   </td>
-                  <td
-                    class="px-6 py-3 text-right text-slate-500 dark:text-slate-300"
-                    x-text="(model.providers || []).length"
-                  ></td>
                 </tr>
               </template>
               <tr x-show="filtered.length === 0">
                 <td
-                  colspan="3"
+                  colspan="2"
                   class="px-6 py-8 text-center text-slate-500 dark:text-slate-300"
                 >
                   No models found
