@@ -45,6 +45,18 @@
     @apply px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 rounded-lg shadow-lg shadow-blue-500/25 hover:shadow-xl hover:shadow-blue-500/30 transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed;
   }
 
+  /* Icon action buttons used in list rows and modal headers. The base gives
+     a neutral chip with a neutral hover background; pair it with a modifier
+     that sets the ICON color on hover so the background never turns red/etc.
+     Usage: class="icon-btn icon-btn-delete" */
+  .icon-btn {
+    @apply p-2 text-slate-500 dark:text-slate-400 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors cursor-pointer;
+  }
+  .icon-btn-view   { @apply hover:text-green-600 dark:hover:text-green-300; }
+  .icon-btn-edit   { @apply hover:text-blue-600 dark:hover:text-blue-300; }
+  .icon-btn-delete { @apply hover:text-red-600 dark:hover:text-red-300; }
+  .icon-btn-close  { @apply hover:text-slate-700 dark:hover:text-slate-200; }
+
   .input-field {
     @apply w-full px-3 py-2 text-sm text-slate-900 dark:text-white border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700/60 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-colors duration-200;
   }
@@ -101,6 +113,13 @@
 .wc-sidebar { display: flex; }
 .wc-hamburger { display: none; }
 .wc-mobile-panel { display: none; }
+
+/* Unlayered on purpose. Tailwind's w-4/w-5 utilities live in the utilities
+   cascade layer, which beats @layer components — so an in-layer rule could
+   not override an inline w-4. Unlayered CSS outranks ALL layers, so this
+   forces every svg inside an .icon-btn to 1.25rem (w-5/h-5) regardless of
+   any inline w-4, keeping every action icon the same size. */
+.icon-btn svg { width: 1.25rem; height: 1.25rem; }
 @media (max-width: 1023px) {
   .wc-nav-links { display: none !important; }
   .wc-sidebar { display: none !important; }

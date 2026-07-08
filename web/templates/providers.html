@@ -317,7 +317,7 @@
                   x-show="!p.static_provider"
                   @click="openEdit(p)"
                   title="Edit"
-                  class="p-1.5 rounded text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 cursor-pointer transition-colors"
+                  class="icon-btn icon-btn-edit"
                 >
                   <svg
                     class="w-4 h-4"
@@ -337,7 +337,7 @@
                   x-show="!p.static_provider"
                   @click="confirmDelete(p)"
                   title="Delete"
-                  class="p-1.5 rounded text-slate-400 hover:text-red-600 dark:hover:text-red-300 hover:bg-red-100 dark:hover:bg-red-900/40 cursor-pointer transition-colors"
+                  class="icon-btn icon-btn-delete"
                 >
                   <svg
                     class="w-4 h-4"
@@ -546,6 +546,8 @@
       <div
         x-show="showDeleteModal"
         x-cloak
+        @keydown.window.escape="if (showDeleteModal) showDeleteModal = false"
+        @keydown.window.enter="if (showDeleteModal) { $event.preventDefault(); doDelete() }"
         class="fixed inset-0 z-50 flex items-center justify-center p-4"
       >
         <div
@@ -572,9 +574,10 @@
             </button>
             <button
               @click="doDelete()"
-              class="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-medium cursor-pointer"
+              class="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-medium cursor-pointer inline-flex items-center gap-1.5"
             >
               Delete
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 14l-4-4m0 0l4-4m-4 4h11a4 4 0 010 8h-1" /></svg>
             </button>
           </div>
         </div>
