@@ -252,6 +252,11 @@ func NewRouter(config *types.Config, logger Logger) (*Router, error) {
 		router.admin.SetProviderStorage(providerStorage, providerStorageWritable, router.reloadProviders)
 		router.admin.SetPersonaStorage(personaStorage, personaStorageWritable, router.reloadPersonas, router.getPersonas)
 		router.admin.SetMCPToolCaller(router.callMCPTool)
+		router.admin.SetRefreshModels(func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+			defer cancel()
+			router.RefreshModels(ctx)
+		})
 		router.admin.RegisterRoutes(router.mux)
 		logger.Info("admin UI enabled at /admin")
 	}
@@ -438,6 +443,28 @@ func (r *Router) addProviderModels(providerName string, modelIDs []string, p *Pr
 	}
 
 	r.logger.Info("model refresh complete", "total_models", len(r.ModelMap), "total_providers", len(r.Providers))
+}
+
+// removeProviderModels removes all ModelMap entries attributed to the given
+// provider. Called when a stored provider is deleted or disabled via the
+// admin UI so its models no longer appear in /admin/api/models.
+func (r *Router) removeProviderModels(providerName string) {
+	r.ModelMapMu.Lock()
+	defer r.ModelMapMu.Unlock()
+
+	for modelID, providers := range r.ModelMap {
+		newProviders := make([]string, 0, len(providers))
+		for _, pn := range providers {
+			if pn != providerName {
+				newProviders = append(newProviders, pn)
+			}
+		}
+		if len(newProviders) == 0 {
+			delete(r.ModelMap, modelID)
+		} else {
+			r.ModelMap[modelID] = newProviders
+		}
+	}
 }
 
 // DisableProvider marks a provider as unhealthy and removes its models from the map

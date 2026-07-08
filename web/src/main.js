@@ -732,6 +732,7 @@ Alpine.data("mcpServers", () => ({
 Alpine.data("models", () => ({
   models: [],
   loading: true,
+  rescanning: false,
   error: null,
   search: "",
 
@@ -752,6 +753,21 @@ Alpine.data("models", () => ({
     if (!this.search) return this.models;
     const q = this.search.toLowerCase();
     return this.models.filter(m => m.id.toLowerCase().includes(q));
+  },
+
+  async rescan() {
+    this.rescanning = true;
+    this.error = null;
+    try {
+      const res = await fetch("/admin/api/models/refresh", { method: "POST" });
+      if (res.status === 401) { window.location.href = "/admin/login"; return; }
+      if (!res.ok) throw new Error("Failed to rescan models");
+      this.models = (await res.json()).sort((a, b) => a.id.localeCompare(b.id));
+    } catch (err) {
+      this.error = err.message;
+    } finally {
+      this.rescanning = false;
+    }
   },
 
   logout() {

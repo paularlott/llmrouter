@@ -103,8 +103,11 @@ func (r *Router) reloadProviders() {
 	}
 
 	// Remove all previously-loaded stored providers (keep config-file ones)
+	// and clear their models from the map so disabled/deleted providers no
+	// longer appear in the model list.
 	for name := range r.storedProviderNames {
 		delete(r.Providers, name)
+		r.removeProviderModels(name)
 	}
 	r.storedProviderNames = make(map[string]bool)
 

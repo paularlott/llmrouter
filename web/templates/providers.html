@@ -284,21 +284,35 @@
                 class="flex items-center gap-3 text-xs text-slate-500 dark:text-slate-400"
               >
                 <span
-                  x-show="p.healthy"
+                  x-show="p.enabled && p.healthy"
                   class="flex items-center gap-1 text-green-600 dark:text-green-400"
                   ><span class="w-2 h-2 rounded-full bg-green-500"></span>
                   healthy</span
                 >
                 <span
-                  x-show="!p.healthy"
+                  x-show="p.enabled && !p.healthy"
                   class="flex items-center gap-1 text-red-600 dark:text-red-400"
                   ><span class="w-2 h-2 rounded-full bg-red-500"></span>
                   unhealthy</span
                 >
-                <span x-text="p.model_count + ' models'"></span>
+                <span x-show="p.enabled" x-text="p.model_count + ' models'"></span>
                 <span x-text="'w:' + p.weight"></span>
               </div>
               <div class="flex items-center gap-1">
+                <template x-if="!p.static_provider">
+                  <label
+                    class="flex items-center cursor-pointer mr-2"
+                    :aria-label="'Enable or disable ' + p.name + ' provider'"
+                  >
+                    <input
+                      type="checkbox"
+                      :checked="p.enabled"
+                      @change="toggleProviderEnabled(p)"
+                      class="sr-only peer"
+                    />
+                    <div class="relative w-9 h-5 bg-slate-200 dark:bg-slate-600 rounded-full peer peer-checked:bg-green-500 after:content-[''] after:absolute after:top-0.5 after:start-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-4"></div>
+                  </label>
+                </template>
                 <button
                   x-show="!p.static_provider"
                   @click="openEdit(p)"
@@ -490,16 +504,18 @@
                 class="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm"
               />
             </div>
-            <label
-              class="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300 cursor-pointer"
-            >
-              <input
-                type="checkbox"
-                x-model="form.enabled"
-                class="rounded border-slate-300 dark:border-slate-600 text-blue-600 focus:ring-blue-500"
-              />
-              Enabled
-            </label>
+            <div class="flex items-center gap-3">
+              <label class="flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  x-model="form.enabled"
+                  class="sr-only peer"
+                  aria-label="Enable provider"
+                />
+                <div class="relative w-9 h-5 bg-slate-200 dark:bg-slate-600 rounded-full peer peer-checked:bg-green-500 after:content-[''] after:absolute after:top-0.5 after:start-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-4"></div>
+              </label>
+              <span class="text-sm font-medium text-slate-700 dark:text-slate-300">Enabled</span>
+            </div>
           </div>
           <div
             class="px-6 py-4 border-t border-slate-200 dark:border-slate-800 flex justify-end gap-2"
@@ -597,6 +613,48 @@
             } catch {
             } finally {
               this.loading = false;
+            }
+          },
+          async refreshProviders() {
+            try {
+              const r = await fetch("/admin/api/providers/list");
+              if (r.ok) this.providers = await r.json();
+            } catch {}
+          },
+          async toggleProviderEnabled(p) {
+            const newEnabled = !p.enabled;
+            const name = p.name;
+            try {
+              const r = await fetch(
+                "/admin/api/providers/" + encodeURIComponent(name) + "/toggle",
+                {
+                  method: "PUT",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ enabled: newEnabled }),
+                },
+              );
+              if (!r.ok) {
+                const err = await r.json().catch(() => ({ error: "failed" }));
+                alert(err.error || "Failed to toggle provider");
+              }
+            } catch (e) {
+              alert("Error: " + e.message);
+            }
+            // Refresh immediately so the toggle reflects server-side state
+            // (reloadProviders runs before the response returns). Done without
+            // toggling loading to avoid a list flicker.
+            await this.refreshProviders();
+            // When enabling, the model count is populated by a background
+            // fetch from the provider (can take several seconds). Poll until
+            // it lands, the provider drops out, or attempts run out.
+            if (newEnabled) {
+              for (let i = 0; i < 12; i++) {
+                const cur = this.providers.find((x) => x.name === name);
+                if (!cur || !cur.enabled || !cur.healthy || cur.model_count > 0)
+                  break;
+                await new Promise((resolve) => setTimeout(resolve, 1500));
+                await this.refreshProviders();
+              }
             }
           },
           openAdd() {

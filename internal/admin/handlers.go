@@ -38,6 +38,7 @@ func (a *Admin) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /admin/api/stats", a.requireAuth(a.HandleStats))
 	mux.HandleFunc("GET /admin/api/providers", a.requireAuth(a.HandleProviders))
 	mux.HandleFunc("GET /admin/api/models", a.requireAuth(a.HandleModels))
+	mux.HandleFunc("POST /admin/api/models/refresh", a.requireAuth(a.HandleRefreshModels))
 	mux.HandleFunc("GET /admin/api/mcp-servers", a.requireAuth(a.HandleListMCPServers))
 	mux.HandleFunc("POST /admin/api/mcp-servers", a.requireAuth(a.HandleCreateMCPServer))
 	mux.HandleFunc("GET /admin/api/mcp-servers/{namespace}", a.requireAuth(a.HandleGetMCPServer))
@@ -58,6 +59,7 @@ func (a *Admin) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /admin/api/providers", a.requireAuth(a.HandleCreateProvider))
 	mux.HandleFunc("GET /admin/api/providers/{name}", a.requireAuth(a.HandleGetProvider))
 	mux.HandleFunc("PUT /admin/api/providers/{name}", a.requireAuth(a.HandleUpdateProvider))
+	mux.HandleFunc("PUT /admin/api/providers/{name}/toggle", a.requireAuth(a.HandleToggleProvider))
 	mux.HandleFunc("DELETE /admin/api/providers/{name}", a.requireAuth(a.HandleDeleteProvider))
 
 	// Persona management
@@ -218,6 +220,21 @@ func (a *Admin) HandleModelsPage(w http.ResponseWriter, r *http.Request) {
 
 // HandleModels returns model information
 func (a *Admin) HandleModels(w http.ResponseWriter, r *http.Request) {
+	if a.getModels == nil {
+		writeJSON(w, http.StatusOK, []ModelInfo{})
+		return
+	}
+	writeJSON(w, http.StatusOK, a.getModels())
+}
+
+// HandleRefreshModels forces a rescan of models from all providers and
+// returns the updated model list.
+func (a *Admin) HandleRefreshModels(w http.ResponseWriter, r *http.Request) {
+	if a.refreshModels == nil {
+		writeError(w, http.StatusInternalServerError, "model refresh not available")
+		return
+	}
+	a.refreshModels()
 	if a.getModels == nil {
 		writeJSON(w, http.StatusOK, []ModelInfo{})
 		return

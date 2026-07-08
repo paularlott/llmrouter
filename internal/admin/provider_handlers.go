@@ -327,6 +327,55 @@ func (a *Admin) HandleUpdateProvider(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// HandleToggleProvider toggles a stored provider's enabled state.
+func (a *Admin) HandleToggleProvider(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+	if name == "" {
+		writeError(w, http.StatusBadRequest, "name required")
+		return
+	}
+
+	if a.providerStorage == nil || !a.providerStorageWritable {
+		writeError(w, http.StatusBadRequest, "provider storage requires a configured storage path")
+		return
+	}
+
+	provider, err := a.providerStorage.Get(r.Context(), name)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "provider not found or is a static config provider")
+		return
+	}
+
+	var req struct {
+		Enabled bool `json:"enabled"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	provider.Enabled = req.Enabled
+
+	if err := a.providerStorage.Update(r.Context(), provider); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to update provider")
+		return
+	}
+
+	if a.onProviderChange != nil {
+		a.onProviderChange()
+	}
+
+	writeJSON(w, http.StatusOK, ProviderDetail{
+		Name:           provider.Name,
+		Provider:       provider.Provider,
+		BaseURL:        provider.BaseURL,
+		Enabled:        provider.Enabled,
+		Weight:         provider.Weight,
+		StaticProvider: false,
+	})
+}
+
 // HandleDeleteProvider deletes a stored provider.
 func (a *Admin) HandleDeleteProvider(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")

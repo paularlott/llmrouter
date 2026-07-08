@@ -29,6 +29,7 @@ type Admin struct {
 	getStats     func() *Stats
 	getProviders func() []ProviderInfo
 	getModels    func() []ModelInfo
+	refreshModels func() // Called to force a rescan of models from all providers
 
 	// MCP callbacks (for read-only display of config-based servers)
 	getMCPServers   func() []MCPServerInfo
@@ -205,6 +206,13 @@ func (a *Admin) SetPersonaStorage(ps storage.PersonaStorage, writable bool, onCh
 // 503 (tool execution not available).
 func (a *Admin) SetMCPToolCaller(fn func(namespace, toolName string, args map[string]any) (*ToolCallResult, error)) {
 	a.callMCPTool = fn
+}
+
+// SetRefreshModels wires a forced model rescan from the admin UI. Called
+// after New but before RegisterRoutes. If fn is nil, the rescan endpoint
+// returns 500 (refresh not available).
+func (a *Admin) SetRefreshModels(fn func()) {
+	a.refreshModels = fn
 }
 
 // ChatPageHandler returns the HTTP handler for /chat. Uses requirePageAuth

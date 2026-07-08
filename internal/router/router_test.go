@@ -92,6 +92,43 @@ func TestDisableProvider_Idempotent(t *testing.T) {
 	r.DisableProvider("p1", "second") // should not panic or double-remove
 }
 
+// removeProviderModels is what reloadProviders uses when a provider is
+// disabled/deleted via the admin UI. It must drop the provider's name from
+// every model entry and delete entries left with no providers — otherwise a
+// disabled provider keeps showing up on the models page.
+func TestRemoveProviderModels_ClearsEntries(t *testing.T) {
+	r := newTestRouter([]struct {
+		name   string
+		model  string
+		weight float64
+		load   int64
+	}{
+		{"p1", "m1", 1.0, 0},
+		{"p1", "shared", 1.0, 0},
+		{"p2", "shared", 1.0, 0},
+		{"p2", "m2", 1.0, 0},
+	})
+	r.logger = &testLogger{}
+
+	r.removeProviderModels("p1")
+
+	if _, ok := r.ModelMap["m1"]; ok {
+		t.Fatal("model served only by p1 should be removed")
+	}
+	providers, ok := r.ModelMap["shared"]
+	if !ok {
+		t.Fatal("shared model should remain (p2 still serves it)")
+	}
+	for _, p := range providers {
+		if p == "p1" {
+			t.Fatal("p1 should be removed from shared model entry")
+		}
+	}
+	if _, ok := r.ModelMap["m2"]; !ok {
+		t.Fatal("unrelated model m2 should be untouched")
+	}
+}
+
 func TestEnableProvider_MarksHealthy(t *testing.T) {
 	r := newTestRouter([]struct {
 		name   string
