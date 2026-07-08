@@ -6,7 +6,7 @@ require (
 	github.com/fsnotify/fsnotify v1.10.1
 	github.com/google/uuid v1.6.0
 	github.com/paularlott/cli v0.8.5
-	github.com/paularlott/lmchatkit v0.4.0
+	github.com/paularlott/lmchatkit v0.5.0
 	github.com/paularlott/logger v0.3.0
 	github.com/paularlott/mcp v0.21.2
 	github.com/paularlott/scriptling v0.16.1
