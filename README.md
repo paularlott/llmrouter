@@ -5,14 +5,16 @@ A unified gateway that aggregates multiple LLM providers behind a single endpoin
 ## Features
 
 - **Multi-Provider**: OpenAI, Claude, Gemini, Ollama, Mistral, ZAi — configure once, route by model name
-- **Protocol Translation**: Clients speak OpenAI or Messages (Claude) format; the gateway translates as needed
+- **Protocol Translation**: Clients speak OpenAI or Anthropic Messages; the gateway translates as needed, and also exposes a full Ollama-compatible API under `/ollama`
 - **Weight-Based Load Balancing**: Distribute load across providers with configurable weights
 - **Smart Routing**: Request the `auto` model and a [Scriptling](https://scriptling.dev/) script picks the best provider/model based on tags, load, and request content
-- **MCP Aggregator**: Aggregate tools from multiple remote MCP servers with namespace isolation
+- **MCP Aggregator**: Combine tools, resources, and prompts from multiple remote MCP servers with namespace isolation, OAuth support, and per-tool visibility / allow / deny filtering
+- **Chat UI**: Built-in interface at `/chat` with personas, conversation history, slash commands, `@prompt` / `@resource` menus, live MCP tool calling, markdown rendering, and `skill://` resources auto-surfaced to the model
+- **Personas**: System prompts, default models, and generation parameters — defined in the config file or managed through the admin UI
+- **Admin UI**: Optional web interface at `/admin` to manage providers, personas, and MCP servers (create / edit / delete, enable / disable), browse models (with rescan) and tools, and test-run MCP tools directly from the browser
 - **Responses API**: OpenAI-compatible responses storage (emulated for all providers)
 - **Conversations API**: n8n-compatible conversation management
 - **Optional Auth**: Bearer token protection for all endpoints
-- **Admin UI**: Optional web interface for monitoring providers, models, and MCP servers
 
 ## Installation
 
@@ -367,7 +369,7 @@ Tools can be marked as `discoverable = true` to hide them from `tools/list` and 
 
 ### Chat UI
 
-When `admin_password` is set and a personas directory is configured, a built-in chat interface is available at `/chat` with conversation history, slash commands, MCP tool integration, and markdown rendering.
+When `admin_password` is set and a personas directory is configured, a built-in chat interface is available at `/chat` with conversation history, personas, slash commands, `@prompt` / `@resource` menus, MCP tool calling, and markdown rendering.
 
 ```bash
 ./llmrouter server --personas-dir ./personas --commands-dir ./commands --resources-dir ./resources
@@ -464,7 +466,7 @@ POST /mcp    # MCP protocol — aggregates tools from all configured remote serv
 
 ### Admin UI
 
-When `server.admin_password` is set, a web-based admin interface is available at `/admin` for monitoring providers, models, and MCP servers.
+When `server.admin_password` is set, a web-based admin interface is available at `/admin`. From it you can manage providers, personas, and MCP servers (create / edit / delete, enable / disable), browse models and trigger a rescan, inspect tools / resources / prompts, and test-run MCP tools directly from the browser. Items created here are stored under `storage_path` and take effect live (config-file entries are shown read-only alongside them).
 
 ```bash
 GET /admin         # Admin UI (requires password login)
