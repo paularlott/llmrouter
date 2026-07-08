@@ -583,7 +583,7 @@
                       <!-- Try tool / Run -->
                       <button
                         @click.stop="openToolCall(tool)"
-                        class="icon-btn icon-btn-view"
+                        class="icon-btn icon-btn-view icon-btn-tinted"
                         :aria-label="'Run ' + tool.name"
                         title="Run tool"
                       >
@@ -593,7 +593,7 @@
                         </svg>
                       </button>
                       <!-- Expand chevron -->
-                      <button @click.stop="tool.expanded = !tool.expanded" class="icon-btn icon-btn-close shrink-0" :aria-label="(tool.expanded ? 'Collapse' : 'Expand') + ' parameters for ' + tool.name" :aria-expanded="tool.expanded">
+                      <button @click.stop="tool.expanded = !tool.expanded" class="icon-btn icon-btn-close icon-btn-tinted shrink-0" :aria-label="(tool.expanded ? 'Collapse' : 'Expand') + ' parameters for ' + tool.name" :aria-expanded="tool.expanded">
                         <svg class="w-5 h-5 transition-transform" :class="{ 'rotate-180': tool.expanded }" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
                         </svg>

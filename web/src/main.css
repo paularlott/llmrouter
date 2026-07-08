@@ -56,6 +56,11 @@
   .icon-btn-edit   { @apply hover:text-blue-600 dark:hover:text-blue-300; }
   .icon-btn-delete { @apply hover:text-red-600 dark:hover:text-red-300; }
   .icon-btn-close  { @apply hover:text-slate-700 dark:hover:text-slate-200; }
+  /* Modifier for icon buttons that sit on a tinted (slate-50 / slate-800)
+     block, e.g. an MCP tool's header row. The default slate-100 hover is too
+     close to slate-50, so step to slate-200 (and slate-600 dark). Defined
+     after .icon-btn so its :hover wins the same-specificity cascade. */
+  .icon-btn-tinted { @apply hover:bg-slate-200 dark:hover:bg-slate-600; }
 
   .input-field {
     @apply w-full px-3 py-2 text-sm text-slate-900 dark:text-white border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700/60 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-colors duration-200;
