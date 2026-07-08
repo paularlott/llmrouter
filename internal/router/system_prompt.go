@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-// augmentSystemPrompt is called by webchat on every /api/chat request.
+// augmentSystemPrompt is called by lmchatkit on every /api/chat request.
 // It appends dynamic context to the persona's system prompt — currently
 // a list of skill:// resources from the MCP server, so the model knows
 // what skills it can retrieve via the get_skill tool (or equivalent).
@@ -66,7 +66,7 @@ func (r *Router) listSkillResources(ctx context.Context) string {
 	}
 
 	var b strings.Builder
-	b.WriteString("The following skills are available. Call the webchat__get_skill tool with the skill URI to retrieve detailed instructions:\n")
+	b.WriteString("The following skills are available. Call the lmchatkit__get_skill tool with the skill URI to retrieve detailed instructions:\n")
 	for _, line := range lines {
 		b.WriteString(line)
 		b.WriteByte('\n')

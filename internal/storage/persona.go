@@ -12,7 +12,7 @@ import (
 )
 
 // StoredPersona represents a persona created via the admin UI. Mirrors the
-// fields of a webchat persona TOML file (name, description, system_prompt,
+// fields of a lmchatkit persona TOML file (name, description, system_prompt,
 // default_model, [params]) plus a stable ID and storage metadata.
 type StoredPersona struct {
 	ID           string                 `json:"id"`

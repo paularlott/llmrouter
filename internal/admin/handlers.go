@@ -28,7 +28,7 @@ func (a *Admin) RegisterRoutes(mux *http.ServeMux) {
 	// Chat page. Both admin and chat-role sessions can reach it; if no
 	// chat_password is configured ChatAuthMiddleware is nil and the page
 	// is open. The page itself is rendered from web/templates/chat.html
-	// (NOT from webchat's example template) so Tailwind's source scan
+	// (NOT from lmchatkit's example template) so Tailwind's source scan
 	// picks up every utility class used in it.
 	mux.HandleFunc("/chat", a.ChatPageHandler())
 

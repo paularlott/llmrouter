@@ -373,7 +373,7 @@ When `admin_password` is set and a personas directory is configured, a built-in 
 ./llmrouter server --personas-dir ./personas --commands-dir ./commands --resources-dir ./resources
 ```
 
-**Skills:** Resources with a `skill://` URI prefix are automatically surfaced to the LLM. On every chat request, the router queries the MCP server for `skill://` resources and appends their names and descriptions to the persona's system prompt. A virtual tool (`webchat__get_skill`) is injected into the tool list — the model calls it to retrieve a skill's full instructions on demand. The tool routes to the standard MCP `ReadResource` API, so skills work from any source (files, remote servers, or custom providers). The tool is auto-approved (no user prompt) since it's a read-only context fetch. Skills are transient — the stored conversation is not modified; the augmentation is recomputed on each request.
+**Skills:** Resources with a `skill://` URI prefix are automatically surfaced to the LLM. On every chat request, the router queries the MCP server for `skill://` resources and appends their names and descriptions to the persona's system prompt. A virtual tool (`lmchatkit__get_skill`) is injected into the tool list — the model calls it to retrieve a skill's full instructions on demand. The tool routes to the standard MCP `ReadResource` API, so skills work from any source (files, remote servers, or custom providers). The tool is auto-approved (no user prompt) since it's a read-only context fetch. Skills are transient — the stored conversation is not modified; the augmentation is recomputed on each request.
 
 Example skill resource directory structure:
 ```

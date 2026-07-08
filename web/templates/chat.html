@@ -25,7 +25,7 @@
       /* Locally-defined keyframes. Tailwind v4 doesn't ship animate-bounce
          unless it sees the class during source scan, and we want these
          guaranteed regardless of host build. */
-      @keyframes webchat-blink {
+      @keyframes lmchatkit-blink {
         0%,
         49% {
           opacity: 1;
@@ -36,10 +36,10 @@
         }
       }
       .animate-blink {
-        animation: webchat-blink 1s steps(1, end) infinite;
+        animation: lmchatkit-blink 1s steps(1, end) infinite;
       }
 
-      @keyframes webchat-bounce {
+      @keyframes lmchatkit-bounce {
         0%,
         100% {
           transform: translateY(-25%);
@@ -50,8 +50,8 @@
           animation-timing-function: cubic-bezier(0, 0, 0.2, 1);
         }
       }
-      .webchat-bounce {
-        animation: webchat-bounce 1s infinite;
+      .lmchatkit-bounce {
+        animation: lmchatkit-bounce 1s infinite;
       }
 
       /* Markdown content styling — processMarkdown emits semantic
@@ -281,10 +281,10 @@
   <body
     class="min-h-screen bg-slate-100 dark:bg-slate-950 transition-colors duration-300"
   >
-    <div x-data="webchat({ prefix: '{{.Prefix}}' })" x-init="init()" x-cloak>
-      <!-- Mobile menu state is host-owned (not webchat) because the nav
+    <div x-data="lmchatkit({ prefix: '{{.Prefix}}' })" x-init="init()" x-cloak>
+      <!-- Mobile menu state is host-owned (not lmchatkit) because the nav
            links + layout are app-specific. Wrapped in its own x-data so
-           it doesn't pollute the webchat component scope. -->
+           it doesn't pollute the lmchatkit component scope. -->
       <div x-data="{ mobileMenuOpen: false }">
         <!-- Top nav -->
         <header
@@ -409,7 +409,7 @@
 
         <!-- Mobile slide-in panel (hidden on desktop via .wc-mobile-panel CSS).
            Nav links are app-specific. Chat history list is read from the
-           parent webchat scope so conversations are shared. -->
+           parent lmchatkit scope so conversations are shared. -->
         <div class="wc-mobile-panel" x-show="mobileMenuOpen" x-cloak>
           <!-- Backdrop -->
           <div
@@ -493,7 +493,7 @@
                 >MCP Servers</a
               >
             </nav>
-            <!-- Chat history (reads from the webchat parent scope) -->
+            <!-- Chat history (reads from the lmchatkit parent scope) -->
             <div
               class="border-t border-slate-200 dark:border-slate-800 px-3 py-3"
             >
@@ -1167,14 +1167,14 @@
                         <span class="sr-only">Loading response…</span>
                         <span class="flex space-x-1">
                           <span
-                            class="w-2.5 h-2.5 bg-slate-400 dark:bg-slate-500 rounded-full webchat-bounce"
+                            class="w-2.5 h-2.5 bg-slate-400 dark:bg-slate-500 rounded-full lmchatkit-bounce"
                           ></span>
                           <span
-                            class="w-2.5 h-2.5 bg-slate-400 dark:bg-slate-500 rounded-full webchat-bounce"
+                            class="w-2.5 h-2.5 bg-slate-400 dark:bg-slate-500 rounded-full lmchatkit-bounce"
                             style="animation-delay: 0.1s"
                           ></span>
                           <span
-                            class="w-2.5 h-2.5 bg-slate-400 dark:bg-slate-500 rounded-full webchat-bounce"
+                            class="w-2.5 h-2.5 bg-slate-400 dark:bg-slate-500 rounded-full lmchatkit-bounce"
                             style="animation-delay: 0.2s"
                           ></span>
                         </span>

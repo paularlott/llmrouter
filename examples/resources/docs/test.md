@@ -1,6 +1,6 @@
 # Test Resource
 
-This is a static MCP resource used for testing the webchat `@resource` attachment feature.
+This is a static MCP resource used for testing the lmchatkit `@resource` attachment feature.
 
 ## Features
 

@@ -15,7 +15,7 @@ import (
 	"github.com/paularlott/mcp/toolmetadata"
 	scriptlingplugin "github.com/paularlott/scriptling/plugin"
 	mcpcli "github.com/paularlott/scriptling/scriptling-cli/mcp"
-	"github.com/paularlott/webchat"
+	"github.com/paularlott/lmchatkit"
 )
 
 // scriptlingToolManager owns scriptling-served MCP content — tools, resources
@@ -55,19 +55,19 @@ type scriptlingToolManager struct {
 	// "resources_changed" / "prompts_changed" events
 	// so all connected browser tabs refresh their cached lists without
 	// polling.
-	eventBroadcaster *webchat.EventBroadcaster
+	eventBroadcaster *lmchatkit.EventBroadcaster
 }
 
 // SetEventBroadcaster wires the SSE push notifier. When set, tool/resource/
 // prompt reloads broadcast change events so all connected browser tabs
 // refresh their cached lists without polling.
-func (stm *scriptlingToolManager) SetEventBroadcaster(b *webchat.EventBroadcaster) {
+func (stm *scriptlingToolManager) SetEventBroadcaster(b *lmchatkit.EventBroadcaster) {
 	stm.eventBroadcaster = b
 }
 
 func (stm *scriptlingToolManager) broadcast(eventType string) {
 	if stm.eventBroadcaster != nil {
-		stm.eventBroadcaster.Broadcast(webchat.ServerEvent{Type: eventType})
+		stm.eventBroadcaster.Broadcast(lmchatkit.ServerEvent{Type: eventType})
 	}
 }
 
@@ -417,7 +417,7 @@ func (stm *scriptlingToolManager) reloadResources() {
 	stm.logger.Info("Resources reloaded",
 		"new_static", len(staticURIs), "new_templates", len(templates))
 	stm.mainServer.NotifyResourcesChanged()
-	if stm.eventBroadcaster != nil { stm.eventBroadcaster.Broadcast(webchat.ServerEvent{Type: "resources_changed"}) }
+	if stm.eventBroadcaster != nil { stm.eventBroadcaster.Broadcast(lmchatkit.ServerEvent{Type: "resources_changed"}) }
 }
 
 // registerResources scans the resources folder and registers every static
@@ -475,7 +475,7 @@ func (stm *scriptlingToolManager) reloadPrompts() {
 		stm.promptNames = names
 	}
 	stm.mainServer.NotifyPromptsChanged()
-	if stm.eventBroadcaster != nil { stm.eventBroadcaster.Broadcast(webchat.ServerEvent{Type: "prompts_changed"}) }
+	if stm.eventBroadcaster != nil { stm.eventBroadcaster.Broadcast(lmchatkit.ServerEvent{Type: "prompts_changed"}) }
 }
 
 // registerPrompts scans the prompts folder and registers every prompt on the

@@ -22,7 +22,7 @@ import (
 	"github.com/paularlott/mcp/ai/claude"
 	"github.com/paularlott/mcp/ai/openai"
 	mcplib "github.com/paularlott/mcp"
-	"github.com/paularlott/webchat"
+	"github.com/paularlott/lmchatkit"
 )
 
 func NewRouter(config *types.Config, logger Logger) (*Router, error) {
@@ -236,7 +236,7 @@ func NewRouter(config *types.Config, logger Logger) (*Router, error) {
 	router.providerStorage = providerStorage
 
 	// Merged persona source: config-file personas (read-only) + KV-stored
-	// personas (UI-managed). Passed to webchat so /api/personas reflects both,
+	// personas (UI-managed). Passed to lmchatkit so /api/personas reflects both,
 	// and surfaced to the admin page via getPersonas.
 	router.personaStorage = personaStorage
 	router.personaSource = &mergedPersonaSource{
@@ -256,18 +256,18 @@ func NewRouter(config *types.Config, logger Logger) (*Router, error) {
 		logger.Info("admin UI enabled at /admin")
 	}
 
-	// Mount chat UI. The StandardHost wires webchat to llmrouter's own
+	// Mount chat UI. The StandardHost wires lmchatkit to llmrouter's own
 	// OpenAI endpoint (self-loopback) and MCP server. Auth is handled by
 	// ChatAuthMiddleware (nil when no chat_password configured → open).
 	loopbackHost := "127.0.0.1"
 	if config.Server.Host != "" && config.Server.Host != "0.0.0.0" && config.Server.Host != "::" {
 		loopbackHost = config.Server.Host
 	}
-	chatHost := &webchat.StandardHost{
-		ModelsFunc: func(ctx context.Context) ([]webchat.Model, error) {
-			models := make([]webchat.Model, 0)
+	chatHost := &lmchatkit.StandardHost{
+		ModelsFunc: func(ctx context.Context) ([]lmchatkit.Model, error) {
+			models := make([]lmchatkit.Model, 0)
 			for _, m := range router.getModels() {
-				models = append(models, webchat.Model{
+				models = append(models, lmchatkit.Model{
 					ID:       m.ID,
 					Provider: strings.Join(m.Providers, ", "),
 				})
@@ -285,10 +285,10 @@ func NewRouter(config *types.Config, logger Logger) (*Router, error) {
 		SystemPromptAugmenter: router.augmentSystemPrompt,
 	}
 	// EventBroadcaster for SSE push — cross-tab sync + content-change
-	// notifications. Created once and shared between webchat (for the
+	// notifications. Created once and shared between lmchatkit (for the
 	// /api/events endpoint) and the scriptling watcher (for push on
 	// tools/prompts/resources changes).
-	eventBroadcaster := webchat.NewEventBroadcaster()
+	eventBroadcaster := lmchatkit.NewEventBroadcaster()
 	router.eventBroadcaster = eventBroadcaster
 
 	// Wire the broadcaster to the scriptling watcher so tool/resource/prompt
@@ -300,12 +300,12 @@ func NewRouter(config *types.Config, logger Logger) (*Router, error) {
 	// HistoryStore — uses the same snapshotkv store as everything else.
 	// Memory-only mode (no storage path) falls back to an in-memory map
 	// that lasts for the process lifetime but doesn't persist.
-	var historyStore webchat.HistoryStore
+	var historyStore lmchatkit.HistoryStore
 	if sharedStore != nil {
 		historyStore = newHistoryStore(sharedStore)
 	}
 
-	chatServer, err := webchat.New(webchat.Config{
+	chatServer, err := lmchatkit.New(lmchatkit.Config{
 		Prefix:         "/chat",
 		PersonaSource:  router.personaSource,
 		CommandsDir:    config.Chat.CommandsDir,
@@ -1510,7 +1510,7 @@ func (r *Router) getPersonas() []admin.PersonaInfo {
 // without needing a manual page refresh.
 func (r *Router) reloadPersonas() {
 	if r.eventBroadcaster != nil {
-		r.eventBroadcaster.Broadcast(webchat.ServerEvent{Type: "personas_changed"})
+		r.eventBroadcaster.Broadcast(lmchatkit.ServerEvent{Type: "personas_changed"})
 	}
 }
 

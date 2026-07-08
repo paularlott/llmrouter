@@ -198,7 +198,7 @@ func (a *Admin) HandleDeletePersona(w http.ResponseWriter, r *http.Request) {
 }
 
 // personaIDFromName derives a stable 8-hex-char ID from a persona name.
-// Matches webchat's filename-stem hashing so IDs are uniform across sources.
+// Matches lmchatkit's filename-stem hashing so IDs are uniform across sources.
 func personaIDFromName(name string) string {
 	sum := sha256.Sum256([]byte(name))
 	return hex.EncodeToString(sum[:])[:8]

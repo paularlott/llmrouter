@@ -12,7 +12,7 @@ import (
 
 	"github.com/paularlott/llmrouter/internal/admin"
 	"github.com/paularlott/llmrouter/internal/storage"
-	"github.com/paularlott/webchat"
+	"github.com/paularlott/lmchatkit"
 
 	cli "github.com/paularlott/cli"
 	cli_toml "github.com/paularlott/cli/toml"
@@ -31,13 +31,13 @@ type personaEntry struct {
 	Static       bool                   `json:"static"` // true = from .toml file (read-only), false = from KV storage
 }
 
-// mergedPersonaSource implements webchat.PersonaSource by combining:
+// mergedPersonaSource implements lmchatkit.PersonaSource by combining:
 //   - the built-in "Default" persona (always present),
 //   - .toml files read from a configured PersonasDir (read on each call so
 //     edits land without a restart), and
 //   - personas stored in KV via PersonaStorage (managed by the admin UI).
 //
-// It replaces webchat's built-in file watcher so config-file and stored
+// It replaces lmchatkit's built-in file watcher so config-file and stored
 // personas share a single source of truth surfaced to both /api/personas and
 // the admin page.
 type mergedPersonaSource struct {
@@ -45,13 +45,13 @@ type mergedPersonaSource struct {
 	storage storage.PersonaStorage
 }
 
-// Personas satisfies [webchat.PersonaSource]. Called on every /api/personas
-// request by webchat, so a fresh merge keeps both chat and admin current.
-func (m *mergedPersonaSource) Personas(ctx context.Context) ([]webchat.Persona, error) {
+// Personas satisfies [lmchatkit.PersonaSource]. Called on every /api/personas
+// request by lmchatkit, so a fresh merge keeps both chat and admin current.
+func (m *mergedPersonaSource) Personas(ctx context.Context) ([]lmchatkit.Persona, error) {
 	entries := m.entries(ctx)
-	out := make([]webchat.Persona, 0, len(entries))
+	out := make([]lmchatkit.Persona, 0, len(entries))
 	for _, e := range entries {
-		out = append(out, webchat.Persona{
+		out = append(out, lmchatkit.Persona{
 			ID:           e.ID,
 			Name:         e.Name,
 			Description:  e.Description,
@@ -120,7 +120,7 @@ func (m *mergedPersonaSource) entries(ctx context.Context) []personaEntry {
 
 // readFilePersonas parses every .toml in dir. A missing/unreadable dir yields
 // nil (the Default persona is still offered by the caller). Malformed files
-// are skipped rather than failing the lot — matches webchat's behaviour.
+// are skipped rather than failing the lot — matches lmchatkit's behaviour.
 func readFilePersonas(dir string) []personaEntry {
 	if dir == "" {
 		return nil
@@ -146,7 +146,7 @@ func readFilePersonas(dir string) []personaEntry {
 
 // loadPersonaFile parses one persona TOML. The ID is derived from the filename
 // stem via stableID so saved conversations keep referencing the persona even
-// if its display name changes — identical scheme to webchat's file loader, so
+// if its display name changes — identical scheme to lmchatkit's file loader, so
 // IDs stay stable whether personas are served from the dir or the KV store.
 func loadPersonaFile(path string) (personaEntry, error) {
 	base := cli_toml.NewConfigFile(&path, func() []string { return []string{filepath.Dir(path)} })
@@ -173,7 +173,7 @@ func loadPersonaFile(path string) (personaEntry, error) {
 	return p, nil
 }
 
-// stableID hashes a stem into a short, URL-safe identifier. Matches webchat's
+// stableID hashes a stem into a short, URL-safe identifier. Matches lmchatkit's
 // internal scheme (first 8 hex of sha256) so IDs are consistent across
 // file-backed and stored personas and survive renames.
 func stableID(stem string) string {

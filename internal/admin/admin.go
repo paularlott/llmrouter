@@ -318,7 +318,7 @@ func (a *Admin) getSessionFromCookie(r *http.Request) string {
 }
 
 // RequireAuthMiddleware returns an http.Handler middleware that checks for
-// a valid session. Used by webchat to gate its API + asset routes with the
+// a valid session. Used by lmchatkit to gate its API + asset routes with the
 // same admin session as the rest of the app. Returns nil if no admin
 // password is set (open access — for local dev behind a reverse proxy).
 func (a *Admin) RequireAuthMiddleware() func(http.Handler) http.Handler {

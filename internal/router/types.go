@@ -13,7 +13,7 @@ import (
 	"github.com/paularlott/logger"
 	"github.com/paularlott/mcp/ai"
 	"github.com/paularlott/mcp/ai/openai"
-	"github.com/paularlott/webchat"
+	"github.com/paularlott/lmchatkit"
 )
 
 type Logger = logger.Logger
@@ -61,13 +61,13 @@ type Router struct {
 	conversationsService *conversations.Service
 	smartRouter          *SmartRouter
 	admin                *admin.Admin
-	chatServer           *webchat.Server
+	chatServer           *lmchatkit.Server
 	mcpStorage           storage.MCPStorage
 	providerStorage      storage.ProviderStorage
 	storedProviderNames  map[string]bool // tracks which providers came from KV storage
 	personaStorage       storage.PersonaStorage
 	personaSource        *mergedPersonaSource
-	eventBroadcaster     *webchat.EventBroadcaster
+	eventBroadcaster     *lmchatkit.EventBroadcaster
 }
 
 type (

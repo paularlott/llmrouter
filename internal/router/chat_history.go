@@ -9,12 +9,12 @@ import (
 
 	"github.com/paularlott/llmrouter/internal/storage"
 	"github.com/paularlott/snapshotkv"
-	"github.com/paularlott/webchat"
+	"github.com/paularlott/lmchatkit"
 )
 
 const chatHistoryPrefix = "chat_history:"
 
-// kvHistoryStore implements webchat.HistoryStore using snapshotkv.
+// kvHistoryStore implements lmchatkit.HistoryStore using snapshotkv.
 // Conversations are stored as JSON blobs keyed by "chat_history:<id>".
 // The List method scans all keys with the prefix, deserialises each,
 // and returns summaries sorted by UpdatedAt descending.
@@ -28,7 +28,7 @@ type memoryHistoryStore struct {
 	data map[string][]byte // id → JSON StoredConversation
 }
 
-func newHistoryStore(store *storage.Store) webchat.HistoryStore {
+func newHistoryStore(store *storage.Store) lmchatkit.HistoryStore {
 	if store.IsMemory() {
 		return &memoryHistoryStore{data: make(map[string][]byte)}
 	}
@@ -37,9 +37,9 @@ func newHistoryStore(store *storage.Store) webchat.HistoryStore {
 
 // -- snapshotkv implementation --
 
-func (s *kvHistoryStore) List(ctx context.Context) ([]webchat.ConversationSummary, error) {
+func (s *kvHistoryStore) List(ctx context.Context) ([]lmchatkit.ConversationSummary, error) {
 	keys := s.db.FindKeysByPrefix(chatHistoryPrefix)
-	out := make([]webchat.ConversationSummary, 0, len(keys))
+	out := make([]lmchatkit.ConversationSummary, 0, len(keys))
 	for _, key := range keys {
 		raw, err := s.db.Get(key)
 		if err != nil {
@@ -49,7 +49,7 @@ func (s *kvHistoryStore) List(ctx context.Context) ([]webchat.ConversationSummar
 		if !ok {
 			continue
 		}
-		var conv webchat.StoredConversation
+		var conv lmchatkit.StoredConversation
 		if json.Unmarshal(data, &conv) != nil {
 			continue
 		}
@@ -59,7 +59,7 @@ func (s *kvHistoryStore) List(ctx context.Context) ([]webchat.ConversationSummar
 	return out, nil
 }
 
-func (s *kvHistoryStore) Get(ctx context.Context, id string) (*webchat.StoredConversation, error) {
+func (s *kvHistoryStore) Get(ctx context.Context, id string) (*lmchatkit.StoredConversation, error) {
 	raw, err := s.db.Get(chatHistoryPrefix + id)
 	if err != nil {
 		return nil, err
@@ -68,14 +68,14 @@ func (s *kvHistoryStore) Get(ctx context.Context, id string) (*webchat.StoredCon
 	if !ok {
 		return nil, fmt.Errorf("unexpected data type for conversation %s", id)
 	}
-	var conv webchat.StoredConversation
+	var conv lmchatkit.StoredConversation
 	if err := json.Unmarshal(data, &conv); err != nil {
 		return nil, err
 	}
 	return &conv, nil
 }
 
-func (s *kvHistoryStore) Save(ctx context.Context, conv *webchat.StoredConversation) error {
+func (s *kvHistoryStore) Save(ctx context.Context, conv *lmchatkit.StoredConversation) error {
 	data, err := json.Marshal(conv)
 	if err != nil {
 		return err
@@ -89,12 +89,12 @@ func (s *kvHistoryStore) Delete(ctx context.Context, id string) error {
 
 // -- memory implementation --
 
-func (s *memoryHistoryStore) List(ctx context.Context) ([]webchat.ConversationSummary, error) {
+func (s *memoryHistoryStore) List(ctx context.Context) ([]lmchatkit.ConversationSummary, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	out := make([]webchat.ConversationSummary, 0, len(s.data))
+	out := make([]lmchatkit.ConversationSummary, 0, len(s.data))
 	for _, data := range s.data {
-		var conv webchat.StoredConversation
+		var conv lmchatkit.StoredConversation
 		if json.Unmarshal(data, &conv) != nil {
 			continue
 		}
@@ -104,21 +104,21 @@ func (s *memoryHistoryStore) List(ctx context.Context) ([]webchat.ConversationSu
 	return out, nil
 }
 
-func (s *memoryHistoryStore) Get(ctx context.Context, id string) (*webchat.StoredConversation, error) {
+func (s *memoryHistoryStore) Get(ctx context.Context, id string) (*lmchatkit.StoredConversation, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	data, ok := s.data[id]
 	if !ok {
 		return nil, fmt.Errorf("conversation not found: %s", id)
 	}
-	var conv webchat.StoredConversation
+	var conv lmchatkit.StoredConversation
 	if err := json.Unmarshal(data, &conv); err != nil {
 		return nil, err
 	}
 	return &conv, nil
 }
 
-func (s *memoryHistoryStore) Save(ctx context.Context, conv *webchat.StoredConversation) error {
+func (s *memoryHistoryStore) Save(ctx context.Context, conv *lmchatkit.StoredConversation) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	data, err := json.Marshal(conv)

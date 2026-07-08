@@ -29,6 +29,8 @@ github.com/paularlott/gossip v0.12.7 h1:k17471+iNCHMG9wg7AdRW/+F0jVXhIugPkhPw1s8
 github.com/paularlott/gossip v0.12.7/go.mod h1:ME1A8VWeCe/YBG7jaDZFjp7h4APG+FWLxJbjNy48Rn0=
 github.com/paularlott/jsonrpc v0.1.0 h1:SbHR1kHTp0yOdW+FOeHHUWTsD1zwZfv8uFbHSSQlm8w=
 github.com/paularlott/jsonrpc v0.1.0/go.mod h1:mXoOPTPQf87HF3wR064n23dmsAQs3/EICA3Cbha3Sk4=
+github.com/paularlott/lmchatkit v0.4.0 h1:Z8J2ohmwFdEpCjkHHCK/xeecMq+tVNuocag3SamB1p8=
+github.com/paularlott/lmchatkit v0.4.0/go.mod h1:UG+lpOKE5RodE9v2i2sftV3w5cFZlkvBwu8pZivLt64=
 github.com/paularlott/logger v0.3.0 h1:QwVUoxmlEFkfHI25y5dn56OJvK4Bpe3OvoJu4GZM7ng=
 github.com/paularlott/logger v0.3.0/go.mod h1:vjAOY1vUvYigmJxxQ0eMclryIjDS6VWNK6FprtTMce0=
 github.com/paularlott/mcp v0.21.2 h1:/0OLL6A/pWjBkWRZ9VJ/b7cBYPjQHYYdJGVwIAqdElI=
@@ -37,8 +39,6 @@ github.com/paularlott/scriptling v0.16.1 h1:s12ZkWKpXWlczj2geT0xkGKWHhquojHd/TLp
 github.com/paularlott/scriptling v0.16.1/go.mod h1:pC8RIGxXnKj0Rdvfb3yw/F8stetYP5cW94JsLExdYmk=
 github.com/paularlott/snapshotkv v0.4.0 h1:IsFyQ0hmycGkMUzbR4E4vvHzZeKbaE+LM6jqZdeBP0g=
 github.com/paularlott/snapshotkv v0.4.0/go.mod h1:X2ONJRnGTRUV2j8tIdO187y0QLm4n7bnCbdnV/mTWUQ=
-github.com/paularlott/webchat v0.3.0 h1:rkfx5jUQChCEb1ozwkVXYQzOkUP6TormXUtBZhVU6yY=
-github.com/paularlott/webchat v0.3.0/go.mod h1:G++Bqek3GrXquv6wIg5ODPyt6AEHxlSKx8HGvZvN98E=
 github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/power-devops/perfstat v0.0.0-20240221224432-82ca36839d55 h1:o4JXh1EVt9k/+g42oCprj/FisM4qX9L3sZB3upGN2ZU=
