@@ -22,6 +22,29 @@
     @apply px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-xl shadow-lg shadow-blue-500/25 hover:shadow-xl hover:shadow-blue-500/30 transition-all duration-200 flex items-center gap-2 cursor-pointer;
   }
 
+  /* Modal/dialog primitives — shared by every modal (provider, persona,
+     mcp-server, chat). Add max-w-* / max-h / overflow / flex-col alongside
+     .modal per dialog as needed; the shell (bg, radius, elevation, border)
+     is unified here so elevation and divider shade stay consistent. */
+  .modal {
+    @apply relative bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-800 w-full;
+  }
+  .modal-header {
+    @apply px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between;
+  }
+  .modal-body {
+    @apply p-6 space-y-4;
+  }
+  .modal-footer {
+    @apply px-6 py-4 border-t border-slate-200 dark:border-slate-800 flex justify-end gap-2;
+  }
+  .btn-cancel {
+    @apply px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors cursor-pointer;
+  }
+  .btn-submit {
+    @apply px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 rounded-lg shadow-lg shadow-blue-500/25 hover:shadow-xl hover:shadow-blue-500/30 transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
   .input-field {
     @apply w-full px-3 py-2 text-sm text-slate-900 dark:text-white border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700/60 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-colors duration-200;
   }

@@ -262,7 +262,7 @@
       <div x-show="showAddModal" x-cloak class="fixed inset-0 z-50 overflow-y-auto" @keydown.escape.window="showAddModal = false; resetForm()" role="dialog" aria-modal="true" aria-labelledby="add-edit-modal-title">
         <div class="flex items-center justify-center min-h-screen px-4">
           <div class="fixed inset-0 bg-black/50 backdrop-blur-sm transition-opacity" @click="showAddModal = false; resetForm()"></div>
-          <div class="relative bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-lg w-full p-6 border border-slate-200 dark:border-slate-700">
+          <div class="modal max-w-lg p-6">
             <h2 id="add-edit-modal-title" class="text-xl font-bold text-slate-900 dark:text-white mb-6" x-text="editingServer ? 'Edit Server' : 'Add MCP Server'"></h2>
 
             <form @submit.prevent="saveServer" class="space-y-4">
@@ -420,14 +420,14 @@
                 <button
                   type="button"
                   @click="showAddModal = false; resetForm()"
-                  class="px-4 py-2 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl transition-colors cursor-pointer"
+                  class="btn-cancel"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   :disabled="saving"
-                  class="px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-xl hover:from-blue-600 hover:to-indigo-700 transition-all disabled:opacity-50 flex items-center gap-2 cursor-pointer"
+                  class="btn-submit"
                 >
                   <svg x-show="saving" class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
                     <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
@@ -445,7 +445,7 @@
       <div x-show="showDeleteModal" x-cloak class="fixed inset-0 z-50 overflow-y-auto" role="dialog" aria-modal="true" aria-labelledby="delete-modal-title">
         <div class="flex items-center justify-center min-h-screen px-4">
           <div class="fixed inset-0 bg-black/50 backdrop-blur-sm transition-opacity" @click="showDeleteModal = false"></div>
-          <div class="relative bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-md w-full p-6 border border-slate-200 dark:border-slate-700">
+          <div class="modal max-w-md p-6">
             <h2 id="delete-modal-title" class="text-xl font-bold text-slate-900 dark:text-white mb-4">Delete Server</h2>
             <p class="text-slate-600 dark:text-slate-300 mb-6">
               Are you sure you want to delete <span class="font-semibold" x-text="deletingServer?.namespace"></span>? This action cannot be undone.
@@ -453,7 +453,7 @@
             <div class="flex justify-end gap-3">
               <button
                 @click="showDeleteModal = false"
-                class="px-4 py-2 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl transition-colors cursor-pointer"
+                class="btn-cancel"
               >
                 Cancel
               </button>
@@ -477,7 +477,7 @@
       <div x-show="showToolsModal" x-cloak class="fixed inset-0 z-50 overflow-y-auto" @keydown.escape.window="showToolsModal = false" role="dialog" aria-modal="true" aria-labelledby="tools-modal-title">
         <div class="flex items-center justify-center min-h-screen px-4">
           <div class="fixed inset-0 bg-black/50 backdrop-blur-sm transition-opacity" @click="showToolsModal = false"></div>
-          <div class="relative bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-2xl w-full max-h-[80vh] flex flex-col border border-slate-200 dark:border-slate-700">
+          <div class="modal max-w-2xl max-h-[80vh] flex flex-col">
             <div class="p-6 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
               <div>
                 <h2 id="tools-modal-title" class="text-xl font-bold text-slate-900 dark:text-white">
@@ -635,7 +635,7 @@
             <div class="p-4 border-t border-slate-200 dark:border-slate-700 flex justify-end">
               <button
                 @click="showToolsModal = false"
-                class="px-4 py-2 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl transition-colors cursor-pointer"
+                class="btn-cancel"
               >
                 Close
               </button>
@@ -648,7 +648,7 @@
       <div x-show="showToolCallModal" x-cloak class="fixed inset-0 z-[60] overflow-y-auto" @keydown.escape.window="closeToolCall()" role="dialog" aria-modal="true" aria-labelledby="tool-call-modal-title">
         <div class="flex items-center justify-center min-h-screen px-4">
           <div class="fixed inset-0 bg-black/50 backdrop-blur-sm transition-opacity" @click="closeToolCall()"></div>
-          <div class="relative bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-3xl w-full max-h-[85vh] flex flex-col border border-slate-200 dark:border-slate-700">
+          <div class="modal max-w-3xl max-h-[85vh] flex flex-col">
             <!-- Header -->
             <div class="p-6 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between gap-4">
               <div class="min-w-0">
@@ -776,7 +776,7 @@
 
             <!-- Footer -->
             <div class="p-4 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between gap-3">
-              <button @click="closeToolCall()" class="px-4 py-2 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl transition-colors cursor-pointer">
+              <button @click="closeToolCall()" class="btn-cancel">
                 Close
               </button>
               <button
@@ -803,7 +803,7 @@
       <div x-show="showResourcesModal" x-cloak class="fixed inset-0 z-50 overflow-y-auto" @keydown.escape.window="showResourcesModal = false" role="dialog" aria-modal="true" aria-labelledby="resources-modal-title">
         <div class="flex items-center justify-center min-h-screen px-4">
           <div class="fixed inset-0 bg-black/50 backdrop-blur-sm transition-opacity" @click="showResourcesModal = false"></div>
-          <div class="relative bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-2xl w-full max-h-[80vh] flex flex-col border border-slate-200 dark:border-slate-700">
+          <div class="modal max-w-2xl max-h-[80vh] flex flex-col">
             <div class="p-6 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
               <div>
                 <h2 id="resources-modal-title" class="text-xl font-bold text-slate-900 dark:text-white">
@@ -862,7 +862,7 @@
             <div class="p-4 border-t border-slate-200 dark:border-slate-700 flex justify-end">
               <button
                 @click="showResourcesModal = false"
-                class="px-4 py-2 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl transition-colors cursor-pointer"
+                class="btn-cancel"
               >
                 Close
               </button>
@@ -875,7 +875,7 @@
       <div x-show="showPromptsModal" x-cloak class="fixed inset-0 z-50 overflow-y-auto" @keydown.escape.window="showPromptsModal = false" role="dialog" aria-modal="true" aria-labelledby="prompts-modal-title">
         <div class="flex items-center justify-center min-h-screen px-4">
           <div class="fixed inset-0 bg-black/50 backdrop-blur-sm transition-opacity" @click="showPromptsModal = false"></div>
-          <div class="relative bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-2xl w-full max-h-[80vh] flex flex-col border border-slate-200 dark:border-slate-700">
+          <div class="modal max-w-2xl max-h-[80vh] flex flex-col">
             <div class="p-6 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
               <div>
                 <h2 id="prompts-modal-title" class="text-xl font-bold text-slate-900 dark:text-white">
@@ -939,7 +939,7 @@
             <div class="p-4 border-t border-slate-200 dark:border-slate-700 flex justify-end">
               <button
                 @click="showPromptsModal = false"
-                class="px-4 py-2 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl transition-colors cursor-pointer"
+                class="btn-cancel"
               >
                 Close
               </button>
