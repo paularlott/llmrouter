@@ -583,6 +583,23 @@ Alpine.data("mcpServers", () => ({
     this.toolCallHistory = [];
   },
 
+  // Pretty-print tool text output when it's a JSON object/array; leave
+  // plain text (and non-JSON) untouched. Only attempts a parse when the
+  // trimmed string starts with { or [ so ordinary text is never mangled.
+  formatToolOutput(text) {
+    if (text == null) return "";
+    if (typeof text !== "string") {
+      try { return JSON.stringify(text, null, 2); } catch { return String(text); }
+    }
+    const s = text.trim();
+    if (s === "") return "";
+    const ch = s[0];
+    if (ch === "{" || ch === "[") {
+      try { return JSON.stringify(JSON.parse(s), null, 2); } catch { return text; }
+    }
+    return text;
+  },
+
   async runToolCall() {
     if (!this.callingTool || !this.toolsServer) return;
     this.toolCallError = null;

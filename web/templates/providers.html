@@ -198,18 +198,18 @@
       </div>
       <!-- /mobileMenuOpen scope -->
 
-      <main class="max-w-7xl mx-auto px-4 sm:px-6 py-6">
-        <div class="flex items-center justify-between mb-6">
+      <main class="max-w-7xl mx-auto px-4 sm:px-6 py-8">
+        <div class="flex items-center justify-between mb-8">
           <h1 class="text-2xl font-bold text-slate-900 dark:text-white">
             Providers
           </h1>
           <button
             x-show="storageWritable"
             @click="openAdd()"
-            class="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition-colors cursor-pointer flex items-center gap-2"
+            class="btn-add"
           >
             <svg
-              class="w-4 h-4"
+              class="w-5 h-5"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -368,8 +368,9 @@
           <button
             x-show="storageWritable"
             @click="openAdd()"
-            class="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium cursor-pointer"
+            class="btn-add"
           >
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
             Add Provider
           </button>
         </div>
@@ -425,7 +426,7 @@
                 type="text"
                 x-model="form.name"
                 :disabled="editing"
-                class="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm disabled:opacity-60"
+                class="input-field disabled:opacity-60"
               />
             </div>
             <div>
@@ -435,7 +436,7 @@
               >
               <select
                 x-model="form.provider"
-                class="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm"
+                class="input-field"
               >
                 <option value="openai">OpenAI compatible</option>
                 <option value="claude">Claude</option>
@@ -457,7 +458,7 @@
                 type="text"
                 x-model="form.base_url"
                 placeholder="https://api.openai.com/v1"
-                class="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm"
+                class="input-field"
               />
             </div>
             <div>
@@ -469,7 +470,7 @@
                 type="password"
                 x-model="form.token"
                 :placeholder="editing ? '(unchanged)' : 'sk-...'"
-                class="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm"
+                class="input-field"
               />
             </div>
             <div>
@@ -486,7 +487,7 @@
                 min="0"
                 max="2"
                 x-model.number="form.weight"
-                class="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm"
+                class="input-field"
               />
             </div>
             <div>
@@ -501,7 +502,7 @@
                 type="text"
                 x-model="form.models_str"
                 placeholder="gpt-4, gpt-3.5-turbo"
-                class="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm"
+                class="input-field"
               />
             </div>
             <div class="flex items-center gap-3">
