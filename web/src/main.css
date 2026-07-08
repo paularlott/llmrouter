@@ -1,6 +1,12 @@
 @import "tailwindcss";
 @variant dark (&:where(.dark, .dark *));
 
+/* Hide any element carrying x-cloak until Alpine initializes and removes the
+   attribute. Defined here in the render-blocking stylesheet linked from every
+   page's <head>, so modals/dialogs never flash on slow connections (the old
+   per-page copies lived at the bottom of <body> and arrived too late). */
+[x-cloak] { display: none !important; }
+
 /* Custom component styles */
 @layer components {
   .btn-primary {

@@ -18,10 +18,6 @@
     <script defer src="{{.Prefix}}/assets/chat.js"></script>
     <script type="module" src="{{.JSFile}}"></script>
     <style>
-      [x-cloak] {
-        display: none !important;
-      }
-
       /* Locally-defined keyframes. Tailwind v4 doesn't ship animate-bounce
          unless it sees the class during source scan, and we want these
          guaranteed regardless of host build. */
@@ -653,10 +649,20 @@
         </aside>
 
         <!-- Chat column -->
-        <section class="flex-1 flex flex-col min-w-0 pl-0 md:pl-6">
+        <section
+          class="flex-1 flex flex-col min-w-0 pl-0 md:pl-6"
+          x-data="{ chatReady: false }"
+          x-init="$watch('conversations', () => { chatReady = true }); setTimeout(() => { chatReady = true }, 1500)"
+        >
+          <!-- Loading: hidden once lmchatkit's initial conversations fetch
+               resolves, so the setup form can't flash before a restored
+               currentId is applied. The setTimeout is just a safety net. -->
+          <div x-show="!chatReady" class="flex-1 flex items-center justify-center">
+            <div class="animate-spin rounded-full h-8 w-8 border-2 border-blue-500 border-t-transparent"></div>
+          </div>
           <!-- Empty / setup state -->
           <div
-            x-show="!currentId"
+            x-show="!currentId && chatReady"
             class="flex-1 flex items-start justify-center overflow-y-auto py-6"
           >
             <div
@@ -872,7 +878,7 @@
           </div>
 
           <!-- Active chat -->
-          <div x-show="currentId" class="flex-1 flex flex-col min-h-0">
+          <div x-show="currentId && chatReady" class="flex-1 flex flex-col min-h-0">
             <!-- Chat header: persona/model + tool availability -->
             <div class="flex items-center justify-between mb-4 px-1">
               <div class="flex items-center gap-3 min-w-0">
@@ -1852,9 +1858,6 @@
     </div>
 
     <style>
-      [x-cloak] {
-        display: none !important;
-      }
       .input-field {
         width: 100%;
         padding: 0.5rem 0.75rem;
