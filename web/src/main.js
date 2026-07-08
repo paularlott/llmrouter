@@ -166,9 +166,10 @@ Alpine.data("mcpServers", () => ({
   deletingServer: null,
   toolsServer: null,
   tools: [],
-  loadingTools: false,
-  toolsError: null,
-  toolFilter: "",
+   loadingTools: false,
+   toolsError: null,
+   toolFilter: "",
+   togglingTool: null,
   resourcesServer: null,
   resources: [],
   loadingResources: false,
@@ -506,7 +507,13 @@ Alpine.data("mcpServers", () => ({
   },
 
   async toggleTool(tool) {
+    if (this.togglingTool === tool.name) return;
     const newEnabled = !tool.enabled;
+
+    // Optimistic: flip immediately so the toggle feels responsive, then a
+    // spinner shows while the change is confirmed server-side.
+    tool.enabled = newEnabled;
+    this.togglingTool = tool.name;
 
     try {
       const response = await fetch(
@@ -525,15 +532,13 @@ Alpine.data("mcpServers", () => ({
         const data = await response.json();
         throw new Error(data.error || "Failed to toggle tool");
       }
-
-      // Update local state on success
-      tool.enabled = newEnabled;
     } catch (err) {
-      // Revert on error - the UI will show the old state
+      // Revert the optimistic flip on failure.
       console.error("Failed to toggle tool:", err);
+      tool.enabled = !newEnabled;
       this.toolsError = err.message;
-      // Reload tools to get correct state
-      this.loadTools();
+    } finally {
+      this.togglingTool = null;
     }
   },
 

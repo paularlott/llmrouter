@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -613,5 +614,190 @@ func TestCheckDisabledProviders_RemainsUnhealthyOnError(t *testing.T) {
 
 	if r.Providers["failing"].Healthy.Load() {
 		t.Fatal("provider should remain unhealthy when health check fails")
+	}
+}
+
+// --- Streaming error handling: upstream error before any data ---
+
+// streamErrorClient returns a stream that errors immediately without sending any chunks.
+type streamErrorClient struct {
+	mockClient
+	err error
+}
+
+func (c *streamErrorClient) StreamChatCompletion(_ context.Context, _ openai.ChatCompletionRequest) *openai.ChatStream {
+	// Don't close the response channel — leave it open (blocking) so that
+	// Next() is forced to read from the error channel. This matches real
+	// usage where the error is buffered before channels are closed.
+	ch := make(chan openai.ChatCompletionResponse)
+	errCh := make(chan error, 1)
+	errCh <- c.err
+	return openai.NewChatStream(context.Background(), ch, errCh)
+}
+
+func TestHandleChatCompletions_StreamUpstreamError(t *testing.T) {
+	r := newTestRouter([]struct {
+		name   string
+		model  string
+		weight float64
+		load   int64
+	}{{"p1", "m1", 1.0, 0}})
+
+	upstreamErr := &openai.APIError{
+		StatusCode: http.StatusBadRequest,
+		Type:       "invalid_request_error",
+		Message:    "model does not support tool calls",
+	}
+	r.Providers["p1"].Client = &streamErrorClient{err: upstreamErr}
+
+	reqBody := map[string]any{
+		"model":  "m1",
+		"stream": true,
+		"messages": []map[string]any{
+			{"role": "user", "content": "hi"},
+		},
+	}
+	data, _ := json.Marshal(reqBody)
+	req := httptest.NewRequest("POST", "/v1/chat/completions", bytes.NewReader(data))
+	rec := httptest.NewRecorder()
+
+	r.HandleChatCompletions(rec, req)
+
+	// Should get the upstream status code, NOT 200 with bare [DONE].
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("want 400 (upstream status), got %d body=%q", rec.Code, rec.Body.String())
+	}
+
+	// Response must be JSON with an error object — not an empty SSE stream.
+	var resp map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("response should be valid JSON, got: %q err=%v", rec.Body.String(), err)
+	}
+	errObj, ok := resp["error"].(map[string]any)
+	if !ok {
+		t.Fatalf("response should have error object, got: %v", resp)
+	}
+	if errObj["message"] != "model does not support tool calls" {
+		t.Fatalf("unexpected error message: %v", errObj["message"])
+	}
+}
+
+// --- Streaming error handling: upstream error mid-stream ---
+
+// streamThenErrorClient sends one chunk then errors.
+type streamThenErrorClient struct {
+	mockClient
+	chunk openai.ChatCompletionResponse
+	err   error
+}
+
+func (c *streamThenErrorClient) StreamChatCompletion(ctx context.Context, _ openai.ChatCompletionRequest) *openai.ChatStream {
+	ch := make(chan openai.ChatCompletionResponse, 1)
+	errCh := make(chan error, 1)
+	go func() {
+		ch <- c.chunk
+		// Don't close ch — leave it open so the second Next() call blocks
+		// on responseChan and is forced to read from errorChan instead.
+		errCh <- c.err
+	}()
+	return openai.NewChatStream(ctx, ch, errCh)
+}
+
+func TestHandleChatCompletions_StreamMidStreamError(t *testing.T) {
+	r := newTestRouter([]struct {
+		name   string
+		model  string
+		weight float64
+		load   int64
+	}{{"p1", "m1", 1.0, 0}})
+
+	chunk := openai.ChatCompletionResponse{
+		ID: "chatcmpl-test", Object: "chat.completion.chunk", Model: "m1",
+		Choices: []openai.Choice{{
+			Index:        0,
+			Delta:        openai.Delta{Content: "hello"},
+			FinishReason: "",
+		}},
+	}
+	r.Providers["p1"].Client = &streamThenErrorClient{
+		chunk: chunk,
+		err:   errors.New("connection reset"),
+	}
+
+	reqBody := map[string]any{
+		"model":  "m1",
+		"stream": true,
+		"messages": []map[string]any{
+			{"role": "user", "content": "hi"},
+		},
+	}
+	data, _ := json.Marshal(reqBody)
+	req := httptest.NewRequest("POST", "/v1/chat/completions", bytes.NewReader(data))
+	rec := httptest.NewRecorder()
+
+	r.HandleChatCompletions(rec, req)
+
+	// Headers were already committed when the first chunk arrived — status
+	// must be 200 (SSE), but the body must contain an error event.
+	if rec.Code != http.StatusOK {
+		t.Fatalf("want 200 (headers committed), got %d", rec.Code)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, `"content":"hello"`) {
+		t.Fatalf("body should contain the first chunk: %q", body)
+	}
+	if !strings.Contains(body, `"error"`) {
+		t.Fatalf("body should contain an error event after mid-stream failure: %q", body)
+	}
+	if !strings.Contains(body, "connection reset") {
+		t.Fatalf("body should contain the error message: %q", body)
+	}
+	if !strings.Contains(body, "[DONE]") {
+		t.Fatalf("body should end with [DONE]: %q", body)
+	}
+}
+
+// --- Messages (Claude) streaming: upstream error before any data ---
+
+func TestHandleMessages_StreamUpstreamError(t *testing.T) {
+	r := newTestRouter([]struct {
+		name   string
+		model  string
+		weight float64
+		load   int64
+	}{{"p1", "m1", 1.0, 0}})
+
+	upstreamErr := &openai.APIError{
+		StatusCode: http.StatusBadRequest,
+		Type:       "invalid_request_error",
+		Message:    "bad request",
+	}
+	r.Providers["p1"].Client = &streamErrorClient{err: upstreamErr}
+
+	reqBody := map[string]any{
+		"model":  "m1",
+		"stream": true,
+		"messages": []map[string]any{
+			{"role": "user", "content": "hi"},
+		},
+	}
+	data, _ := json.Marshal(reqBody)
+	req := httptest.NewRequest("POST", "/v1/messages", bytes.NewReader(data))
+	rec := httptest.NewRecorder()
+
+	r.HandleMessages(rec, req)
+
+	// Should get the upstream status code, not 200 with empty body.
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("want 400 (upstream status), got %d body=%q", rec.Code, rec.Body.String())
+	}
+
+	// Response must be JSON with an error object.
+	var resp map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("response should be valid JSON, got: %q err=%v", rec.Body.String(), err)
+	}
+	if _, ok := resp["error"].(map[string]any); !ok {
+		t.Fatalf("response should have error object, got: %v", resp)
 	}
 }

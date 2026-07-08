@@ -275,7 +275,9 @@ func (a *Admin) HandleUpdateProvider(w http.ResponseWriter, r *http.Request) {
 	if req.Provider != "" {
 		provider.Provider = req.Provider
 	}
-	provider.BaseURL = strings.TrimSuffix(req.BaseURL, "/")
+	if req.BaseURL != "" {
+		provider.BaseURL = strings.TrimSuffix(req.BaseURL, "/")
+	}
 	if req.Token != "" {
 		provider.Token = req.Token
 	}
@@ -283,12 +285,28 @@ func (a *Admin) HandleUpdateProvider(w http.ResponseWriter, r *http.Request) {
 	if req.Weight > 0 {
 		provider.Weight = req.Weight
 	}
-	provider.Models = req.Models
-	provider.ModelAllowlist = req.ModelAllowlist
-	provider.Tags = req.Tags
-	provider.ModelDenylist = req.ModelDenylist
-	provider.ModelAliases = req.ModelAliases
-	provider.ModelTags = req.ModelTags
+	// Only overwrite list/map fields when the request actually includes
+	// them. The UI edit form doesn't send model_allowlist, model_denylist,
+	// model_aliases, model_tags, or tags — without these guards, editing
+	// any field (e.g. weight) would silently wipe them.
+	if req.Models != nil {
+		provider.Models = req.Models
+	}
+	if req.ModelAllowlist != nil {
+		provider.ModelAllowlist = req.ModelAllowlist
+	}
+	if req.Tags != nil {
+		provider.Tags = req.Tags
+	}
+	if req.ModelDenylist != nil {
+		provider.ModelDenylist = req.ModelDenylist
+	}
+	if req.ModelAliases != nil {
+		provider.ModelAliases = req.ModelAliases
+	}
+	if req.ModelTags != nil {
+		provider.ModelTags = req.ModelTags
+	}
 
 	if err := a.providerStorage.Update(r.Context(), provider); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to update provider")

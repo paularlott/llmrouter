@@ -505,7 +505,7 @@
               </p>
             </div>
 
-            <div class="flex-1 overflow-y-auto p-6">
+            <div class="flex-1 min-h-0 overflow-y-auto p-6">
               <!-- Filter -->
               <div x-show="!loadingTools && !toolsError && tools.length > 0" class="mb-4">
                 <div class="relative">
@@ -556,20 +556,21 @@
                   <div class="border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden" :class="{ 'opacity-50': !tool.enabled }">
                     <!-- Tool header -->
                     <div class="flex items-start gap-3 px-4 py-3 bg-slate-50 dark:bg-slate-800 cursor-pointer" @click="tool.expanded = !tool.expanded">
-                      <!-- Enable toggle (interactive only for non-static servers) -->
+                      <!-- Enable toggle (interactive only for non-static servers).
+                           Uses a <button> rather than a label+sr-only checkbox:
+                           focusing a hidden position:absolute checkbox makes
+                           browsers scroll-into-view and jump the dialog. -->
                       <template x-if="!toolsServer?.static_server">
-                        <label class="flex items-center mt-0.5 cursor-pointer shrink-0" @click.stop :aria-label="'Enable or disable ' + tool.name + ' tool'">
-                          <input type="checkbox" :checked="tool.enabled" @change="toggleTool(tool)" class="sr-only peer" />
-                          <div class="relative w-9 h-5 bg-slate-200 dark:bg-slate-600 rounded-full peer peer-checked:bg-blue-500 after:content-[''] after:absolute after:top-0.5 after:start-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-4"></div>
-                        </label>
-                      </template>
-                      <!-- Enable indicator (read-only for static servers) -->
-                      <template x-if="toolsServer?.static_server">
-                        <div class="flex items-center mt-0.5 shrink-0">
-                          <div class="relative w-9 h-5 rounded-full" :class="tool.enabled ? 'bg-blue-500' : 'bg-slate-300 dark:bg-slate-600'">
-                            <div class="absolute top-0.5 w-4 h-4 bg-white rounded-full" :class="tool.enabled ? 'left-4' : 'left-0.5'"></div>
-                          </div>
-                        </div>
+                        <button type="button" @click.stop="toggleTool(tool)" :disabled="togglingTool === tool.name" :aria-pressed="tool.enabled" :aria-busy="togglingTool === tool.name" :aria-label="'Enable or disable ' + tool.name + ' tool'"
+                          class="relative flex items-center mt-0.5 shrink-0 w-9 h-5 rounded-full cursor-pointer transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed"
+                          :class="tool.enabled ? 'bg-blue-500' : 'bg-slate-200 dark:bg-slate-600'">
+                          <span x-show="togglingTool !== tool.name" class="absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform duration-200"
+                            :class="tool.enabled ? 'translate-x-4' : 'translate-x-0'"></span>
+                          <svg x-show="togglingTool === tool.name" x-cloak class="animate-spin absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-4 h-4" :class="tool.enabled ? 'text-white' : 'text-slate-600 dark:text-slate-300'" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                        </button>
                       </template>
                       <!-- Name + description -->
                       <div class="flex-1 min-w-0">
@@ -662,7 +663,7 @@
             </div>
 
             <!-- Body -->
-            <div class="flex-1 overflow-y-auto p-6 space-y-6">
+            <div class="flex-1 min-h-0 overflow-y-auto p-6 space-y-6">
               <!-- Parameters -->
               <div>
                 <div class="flex items-center justify-between mb-3">
@@ -817,7 +818,7 @@
               </button>
             </div>
 
-            <div class="flex-1 overflow-y-auto p-6">
+            <div class="flex-1 min-h-0 overflow-y-auto p-6">
               <!-- Loading state -->
               <div x-show="loadingResources" class="flex items-center justify-center py-8">
                 <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
@@ -889,7 +890,7 @@
               </button>
             </div>
 
-            <div class="flex-1 overflow-y-auto p-6">
+            <div class="flex-1 min-h-0 overflow-y-auto p-6">
               <!-- Loading state -->
               <div x-show="loadingPrompts" class="flex items-center justify-center py-8">
                 <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>

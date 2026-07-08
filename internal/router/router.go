@@ -3,6 +3,7 @@ package router
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/rand"
 	"net/http"
@@ -753,32 +754,153 @@ func (r *Router) streamChatCompletion(ctx context.Context, providerName string, 
 }
 
 func (r *Router) writeStream(w http.ResponseWriter, stream *openai.ChatStream, model, providerName string) {
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		// Drain the stream so the upstream goroutine can finish cleanly.
+		for stream.Next() {
+		}
+		if err := stream.Err(); err != nil {
+			r.logger.WithError(err).Error("streaming error (non-flushable writer)", "model", model, "provider", providerName)
+		}
+		return
+	}
+
+	// Peek at the first chunk before committing HTTP 200. If the upstream
+	// errors before sending any data we can still return a proper HTTP error
+	// status with a JSON body that clients can parse — instead of a
+	// header-already-committed SSE stream that ends with bare [DONE].
+	hasFirst := stream.Next()
+	if !hasFirst {
+		if err := stream.Err(); err != nil {
+			r.logger.WithError(err).Error("streaming error", "model", model, "provider", providerName)
+			if r.isConnectionError(err) {
+				r.DisableProvider(providerName, fmt.Sprintf("connection error: %v", err))
+			}
+			writeUpstreamStreamError(w, err)
+			return
+		}
+		// No error and no data — degenerate empty stream.
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.Header().Set("Cache-Control", "no-cache")
+		w.Header().Set("Connection", "keep-alive")
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, "data: [DONE]\n\n")
+		flusher.Flush()
+		return
+	}
+
+	// First chunk arrived — the stream is viable. Commit the SSE headers.
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
 	w.WriteHeader(http.StatusOK)
 
-	flusher, ok := w.(http.Flusher)
-	if !ok {
-		return
-	}
+	// Write the peeked first chunk.
+	writeStreamChunk(w, flusher, stream.Current())
 
+	// Continue streaming the rest.
 	for stream.Next() {
-		data, err := json.Marshal(stream.Current())
-		if err != nil {
-			continue
-		}
-		fmt.Fprintf(w, "data: %s\n\n", data)
-		flusher.Flush()
+		writeStreamChunk(w, flusher, stream.Current())
 	}
 
+	// If the stream errored mid-way (after headers are committed), send an
+	// error SSE event so the client knows something went wrong.
 	if err := stream.Err(); err != nil {
 		r.logger.WithError(err).Error("streaming error", "model", model, "provider", providerName)
+		if r.isConnectionError(err) {
+			r.DisableProvider(providerName, fmt.Sprintf("connection error: %v", err))
+		}
+		errData, _ := json.Marshal(map[string]any{
+			"error": upstreamErrorPayload(err),
+		})
+		fmt.Fprintf(w, "data: %s\n\n", errData)
+		flusher.Flush()
 	}
 
 	fmt.Fprint(w, "data: [DONE]\n\n")
 	flusher.Flush()
 	r.logger.Debug("streaming response completed", "model", model, "provider", providerName)
+}
+
+// writeStreamChunk marshals and writes a single SSE data line.
+func writeStreamChunk(w http.ResponseWriter, flusher http.Flusher, resp openai.ChatCompletionResponse) {
+	data, err := json.Marshal(resp)
+	if err != nil {
+		return
+	}
+	fmt.Fprintf(w, "data: %s\n\n", data)
+	flusher.Flush()
+}
+
+// upstreamErrorPayload extracts a structured error payload from an upstream
+// error, preserving the original error type/code/message when available.
+func upstreamErrorPayload(err error) map[string]any {
+	payload := map[string]any{
+		"message": err.Error(),
+		"type":    "upstream_error",
+	}
+	var apiErr *openai.APIError
+	if errors.As(err, &apiErr) {
+		if apiErr.Type != "" {
+			payload["type"] = apiErr.Type
+		}
+		if apiErr.Code != "" {
+			payload["code"] = apiErr.Code
+		}
+		if apiErr.Param != "" {
+			payload["param"] = apiErr.Param
+		}
+		if apiErr.Message != "" {
+			payload["message"] = apiErr.Message
+		}
+	}
+	return payload
+}
+
+// upstreamErrorStatusCode extracts the HTTP status code from an upstream error,
+// falling back to 502 Bad Gateway.
+func upstreamErrorStatusCode(err error) int {
+	var apiErr *openai.APIError
+	if errors.As(err, &apiErr) && apiErr.StatusCode > 0 {
+		return apiErr.StatusCode
+	}
+	return http.StatusBadGateway
+}
+
+// writeUpstreamStreamError writes a JSON error response for a streaming request
+// that failed before any data was sent. Used when headers haven't been
+// committed yet.
+func writeUpstreamStreamError(w http.ResponseWriter, err error) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(upstreamErrorStatusCode(err))
+	json.NewEncoder(w).Encode(map[string]any{
+		"error": upstreamErrorPayload(err),
+	})
+}
+
+// writeTrackingResponseWriter wraps an http.ResponseWriter and tracks whether
+// any data has been written (via Write or WriteHeader). This lets callers
+// detect whether the response is still uncommitted and a proper HTTP error
+// can be returned instead of a truncated SSE stream.
+type writeTrackingResponseWriter struct {
+	http.ResponseWriter
+	wrote bool
+}
+
+func (wt *writeTrackingResponseWriter) Write(b []byte) (int, error) {
+	wt.wrote = true
+	return wt.ResponseWriter.Write(b)
+}
+
+func (wt *writeTrackingResponseWriter) WriteHeader(code int) {
+	wt.wrote = true
+	wt.ResponseWriter.WriteHeader(code)
+}
+
+func (wt *writeTrackingResponseWriter) Flush() {
+	if f, ok := wt.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
 }
 
 func (r *Router) traceRequestPayload(label string, req *ChatCompletionRequest) {
@@ -1005,13 +1127,22 @@ func (r *Router) HandleMessages(w http.ResponseWriter, req *http.Request) {
 		w.Header().Set("Connection", "keep-alive")
 		stream := r.streamChatCompletion(ctx, providerName, &openaiReq)
 		defer r.decrementActiveCompletions(providerName)
+
+		// Track whether the response writer has had data written to it.
+		// If the stream fails before any data is sent, we can still return
+		// a proper HTTP error response (headers haven't been committed yet).
+		wt := &writeTrackingResponseWriter{ResponseWriter: w}
 		flush := func() {
-			if f, ok := w.(http.Flusher); ok {
-				f.Flush()
-			}
+			wt.Flush()
 		}
-		if err := claude.StreamOpenAIToMessages(w, flush, stream, openaiReq.Model); err != nil {
+		if err := claude.StreamOpenAIToMessages(wt, flush, stream, openaiReq.Model); err != nil {
 			r.logger.WithError(err).Error("messages stream error")
+			if r.isConnectionError(err) {
+				r.DisableProvider(providerName, fmt.Sprintf("connection error: %v", err))
+			}
+			if !wt.wrote {
+				writeUpstreamStreamError(w, err)
+			}
 		}
 		return
 	}

@@ -710,6 +710,7 @@
                   @blur="setTimeout(() => setupPersonaOpen = false, 150)"
                   :placeholder="personas.find(p => p.id === setupPersonaId)?.name || 'Search personas...'"
                   class="input-field"
+                  :class="setupPersonaId ? 'placeholder:text-slate-900 dark:placeholder:text-slate-100 font-medium' : ''"
                 />
                 <!-- Dropdown -->
                 <div
@@ -761,6 +762,7 @@
                   @blur="setTimeout(() => setupModelOpen = false, 150)"
                   :placeholder="setupModel || 'Search models...'"
                   class="input-field"
+                  :class="setupModel ? 'placeholder:text-slate-900 dark:placeholder:text-slate-100 font-medium' : ''"
                 />
                 <div
                   x-show="setupModelOpen && setupModelMatches.length > 0"
@@ -1560,6 +1562,7 @@
                   @blur="setTimeout(() => editPersonaOpen = false, 150)"
                   :placeholder="personas.find(p => p.id === editPersonaId)?.name || 'Search personas...'"
                   class="input-field"
+                  :class="editPersonaId ? 'placeholder:text-slate-900 dark:placeholder:text-slate-100 font-medium' : ''"
                 />
                 <div
                   x-show="editPersonaOpen && editPersonaMatches.length > 0"
@@ -1597,6 +1600,7 @@
                   @blur="setTimeout(() => editModelOpen = false, 150)"
                   :placeholder="editModel || 'Search models...'"
                   class="input-field"
+                  :class="editModel ? 'placeholder:text-slate-900 dark:placeholder:text-slate-100 font-medium' : ''"
                 />
                 <div
                   x-show="editModelOpen && editModelMatches.length > 0"
