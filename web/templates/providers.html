@@ -380,7 +380,10 @@
       <div
         x-show="showModal"
         x-cloak
+        x-trap="showModal"
         class="fixed inset-0 z-50 flex items-center justify-center p-4"
+        role="dialog"
+        aria-modal="true"
       >
         <div
           class="absolute inset-0 bg-black/50"
@@ -546,9 +549,12 @@
       <div
         x-show="showDeleteModal"
         x-cloak
+        x-trap="showDeleteModal"
         @keydown.window.escape="if (showDeleteModal) showDeleteModal = false"
         @keydown.window.enter="if (showDeleteModal) { $event.preventDefault(); doDelete() }"
         class="fixed inset-0 z-50 flex items-center justify-center p-4"
+        role="dialog"
+        aria-modal="true"
       >
         <div
           class="absolute inset-0 bg-black/50"

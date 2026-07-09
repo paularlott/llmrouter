@@ -794,6 +794,104 @@ Alpine.data("models", () => ({
   },
 }));
 
+// x-trap: confine keyboard focus (Tab / Shift+Tab) to the element while the
+// bound expression is truthy. Used on modal dialogs so keyboard and screen
+// reader users can't Tab out into the page behind. On engage, focus moves
+// into the dialog (first focusable descendant, else the container itself);
+// on release it returns to the element that had focus before the dialog
+// opened (typically the button that triggered it). Stacked modals — e.g. the
+// tool-call modal opened over the tools modal — are supported via an internal
+// stack: only the topmost trap intercepts Tab.
+//
+//   <div x-show="showModal" x-trap="showModal" role="dialog" aria-modal="true">
+//
+// NOTE: if @alpinejs/focus is ever added, it ships a same-named directive;
+// drop this one in favour of the plugin.
+const trapStack = [];
+
+Alpine.directive(
+  "trap",
+  (el, { expression }, { effect, cleanup, evaluate }) => {
+    const FOCUSABLE = [
+      "a[href]",
+      "button:not([disabled])",
+      "textarea:not([disabled])",
+      "input:not([disabled])",
+      "select:not([disabled])",
+      '[tabindex]:not([tabindex="-1"])',
+    ].join(",");
+
+    const focusables = () =>
+      Array.from(el.querySelectorAll(FOCUSABLE)).filter((node) => {
+        if (node.disabled || node.getAttribute("aria-hidden") === "true")
+          return false;
+        const { width, height } = node.getBoundingClientRect();
+        return width > 0 && height > 0;
+      });
+
+    let lastFocused = null;
+    let onKeyDown = null;
+
+    const engage = () => {
+      lastFocused = document.activeElement;
+      trapStack.push(el);
+      // Make the container itself focusable as a fallback target.
+      el.setAttribute("tabindex", "-1");
+      // Defer one frame so x-show has applied its display change before we
+      // measure focusables and move focus.
+      requestAnimationFrame(() => {
+        // A deeper modal may have opened in the same frame; only focus in if
+        // we're still on top.
+        if (trapStack[trapStack.length - 1] !== el) return;
+        const items = focusables();
+        (items[0] || el).focus({ preventScroll: true });
+      });
+      onKeyDown = (e) => {
+        // Yield to any trap opened above this one.
+        if (trapStack[trapStack.length - 1] !== el) return;
+        if (e.key !== "Tab") return;
+        const items = focusables();
+        if (items.length === 0) {
+          e.preventDefault();
+          el.focus({ preventScroll: true });
+          return;
+        }
+        const first = items[0];
+        const last = items[items.length - 1];
+        const active = document.activeElement;
+        if (e.shiftKey && (active === first || !el.contains(active))) {
+          e.preventDefault();
+          last.focus({ preventScroll: true });
+        } else if (!e.shiftKey && (active === last || !el.contains(active))) {
+          e.preventDefault();
+          first.focus({ preventScroll: true });
+        }
+      };
+      el.addEventListener("keydown", onKeyDown, true);
+    };
+
+    const release = () => {
+      if (onKeyDown) {
+        el.removeEventListener("keydown", onKeyDown, true);
+        onKeyDown = null;
+      }
+      const idx = trapStack.indexOf(el);
+      if (idx !== -1) trapStack.splice(idx, 1);
+      if (lastFocused && typeof lastFocused.focus === "function") {
+        lastFocused.focus({ preventScroll: true });
+      }
+      lastFocused = null;
+    };
+
+    effect(() => {
+      if (evaluate(expression)) engage();
+      else release();
+    });
+
+    cleanup(release);
+  },
+);
+
 // Make Alpine available globally
 window.Alpine = Alpine;
 

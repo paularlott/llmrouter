@@ -259,11 +259,16 @@
       </main>
 
       <!-- Add/Edit Modal -->
-      <div x-show="showAddModal" x-cloak class="fixed inset-0 z-50 overflow-y-auto" @keydown.escape.window="showAddModal = false; resetForm()" role="dialog" aria-modal="true" aria-labelledby="add-edit-modal-title">
+      <div x-show="showAddModal" x-cloak x-trap="showAddModal" class="fixed inset-0 z-50 overflow-y-auto" @keydown.escape.window="showAddModal = false; resetForm()" role="dialog" aria-modal="true" aria-labelledby="add-edit-modal-title">
         <div class="flex items-center justify-center min-h-screen px-4">
           <div class="fixed inset-0 bg-black/50 backdrop-blur-sm transition-opacity" @click="showAddModal = false; resetForm()"></div>
           <div class="modal max-w-lg p-6">
-            <h2 id="add-edit-modal-title" class="text-xl font-bold text-slate-900 dark:text-white mb-6" x-text="editingServer ? 'Edit Server' : 'Add MCP Server'"></h2>
+            <div class="flex items-center justify-between mb-6">
+              <h2 id="add-edit-modal-title" class="text-xl font-bold text-slate-900 dark:text-white" x-text="editingServer ? 'Edit Server' : 'Add MCP Server'"></h2>
+              <button @click="showAddModal = false; resetForm()" class="icon-btn icon-btn-close" aria-label="Close modal">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+              </button>
+            </div>
 
             <form @submit.prevent="saveServer" class="space-y-4">
               <div>
@@ -442,7 +447,7 @@
       </div>
 
       <!-- Delete Confirmation Modal -->
-      <div x-show="showDeleteModal" x-cloak @keydown.window.escape="if (showDeleteModal) showDeleteModal = false" @keydown.window.enter="if (showDeleteModal && !deleting) { $event.preventDefault(); deleteServer() }" class="fixed inset-0 z-50 overflow-y-auto" role="dialog" aria-modal="true" aria-labelledby="delete-modal-title">
+      <div x-show="showDeleteModal" x-cloak x-trap="showDeleteModal" @keydown.window.escape="if (showDeleteModal) showDeleteModal = false" @keydown.window.enter="if (showDeleteModal && !deleting) { $event.preventDefault(); deleteServer() }" class="fixed inset-0 z-50 overflow-y-auto" role="dialog" aria-modal="true" aria-labelledby="delete-modal-title">
         <div class="flex items-center justify-center min-h-screen px-4">
           <div class="fixed inset-0 bg-black/50 backdrop-blur-sm transition-opacity" @click="showDeleteModal = false"></div>
           <div class="modal max-w-md p-6">
@@ -475,7 +480,7 @@
       </div>
 
       <!-- Tools Modal -->
-      <div x-show="showToolsModal" x-cloak class="fixed inset-0 z-50 overflow-y-auto" @keydown.escape.window="showToolsModal = false" role="dialog" aria-modal="true" aria-labelledby="tools-modal-title">
+      <div x-show="showToolsModal" x-cloak x-trap="showToolsModal" class="fixed inset-0 z-50 overflow-y-auto" @keydown.escape.window="showToolsModal = false" role="dialog" aria-modal="true" aria-labelledby="tools-modal-title">
         <div class="flex items-center justify-center min-h-screen px-4">
           <div class="fixed inset-0 bg-black/50 backdrop-blur-sm transition-opacity" @click="showToolsModal = false"></div>
           <div class="modal max-w-2xl max-h-[80vh] flex flex-col">
@@ -646,7 +651,7 @@
       </div>
 
       <!-- Tool Call Modal -->
-      <div x-show="showToolCallModal" x-cloak class="fixed inset-0 z-[60] overflow-y-auto" @keydown.escape.window="closeToolCall()" role="dialog" aria-modal="true" aria-labelledby="tool-call-modal-title">
+      <div x-show="showToolCallModal" x-cloak x-trap="showToolCallModal" class="fixed inset-0 z-[60] overflow-y-auto" @keydown.escape.window="closeToolCall()" role="dialog" aria-modal="true" aria-labelledby="tool-call-modal-title">
         <div class="flex items-center justify-center min-h-screen px-4">
           <div class="fixed inset-0 bg-black/50 backdrop-blur-sm transition-opacity" @click="closeToolCall()"></div>
           <div class="modal max-w-3xl max-h-[85vh] flex flex-col">
@@ -801,7 +806,7 @@
       </div>
 
       <!-- Resources Modal -->
-      <div x-show="showResourcesModal" x-cloak class="fixed inset-0 z-50 overflow-y-auto" @keydown.escape.window="showResourcesModal = false" role="dialog" aria-modal="true" aria-labelledby="resources-modal-title">
+      <div x-show="showResourcesModal" x-cloak x-trap="showResourcesModal" class="fixed inset-0 z-50 overflow-y-auto" @keydown.escape.window="showResourcesModal = false" role="dialog" aria-modal="true" aria-labelledby="resources-modal-title">
         <div class="flex items-center justify-center min-h-screen px-4">
           <div class="fixed inset-0 bg-black/50 backdrop-blur-sm transition-opacity" @click="showResourcesModal = false"></div>
           <div class="modal max-w-2xl max-h-[80vh] flex flex-col">
@@ -873,7 +878,7 @@
       </div>
 
       <!-- Prompts Modal -->
-      <div x-show="showPromptsModal" x-cloak class="fixed inset-0 z-50 overflow-y-auto" @keydown.escape.window="showPromptsModal = false" role="dialog" aria-modal="true" aria-labelledby="prompts-modal-title">
+      <div x-show="showPromptsModal" x-cloak x-trap="showPromptsModal" class="fixed inset-0 z-50 overflow-y-auto" @keydown.escape.window="showPromptsModal = false" role="dialog" aria-modal="true" aria-labelledby="prompts-modal-title">
         <div class="flex items-center justify-center min-h-screen px-4">
           <div class="fixed inset-0 bg-black/50 backdrop-blur-sm transition-opacity" @click="showPromptsModal = false"></div>
           <div class="modal max-w-2xl max-h-[80vh] flex flex-col">
