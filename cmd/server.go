@@ -99,6 +99,11 @@ var ServerCmd = &cli.Command{
 			Usage:      "Additional directories to search for scriptling libraries (can be repeated)",
 			ConfigPath: []string{"scripting.lib_paths"},
 		},
+		&cli.BoolFlag{
+			Name:       "mcp-exec-script",
+			Usage:      "Enable the built-in execute_script MCP tool (runs Scriptling code passed by the caller)",
+			ConfigPath: []string{"scripting.exec_script"},
+		},
 		&cli.StringFlag{
 			Name:         "personas-dir",
 			Usage:        "Directory of chat persona .toml files (system_prompt, default_model, [params] table)",

@@ -8,7 +8,7 @@ require (
 	github.com/paularlott/cli v0.8.5
 	github.com/paularlott/lmchatkit v0.5.0
 	github.com/paularlott/logger v0.3.0
-	github.com/paularlott/mcp v0.21.2
+	github.com/paularlott/mcp v0.22.0
 	github.com/paularlott/scriptling v0.16.1
 	github.com/paularlott/snapshotkv v0.4.0
 )
@@ -33,10 +33,10 @@ require (
 	github.com/vmihailenco/tagparser/v2 v2.0.0 // indirect
 	github.com/yuin/goldmark v1.8.2 // indirect
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
-	golang.org/x/net v0.56.0 // indirect
+	golang.org/x/net v0.57.0 // indirect
 	golang.org/x/oauth2 v0.36.0 // indirect
-	golang.org/x/sys v0.46.0 // indirect
-	golang.org/x/term v0.44.0 // indirect
-	golang.org/x/text v0.39.0 // indirect
+	golang.org/x/sys v0.47.0 // indirect
+	golang.org/x/term v0.45.0 // indirect
+	golang.org/x/text v0.40.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

@@ -548,12 +548,15 @@ func NewMCPServerWithScriptling(config *types.Config, logger Logger) (*MCPServer
 	}
 
 	// Set up scriptling-served MCP content if any source folder is configured.
-	if config.Scripting.ToolsDir != "" || config.Scripting.ResourcesDir != "" || config.Scripting.PromptsDir != "" {
+	if config.Scripting.ToolsDir != "" || config.Scripting.ResourcesDir != "" || config.Scripting.PromptsDir != "" || config.Scripting.ExecScript {
 		manager, err := NewScriptlingToolManager(config.Scripting, mcpServer.server, logger)
 		if err != nil {
 			logger.Warn("Failed to setup scriptling tools", "error", err)
 		} else {
 			mcpServer.scriptlingManager = manager
+			if config.Scripting.ExecScript {
+				logger.Info("Scriptling execute_script tool enabled")
+			}
 			logger.Info("Scriptling MCP content enabled",
 				"tools_dir", config.Scripting.ToolsDir,
 				"resources_dir", config.Scripting.ResourcesDir,

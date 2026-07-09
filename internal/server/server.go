@@ -49,6 +49,7 @@ func RunServer(ctx context.Context, cmd *cli.Command) error {
 			PromptsDir:   cmd.GetString("prompts-dir"),
 			PluginDirs:   cmd.GetStringSlice("plugin-dir"),
 			LibPaths:     cmd.GetStringSlice("libpath"),
+			ExecScript:   cmd.GetBool("mcp-exec-script"),
 		},
 		Chat: types.ChatConfig{
 			PersonasDir: cmd.GetString("personas-dir"),
@@ -122,6 +123,7 @@ func RunServer(ctx context.Context, cmd *cli.Command) error {
 			config.Scripting.PromptsDir = scriptingCfg.GetString("prompts_dir")
 			config.Scripting.PluginDirs = scriptingCfg.GetStringSlice("plugin_dirs")
 			config.Scripting.LibPaths = scriptingCfg.GetStringSlice("lib_paths")
+			config.Scripting.ExecScript = scriptingCfg.GetBool("exec_script")
 		}
 		if chatCfg := typedConfig.GetObject("chat"); chatCfg != nil {
 			config.Chat.PersonasDir = chatCfg.GetString("personas_dir")

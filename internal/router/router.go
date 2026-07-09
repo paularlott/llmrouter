@@ -146,16 +146,16 @@ func NewRouter(config *types.Config, logger Logger) (*Router, error) {
 		router.mux.HandleFunc("GET /v1/responses", auth(router.HandleListResponses))
 		router.mux.HandleFunc("POST /v1/responses/{id}/cancel", auth(router.HandleCancelResponse))
 		router.mux.HandleFunc("POST /v1/responses/{id}/compact", auth(router.HandleCompactResponses))
-		router.mux.HandleFunc("GET /v1/responses/{id}/input-items", auth(router.HandleUnsupported))
-		router.mux.HandleFunc("GET /v1/responses/{id}/input-tokens", auth(router.HandleUnsupported))
+		router.mux.HandleFunc("GET /v1/responses/{id}/input_items", auth(router.HandleListResponseInputItems))
+		router.mux.HandleFunc("POST /v1/responses/input_tokens", auth(router.HandleCountInputTokens))
 		router.mux.HandleFunc("POST /ollama/v1/responses", auth(router.HandleCreateResponse))
 		router.mux.HandleFunc("GET /ollama/v1/responses/{id}", auth(router.HandleGetResponse))
 		router.mux.HandleFunc("DELETE /ollama/v1/responses/{id}", auth(router.HandleDeleteResponse))
 		router.mux.HandleFunc("GET /ollama/v1/responses", auth(router.HandleListResponses))
 		router.mux.HandleFunc("POST /ollama/v1/responses/{id}/cancel", auth(router.HandleCancelResponse))
 		router.mux.HandleFunc("POST /ollama/v1/responses/{id}/compact", auth(router.HandleCompactResponses))
-		router.mux.HandleFunc("GET /ollama/v1/responses/{id}/input-items", auth(router.HandleUnsupported))
-		router.mux.HandleFunc("GET /ollama/v1/responses/{id}/input-tokens", auth(router.HandleUnsupported))
+		router.mux.HandleFunc("GET /ollama/v1/responses/{id}/input_items", auth(router.HandleListResponseInputItems))
+		router.mux.HandleFunc("POST /ollama/v1/responses/input_tokens", auth(router.HandleCountInputTokens))
 		logger.Info("responses endpoints available")
 	}
 
@@ -609,13 +609,7 @@ func (r *Router) GetProviderForModel(model string, hint string) (string, error) 
 
 	selectedProvider := tiedProviders[0]
 	if len(tiedProviders) > 1 {
-		// Among equally-scored, equally-weighted providers, prefer one that
-		// already has the requested model loaded (warm-cache affinity).
-		if warm := localityWinner(tiedProviders, model, r.Providers); warm != "" {
-			selectedProvider = warm
-		} else {
-			selectedProvider = tiedProviders[rand.Intn(len(tiedProviders))]
-		}
+		selectedProvider = selectFromTies(tiedProviders, model, r.Providers)
 	}
 	r.logger.Debug("selected provider", "model", model, "provider", selectedProvider, "best_score", bestScore, "best_weight", bestWeight, "tied", tiedProviders)
 
@@ -995,34 +989,64 @@ func (r *Router) decrementActiveCompletions(providerName string) {
 	}
 }
 
-// recordModelUse notes that providerName just served model, so future
-// same-weight ties can prefer the server that already has it loaded.
+// recordModelUse notes that providerName just served model, recording the model
+// and time so future selection tiebreaks can prefer a provider that already has
+// the model loaded and otherwise the one idle longest.
 func (r *Router) recordModelUse(providerName, model string) {
 	if provider, exists := r.Providers[providerName]; exists {
-		provider.Locality.Store(&modelLocality{model: model, at: time.Now().UnixNano()})
+		provider.LastServed.Store(&lastServed{model: model, at: time.Now().UnixNano()})
 	}
 }
 
-// localityWinner returns the candidate that most recently served model (and so
-// likely still has it loaded), or "" if none of the candidates has it warm.
-func localityWinner(candidates []string, model string, providers map[string]*Provider) string {
-	var best string
-	var bestAt int64
+// selectFromTies picks one provider from a set of equally-scored, equally-
+// weighted candidates. Tiebreak order:
+//  1. Prefer candidates whose last-served model is the requested model, so a
+//     provider currently serving a different model isn't forced to reload it.
+//     If at least one candidate matches, only matches are considered.
+//  2. Among the considered set, pick the one idle longest since its last
+//     request (LRU): it is the most likely to be free, which makes sequential
+//     traffic round-robin across warm providers instead of piling on one. A
+//     never-used provider (timestamp 0) is idle-longest, so fresh providers are
+//     warmed first.
+//  3. Random as a final tiebreak (e.g. several never-used providers together).
+func selectFromTies(candidates []string, model string, providers map[string]*Provider) string {
+	// (1) restrict to model-matched candidates when any match.
+	pool := candidates
+	var matched []string
 	for _, name := range candidates {
-		p, ok := providers[name]
-		if !ok {
-			continue
-		}
-		loc := p.Locality.Load()
-		if loc == nil || loc.model != model {
-			continue
-		}
-		if best == "" || loc.at > bestAt {
-			best = name
-			bestAt = loc.at
+		if p, ok := providers[name]; ok && p.lastServedModel() == model {
+			matched = append(matched, name)
 		}
 	}
-	return best
+	if len(matched) > 0 {
+		pool = matched
+	}
+	if len(pool) == 1 {
+		return pool[0]
+	}
+
+	// (2) longest idle = smallest last-activity timestamp. Snapshot each value
+	// once so a concurrent recordModelUse can't change a timestamp between the
+	// min and collect passes (which could otherwise leave the collect empty).
+	at := make(map[string]int64, len(pool))
+	bestAt := int64(1 << 62)
+	for _, name := range pool {
+		t := providers[name].lastActivityAt()
+		at[name] = t
+		if t < bestAt {
+			bestAt = t
+		}
+	}
+	var tied []string
+	for _, name := range pool {
+		if at[name] == bestAt {
+			tied = append(tied, name)
+		}
+	}
+	if len(tied) == 1 {
+		return tied[0]
+	}
+	return tied[rand.Intn(len(tied))]
 }
 
 // HTTP Handlers
@@ -1735,7 +1759,7 @@ func (r *Router) HandleCreateResponse(w http.ResponseWriter, req *http.Request) 
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
+	w.WriteHeader(openai.CreateStatusCode)
 	if err := writeJSON(w, resp); err != nil {
 		r.logger.WithError(err).Error("failed to write response")
 	}
@@ -1796,7 +1820,12 @@ func (r *Router) HandleDeleteResponse(w http.ResponseWriter, req *http.Request) 
 		return
 	}
 
-	w.WriteHeader(http.StatusNoContent)
+	// OpenAI's Responses API returns 200 with {id, object, deleted:true}.
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(openai.DeleteStatusCode)
+	if err := writeJSON(w, openai.NewResponseDeleted(id)); err != nil {
+		r.logger.WithError(err).Error("failed to write delete response")
+	}
 }
 
 func (r *Router) HandleListResponses(w http.ResponseWriter, req *http.Request) {
@@ -1873,6 +1902,77 @@ func (r *Router) HandleCompactResponses(w http.ResponseWriter, req *http.Request
 	w.Header().Set("Content-Type", "application/json")
 	if err := writeJSON(w, resp); err != nil {
 		r.logger.WithError(err).Error("failed to write response")
+	}
+}
+
+// HandleListResponseInputItems returns the input items used to create a response.
+// GET /v1/responses/{id}/input_items
+func (r *Router) HandleListResponseInputItems(w http.ResponseWriter, req *http.Request) {
+	if r.responsesService == nil {
+		http.Error(w, "Responses service not available", http.StatusServiceUnavailable)
+		return
+	}
+
+	id := req.PathValue("id")
+	if id == "" {
+		http.Error(w, "Response ID required", http.StatusBadRequest)
+		return
+	}
+
+	items, err := r.responsesService.GetInputItems(req.Context(), id)
+	if err != nil {
+		if err.Error() == "response not found" {
+			http.Error(w, "Response not found", http.StatusNotFound)
+		} else {
+			r.logger.WithError(err).Error("failed to get input items")
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+		}
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := writeJSON(w, openai.ResponseInputItemsResponse{Object: "list", Data: items}); err != nil {
+		r.logger.WithError(err).Error("failed to write input items")
+	}
+}
+
+// HandleCountInputTokens returns an estimated input-token count for a request
+// without creating a response. POST /v1/responses/input_tokens
+// The estimate uses a character-based heuristic (~4 chars/token), matching the
+// approximation used elsewhere for providers that don't report exact usage.
+// `input` is accepted as a string or an array of items (per the spec).
+func (r *Router) HandleCountInputTokens(w http.ResponseWriter, req *http.Request) {
+	var body struct {
+		Model        string          `json:"model"`
+		Input        json.RawMessage `json:"input"`
+		Instructions string          `json:"instructions"`
+	}
+	if err := readJSON(req, &body); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// Normalise input: string → single user message; array → as-is.
+	var input []any
+	if len(body.Input) > 0 && string(body.Input) != "null" {
+		if err := json.Unmarshal(body.Input, &input); err != nil {
+			var s string
+			if json.Unmarshal(body.Input, &s) == nil {
+				input = []any{map[string]any{"type": "message", "role": "user", "content": s}}
+			}
+		}
+	}
+
+	tc := openai.NewTokenCounter()
+	if body.Instructions != "" {
+		tc.AddPromptTokensFromText(body.Instructions)
+	}
+	tc.AddPromptTokensFromMessages(openai.ConvertInputToMessages(input))
+	usage := tc.GetUsage()
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := writeJSON(w, openai.NewResponseInputTokensCount(usage.PromptTokens)); err != nil {
+		r.logger.WithError(err).Error("failed to write input tokens")
 	}
 }
 

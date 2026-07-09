@@ -530,7 +530,7 @@ func TestCreateChatCompletion_ParallelLoadBalancing(t *testing.T) {
 		pName := name
 		r.Providers[name] = &Provider{
 			Name: name, ProviderType: "openai",
-			Client: &countingClient{name: pName, counter: c},
+			Client:  &countingClient{name: pName, counter: c, latency: 2 * time.Millisecond},
 			Enabled: true, Weight: 1.0,
 		}
 		r.Providers[name].Healthy.Store(true)
@@ -562,14 +562,239 @@ func TestCreateChatCompletion_ParallelLoadBalancing(t *testing.T) {
 	}
 }
 
+// TestLoadBalancing_SequentialPinsToWarmProvider: under low-concurrency
+// (sequential) traffic to a single model, requests pin to the first provider
+// that warms the model (model-match tiebreak), rather than spreading. Load
+// expands to other providers only when the warm one is busy — see the burst test.
+func TestLoadBalancing_SequentialPinsToWarmProvider(t *testing.T) {
+	r := &Router{
+		Providers: make(map[string]*Provider),
+		ModelMap:  make(map[string][]string),
+		ModelTags: make(map[string][]string),
+		logger:    &testLogger{},
+	}
+	counts := make(map[string]*atomic.Int64)
+	for _, name := range []string{"p1", "p2", "p3"} {
+		c := &atomic.Int64{}
+		counts[name] = c
+		pName := name
+		r.Providers[name] = &Provider{
+			Name: name, ProviderType: "openai",
+			Client:  &countingClient{name: pName, counter: c},
+			Enabled: true, Weight: 1.0,
+		}
+		r.Providers[name].Healthy.Store(true)
+		r.ModelMap["m1"] = append(r.ModelMap["m1"], name)
+	}
+
+	const n = 30
+	for i := 0; i < n; i++ {
+		r.CreateChatCompletion(context.Background(), &ChatCompletionRequest{Model: "m1"}) //nolint
+	}
+
+	// Exactly one provider handled all traffic (the one that warmed m1 first);
+	// the other two stayed idle — pinning, not spreading, for sequential traffic.
+	var used []string
+	for _, name := range []string{"p1", "p2", "p3"} {
+		if counts[name].Load() > 0 {
+			used = append(used, name)
+		}
+	}
+	if len(used) != 1 {
+		t.Errorf("expected exactly one provider to handle sequential traffic (pinning), got %v (%v)", used, counts)
+	}
+}
+
+// --- selectFromTies unit tests (deterministic; set LastServed state directly) ---
+
+func providersWithLastServed(entries map[string]*lastServed) map[string]*Provider {
+	m := make(map[string]*Provider, len(entries))
+	for name, ls := range entries {
+		p := &Provider{Name: name, Enabled: true, Weight: 1.0}
+		p.Healthy.Store(true)
+		if ls != nil {
+			p.LastServed.Store(ls)
+		}
+		m[name] = p
+	}
+	return m
+}
+
+// LRU round-robins among multiple warm providers: pick the one idle longest,
+// so sequential traffic alternates instead of piling on one.
+func TestSelectFromTies_LRURoundRobinsWarmProviders(t *testing.T) {
+	providers := providersWithLastServed(map[string]*lastServed{
+		"a": {model: "m1", at: 100},
+		"b": {model: "m1", at: 200},
+	})
+
+	// Both warm for m1; a is idle longer (at=100) → a wins.
+	if got := selectFromTies([]string{"a", "b"}, "m1", providers); got != "a" {
+		t.Fatalf("first pick = %q, want a (idle longest)", got)
+	}
+	// a just served → now newest; b becomes idle-longest → b wins next.
+	providers["a"].LastServed.Store(&lastServed{model: "m1", at: 300})
+	if got := selectFromTies([]string{"a", "b"}, "m1", providers); got != "b" {
+		t.Fatalf("second pick = %q, want b (now idle longest)", got)
+	}
+}
+
+// Model-match avoids a forced reload: a provider serving a different model is
+// skipped in favour of one that already has the requested model.
+func TestSelectFromTies_ModelMatchAvoidsReload(t *testing.T) {
+	providers := providersWithLastServed(map[string]*lastServed{
+		"has_m1": {model: "m1", at: 500}, // recently busy with m1
+		"has_m2": {model: "m2", at: 0},   // idle longest, but cold for m1
+	})
+	// Request m1: only has_m1 matches → picked, even though has_m2 is idle longer.
+	if got := selectFromTies([]string{"has_m1", "has_m2"}, "m1", providers); got != "has_m1" {
+		t.Fatalf("pick = %q, want has_m1 (only m1 match; avoid reload on has_m2)", got)
+	}
+}
+
+// Cold LRU warms a fresh provider first: when no candidate has the model, the
+// never-used provider (at=0) wins over a reused hand, spreading first loads.
+func TestSelectFromTies_ColdLRUWarmsFreshProvider(t *testing.T) {
+	providers := providersWithLastServed(map[string]*lastServed{
+		"reused": {model: "m1", at: 1000},
+		"fresh":  nil, // never served → at=0
+	})
+	// Request m2 (neither has it): no match → LRU → fresh (at=0 < 1000).
+	if got := selectFromTies([]string{"reused", "fresh"}, "m2", providers); got != "fresh" {
+		t.Fatalf("pick = %q, want fresh (cold LRU warms it first)", got)
+	}
+}
+
+// Multi-model distribution with NO forced reloads: with ≥1 provider per model
+// already warm, each model stays on its own provider — no provider serves two
+// different models (which would imply an eviction/reload).
+func TestSelectFromTies_MultiModelNoReload(t *testing.T) {
+	t.Run("two models", func(t *testing.T) {
+		providers := providersWithLastServed(map[string]*lastServed{
+			"a": {model: "m1", at: 100},
+			"b": {model: "m2", at: 100},
+			"c": nil,
+		})
+		all := []string{"a", "b", "c"}
+		for i := 0; i < 20; i++ {
+			if got := selectFromTies(all, "m1", providers); got != "a" {
+				t.Errorf("m1 pick %d = %q, want a", i, got)
+			}
+			if got := selectFromTies(all, "m2", providers); got != "b" {
+				t.Errorf("m2 pick %d = %q, want b", i, got)
+			}
+		}
+		// c is never picked: no reload forced onto it while a/b are warm.
+		if providers["c"].LastServed.Load() != nil {
+			t.Errorf("c was wrongly assigned a model (forced reload)")
+		}
+	})
+
+	t.Run("three models", func(t *testing.T) {
+		providers := providersWithLastServed(map[string]*lastServed{
+			"a": {model: "m1", at: 100},
+			"b": {model: "m2", at: 100},
+			"c": {model: "m3", at: 100},
+		})
+		all := []string{"a", "b", "c"}
+		for _, tc := range []struct{ model, want string }{
+			{"m1", "a"}, {"m2", "b"}, {"m3", "c"},
+			{"m1", "a"}, {"m3", "c"}, {"m2", "b"},
+		} {
+			if got := selectFromTies(all, tc.model, providers); got != tc.want {
+				t.Errorf("model %s → %q, want %s", tc.model, got, tc.want)
+			}
+		}
+	})
+}
+
+// Multi-model burst distributes across providers (each model warms a distinct
+// provider), verified end-to-end through CreateChatCompletion. After the run no
+// provider should have served more than one distinct model (no forced reloads),
+// and every provider should be used (real distribution).
+func TestLoadBalancing_MultiModelBurstDistributesWithoutReloads(t *testing.T) {
+	r := &Router{
+		Providers: make(map[string]*Provider),
+		ModelMap:  make(map[string][]string),
+		ModelTags: make(map[string][]string),
+		logger:    &testLogger{},
+	}
+	// modelRecorder records which models each provider served.
+	type rec struct {
+		models map[string]bool
+	}
+	recs := make(map[string]*rec, 3)
+	mu := sync.Mutex{}
+	for _, name := range []string{"p1", "p2", "p3"} {
+		recs[name] = &rec{models: map[string]bool{}}
+		pName := name
+		r.Providers[name] = &Provider{
+			Name: name, ProviderType: "openai",
+			Client: &modelRecorderClient{
+				name: pName,
+				record: func(model string) {
+					mu.Lock()
+					recs[pName].models[model] = true
+					mu.Unlock()
+				},
+			},
+			Enabled: true, Weight: 1.0,
+		}
+		r.Providers[name].Healthy.Store(true)
+		for _, m := range []string{"m1", "m2", "m3"} {
+			r.ModelMap[m] = append(r.ModelMap[m], name)
+		}
+	}
+
+	// Interleave requests across 3 models so each warms a distinct provider.
+	// Sequential m1→p_a, m2→p_b, m3→p_c; subsequent same-model requests pin.
+	order := []string{"m1", "m2", "m3", "m1", "m2", "m3", "m1", "m2", "m3"}
+	for _, m := range order {
+		r.CreateChatCompletion(context.Background(), &ChatCompletionRequest{Model: m}) //nolint
+	}
+
+	// Each provider served exactly one distinct model (its warm model), and all
+	// three providers were used — distribution without forced reloads.
+	used := 0
+	for _, name := range []string{"p1", "p2", "p3"} {
+		n := len(recs[name].models)
+		if n > 1 {
+			t.Errorf("provider %s served %d models %v — forced reload", name, n, recs[name].models)
+		}
+		if n == 1 {
+			used++
+		}
+	}
+	if used != 3 {
+		t.Errorf("expected all 3 providers used, got %d", used)
+	}
+}
+
+// modelRecorderClient is a no-op Client that records the model each call served.
+type modelRecorderClient struct {
+	mockClient
+	name   string
+	record func(model string)
+}
+
+func (m *modelRecorderClient) ChatCompletion(_ context.Context, req openai.ChatCompletionRequest) (*openai.ChatCompletionResponse, error) {
+	if m.record != nil {
+		m.record(req.Model)
+	}
+	return &openai.ChatCompletionResponse{Model: req.Model}, nil
+}
 type countingClient struct {
 	mockClient
 	name    string
 	counter *atomic.Int64
+	latency time.Duration // simulated per-request in-flight time (0 = instant)
 }
 
 func (c *countingClient) ChatCompletion(_ context.Context, req openai.ChatCompletionRequest) (*openai.ChatCompletionResponse, error) {
 	c.counter.Add(1)
+	if c.latency > 0 {
+		time.Sleep(c.latency)
+	}
 	return &openai.ChatCompletionResponse{Model: req.Model}, nil
 }
 

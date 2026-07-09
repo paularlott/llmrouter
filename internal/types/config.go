@@ -90,11 +90,12 @@ type SmartRoutingConfig struct {
 // Tools, resources and prompts are all optional — set the dir for the kinds
 // you want to serve; leave blank to skip.
 type ScriptingConfig struct {
-	ToolsDir     string   `json:"tools_dir,omitempty"`     // Directory containing .toml/.py tool pairs
-	ResourcesDir string   `json:"resources_dir,omitempty"` // Directory containing static files and resource templates (first segment = URI scheme)
-	PromptsDir   string   `json:"prompts_dir,omitempty"`   // Directory containing .toml+.py dynamic prompts or static .md/.txt prompts
-	PluginDirs   []string `json:"plugin_dirs,omitempty"`   // Directories containing plugin executables
-	LibPaths     []string `json:"lib_paths,omitempty"`     // Additional directories to search for libraries
+	ToolsDir     string   `json:"tools_dir,omitempty"`      // Directory containing .toml/.py tool pairs
+	ResourcesDir string   `json:"resources_dir,omitempty"`  // Directory containing static files and resource templates (first segment = URI scheme)
+	PromptsDir   string   `json:"prompts_dir,omitempty"`    // Directory containing .toml+.py dynamic prompts or static .md/.txt prompts
+	PluginDirs   []string `json:"plugin_dirs,omitempty"`    // Directories containing plugin executables
+	LibPaths     []string `json:"lib_paths,omitempty"`      // Additional directories to search for libraries
+	ExecScript   bool     `json:"exec_script,omitempty"`    // Register the built-in execute_script MCP tool
 }
 
 // ChatConfig configures the /chat UI. When PersonasDir or CommandsDir is

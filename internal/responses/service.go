@@ -14,6 +14,7 @@ import (
 type entry struct {
 	client    ai.Client
 	model     string
+	input     []any // input items used to create the response (for input_items endpoint)
 	createdAt int64
 	expiresAt time.Time
 }
@@ -57,7 +58,7 @@ func (s *Service) CreateResponse(ctx context.Context, client ai.Client, req *ope
 		return nil, err
 	}
 	s.mu.Lock()
-	s.entries[resp.ID] = &entry{client: client, model: resp.Model, createdAt: resp.CreatedAt, expiresAt: time.Now().Add(s.ttl)}
+	s.entries[resp.ID] = &entry{client: client, model: resp.Model, input: req.Input, createdAt: resp.CreatedAt, expiresAt: time.Now().Add(s.ttl)}
 	s.mu.Unlock()
 	return resp, nil
 }
@@ -125,6 +126,21 @@ func (s *Service) clientFor(id string) (ai.Client, error) {
 		return nil, fmt.Errorf("response not found")
 	}
 	return e.client, nil
+}
+
+// GetInputItems returns the input items used to create a response (for the
+// GET /responses/{id}/input_items endpoint).
+func (s *Service) GetInputItems(_ context.Context, id string) ([]any, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	e, ok := s.entries[id]
+	if !ok {
+		return nil, fmt.Errorf("response not found")
+	}
+	if e.input == nil {
+		return []any{}, nil
+	}
+	return e.input, nil
 }
 
 // Close is a no-op; cleanup is handled by the ai.Client instances.

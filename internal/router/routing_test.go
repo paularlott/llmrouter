@@ -255,9 +255,10 @@ func TestGetProviderForModel_HintDoesNotDefeatHigherWeight(t *testing.T) {
 	}
 }
 
-// LocalityTiebreak: among same-weight idle providers, prefer the one that most
-// recently served the requested model (warm-cache affinity).
-func TestGetProviderForModel_LocalityTiebreak(t *testing.T) {
+// ModelMatchTiebreak: among same-weight idle providers, prefer the one that has
+// the requested model as its last-served model (so we don't force a different
+// provider to reload it). Applies uniformly to all provider types.
+func TestGetProviderForModel_ModelMatchTiebreak(t *testing.T) {
 	r := newTestRouter([]struct {
 		name   string
 		model  string
@@ -274,26 +275,27 @@ func TestGetProviderForModel_LocalityTiebreak(t *testing.T) {
 		t.Fatalf("want p_a or p_b, got %q err %v", got, err)
 	}
 
-	// p_b last served m1 → it should win every subsequent tie.
+	// p_b last served m1 → it is the only model-match and wins every tie.
 	r.recordModelUse("p_b", "m1")
 	for i := 0; i < 50; i++ {
 		got, err := r.GetProviderForModel("m1", "")
 		if err != nil || got != "p_b" {
-			t.Fatalf("iter %d: want p_b (warm), got %q err %v", i, got, err)
+			t.Fatalf("iter %d: want p_b (only m1 match), got %q err %v", i, got, err)
 		}
 	}
 
-	// A different model warm on p_a must not make p_a win for m1.
+	// A different model last-served on p_a must not make p_a win for m1.
 	r.recordModelUse("p_a", "m2")
 	got, err = r.GetProviderForModel("m1", "")
 	if err != nil || got != "p_b" {
-		t.Fatalf("want p_b (only m1 warm there), got %q err %v", got, err)
+		t.Fatalf("want p_b (only m1 match), got %q err %v", got, err)
 	}
 }
 
-// LocalityDoesNotOverrideWeight: a warm lower-weight provider must not beat a
-// cold higher-weight provider at idle.
-func TestGetProviderForModel_LocalityDoesNotOverrideWeight(t *testing.T) {
+// WeightBeatsModelMatch: a warm lower-weight provider must not beat a cold
+// higher-weight provider at idle — weight is decided before the model-match/LRU
+// tiebreak.
+func TestGetProviderForModel_WeightBeatsModelMatch(t *testing.T) {
 	r := newTestRouter([]struct {
 		name   string
 		model  string

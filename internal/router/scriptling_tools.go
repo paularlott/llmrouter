@@ -10,11 +10,16 @@ import (
 	"time"
 
 	"github.com/fsnotify/fsnotify"
+	scriptlinglog "github.com/paularlott/logger"
 	"github.com/paularlott/llmrouter/internal/types"
 	mcp_lib "github.com/paularlott/mcp"
 	"github.com/paularlott/mcp/toolmetadata"
+	"github.com/paularlott/scriptling"
+	scriptlingmcp "github.com/paularlott/scriptling/extlibs/mcp"
+	"github.com/paularlott/scriptling/extlibs/secretprovider"
 	scriptlingplugin "github.com/paularlott/scriptling/plugin"
 	mcpcli "github.com/paularlott/scriptling/scriptling-cli/mcp"
+	"github.com/paularlott/scriptling/scriptling-cli/setup"
 	"github.com/paularlott/lmchatkit"
 )
 
@@ -130,6 +135,10 @@ func NewScriptlingToolManager(config types.ScriptingConfig, mainServer *mcp_lib.
 		return nil, err
 	}
 
+	if config.ExecScript {
+		stm.registerExecTool(stm.mainServer)
+	}
+
 	if stm.toolsDirAbs != "" || stm.resourcesDirAbs != "" || stm.promptsDirAbs != "" {
 		if err := stm.startWatching(); err != nil {
 			logger.Warn("Failed to start source-folder watcher, auto-reload disabled", "error", err)
@@ -173,7 +182,85 @@ func (stm *scriptlingToolManager) registerAll() error {
 	return nil
 }
 
-// startWatching attaches an fsnotify watcher to every configured source folder
+// newScriptling builds a fresh Scriptling interpreter configured the same way
+// as the folder-sourced tool handlers (same library set, lib paths and plugins).
+// It backs the built-in execute_script tool, which runs arbitrary caller code
+// outside any fixed script directory.
+func (stm *scriptlingToolManager) newScriptling() *scriptling.Scriptling {
+	p := scriptling.New()
+	setup.Scriptling(p, stm.config.LibPaths, false, nil, nil, secretprovider.NewRegistry(), scriptlinglog.NewNullLogger(), "", "")
+	if stm.plugins != nil {
+		scriptlingplugin.RegisterLibraries(p, stm.plugins)
+	}
+	return p
+}
+
+// registerExecTool registers the built-in execute_script MCP tool, mirroring
+// scriptling's --mcp-exec-script. It runs arbitrary Scriptling code supplied by
+// the caller and returns captured output (print() or an explicit
+// return_string / return_object) — exactly like scriptling-cli's tool.
+func (stm *scriptlingToolManager) registerExecTool(server *mcp_lib.Server) {
+	server.RegisterTool(
+		mcp_lib.NewTool("execute_script",
+			`Execute Scriptling code and return the result. Scriptling is a Python 3-like scripting language.
+
+KEY SYNTAX RULES:
+- Use True/False (capitalized), None for null
+- Use elif (not else if)
+- 4-space indentation for blocks
+- No nested classes, no multiple inheritance, no generators/yield
+
+HTTP & JSON:
+- HTTP response is an object: response.status_code, response.body, response.headers
+- Use json.loads(str) and json.dumps(obj) for JSON
+- Use requests.get(url, options), requests.post(url, body, options) for HTTP
+- Default HTTP timeout is 5 seconds
+- HTTP options dict: {"timeout": 10, "headers": {"Authorization": "Bearer token"}}
+
+COMMON PATTERNS:
+- Dict iteration: for item in items(dict): key=item[0], value=item[1]
+- List append: append(list, item) modifies in-place
+- Use join() for string building in loops: result = "".join(parts)
+- Error handling: try/except/finally, raise "message" or raise ValueError("msg")
+
+RETURNING RESULTS:
+- print() output is captured and returned automatically
+- For structured data: import scriptling.mcp.tool; tool.return_object(data)
+- For text: tool.return_string(text)
+- Use help(topic) for built-in help: help("builtins"), help("json"), help("requests")`,
+			mcp_lib.String("code", "Scriptling code to execute (Python 3-like syntax)", mcp_lib.Required()),
+		),
+		func(ctx context.Context, req *mcp_lib.ToolRequest) (*mcp_lib.ToolResponse, error) {
+			code, _ := req.String("code")
+			stm.logger.Trace("MCP execute_script invoked", "code_len", len(code))
+			p := stm.newScriptling()
+
+			response, exitCode, err := scriptlingmcp.RunToolScript(ctx, p, code, map[string]interface{}{})
+
+			// If the script produced an explicit response (via return_error,
+			// return_string, etc.), return it to the client. return_error sets a
+			// response AND exits non-zero, so check for a response before treating
+			// non-zero exit as a failure.
+			if response != "" {
+				if exitCode != 0 {
+					stm.logger.Debug("MCP execute_script returned error response", "exit_code", exitCode)
+					return nil, mcp_lib.NewToolErrorInternal(response)
+				}
+				stm.logger.Trace("MCP execute_script completed", "exit_code", exitCode, "response_len", len(response))
+				return mcp_lib.NewToolResponseText(response), nil
+			}
+
+			if err != nil {
+				stm.logger.Debug("MCP execute_script failed", "exit_code", exitCode, "error", err)
+				return nil, fmt.Errorf("execution error: %w", err)
+			}
+
+			return mcp_lib.NewToolResponseText(""), nil
+		},
+	)
+	stm.logger.Info("Registered MCP tool", "name", "execute_script", "params", 1, "mode", "native")
+}
+
 // and runs watchLoop to dispatch events. Resources and prompts use a tree
 // structure (first path segment = URI scheme / namespace), so we watch
 // recursively — every subdirectory is added. Tools are flat (single folder
