@@ -156,7 +156,7 @@ func (r *Router) HandleOllamaShow(w http.ResponseWriter, req *http.Request) {
 	r.ModelMapMu.RLock()
 	_, ok := r.ModelMap[showReq.Model]
 	r.ModelMapMu.RUnlock()
-	if !ok && showReq.Model != "auto" {
+	if !ok && r.smartRouterFor(showReq.Model) == nil {
 		http.Error(w, fmt.Sprintf("model %s not found", showReq.Model), http.StatusNotFound)
 		return
 	}
@@ -400,10 +400,10 @@ func (r *Router) handleOllamaGenerateStream(w http.ResponseWriter, req *http.Req
 
 func (r *Router) resolveStreamingProvider(req *http.Request, openaiReq *ChatCompletionRequest) (string, error) {
 	providerHint := ""
-	if openaiReq.Model == "auto" && r.smartRouter != nil {
-		result := r.smartRouter.Route(req.Context(), openaiReq)
+	if sr := r.smartRouterFor(openaiReq.Model); sr != nil {
+		result := sr.Route(req.Context(), openaiReq)
 		if result.Model == "" {
-			return "", fmt.Errorf("model auto not found in any provider")
+			return "", fmt.Errorf("model %s not found in any provider", openaiReq.Model)
 		}
 		openaiReq.Model = result.Model
 		providerHint = result.ProviderHint

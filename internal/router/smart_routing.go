@@ -3,10 +3,14 @@ package router
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
+	"github.com/BurntSushi/toml"
 	"github.com/fsnotify/fsnotify"
 	scriptling "github.com/paularlott/scriptling"
 	"github.com/paularlott/scriptling/extlibs"
@@ -18,6 +22,7 @@ import (
 	"github.com/paularlott/scriptling/libloader"
 	"github.com/paularlott/scriptling/object"
 	"github.com/paularlott/scriptling/stdlib"
+	"github.com/paularlott/llmrouter/internal/types"
 )
 
 const (
@@ -27,10 +32,12 @@ const (
 	vmPoolSize = 5
 )
 
-// SmartRouter runs the routing script using a pool of pre-warmed VMs.
-// The pool is rebuilt when the script or any library in libDirs changes on disk.
+// SmartRouter runs a single routing script using a pool of pre-warmed VMs.
+// It is identified by name: clients request that model name and the script runs.
+// The pool is rebuilt by SmartRouterManager when the script, config, or libraries change.
 type SmartRouter struct {
-	scriptPath   string
+	name         string // trigger model name (clients request this)
+	scriptPath   string // <folder>/<name>.py; empty when the router is an alias-only router
 	defaultModel string
 	vars         map[string]string
 	libDirs      []string
@@ -40,12 +47,13 @@ type SmartRouter struct {
 	mu        sync.RWMutex
 	scriptSrc string
 	pool      chan *scriptling.Scriptling // buffered channel as VM pool
-	watcher   *fsnotify.Watcher
+	sig       string                      // signature of on-disk config+script, for change detection
 	stopCh    chan struct{}
 }
 
-func newSmartRouter(scriptPath, defaultModel string, vars map[string]string, libDirs []string, r *Router, logger Logger) (*SmartRouter, error) {
+func newSmartRouter(name, scriptPath, defaultModel string, vars map[string]string, libDirs []string, r *Router, logger Logger) (*SmartRouter, error) {
 	sr := &SmartRouter{
+		name:         name,
 		scriptPath:   scriptPath,
 		defaultModel: defaultModel,
 		vars:         vars,
@@ -56,27 +64,9 @@ func newSmartRouter(scriptPath, defaultModel string, vars map[string]string, lib
 	}
 
 	if err := sr.loadScript(); err != nil {
-		logger.Warn("smart routing script load failed, will use default model", "error", err)
+		logger.Warn("smart routing script load failed, will use default model", "router", name, "error", err)
 	}
 
-	watcher, err := fsnotify.NewWatcher()
-	if err != nil {
-		return nil, err
-	}
-	sr.watcher = watcher
-
-	if scriptPath != "" {
-		if err := watcher.Add(scriptPath); err != nil {
-			logger.Warn("could not watch routing script", "path", scriptPath, "error", err)
-		}
-	}
-	for _, libDir := range libDirs {
-		if err := watcher.Add(libDir); err != nil {
-			logger.Warn("could not watch routing libdir", "path", libDir, "error", err)
-		}
-	}
-
-	go sr.watchLoop()
 	return sr, nil
 }
 
@@ -104,13 +94,28 @@ func (sr *SmartRouter) newVM() *scriptling.Scriptling {
 	extlibs.RegisterTemplateHTMLLibrary(vm)
 	extlibs.RegisterTemplateTextLibrary(vm)
 
-	if len(sr.vars) > 0 {
-		pairs := make(map[string]object.Object, len(sr.vars))
-		for k, v := range sr.vars {
-			pairs[k] = object.NewString(v)
-		}
-		vm.RegisterLibrary(object.NewLibrary("vars", nil, pairs, "User-defined variables from smart_routing config"))
+	// vars library: each config var is exposed as an attribute (vars.key) plus a
+	// get(name, default="") function for dynamic lookup. Always registered so
+	// vars.get() exists even when no vars are defined.
+	//
+	// The constants are a build-time snapshot of sr.vars; the get() function reads
+	// sr.vars live under the lock. No lock is taken here because vars is replaced
+	// wholesale (never mutated in place) and pool builds are never concurrent with
+	// a replacement (the manager serialises reconfigure/rebuildPool).
+	vb := object.NewLibraryBuilder("vars", "User-defined variables from the smart router config")
+	for k, v := range sr.vars {
+		vb.Constant(k, v)
 	}
+	vb.FunctionWithHelp("get", func(kwargs object.Kwargs, name string) string {
+		sr.mu.RLock()
+		v, ok := sr.vars[name]
+		sr.mu.RUnlock()
+		if !ok {
+			return kwargs.MustGetString("default", "")
+		}
+		return v
+	}, "get(name, default='') -> str - Look up a config variable by name")
+	vm.RegisterLibrary(vb.Build())
 
 	vm.RegisterLibrary(buildRouterLibrary(sr.router))
 
@@ -151,40 +156,44 @@ func (sr *SmartRouter) loadScript() error {
 	return nil
 }
 
-func (sr *SmartRouter) watchLoop() {
-	var debounce <-chan time.Time
-	for {
-		select {
-		case <-sr.stopCh:
-			sr.watcher.Close()
-			return
-		case event, ok := <-sr.watcher.Events:
-			if !ok {
-				return
-			}
-			if event.Has(fsnotify.Write) || event.Has(fsnotify.Create) || event.Has(fsnotify.Remove) {
-				debounce = time.After(100 * time.Millisecond)
-			}
-		case <-debounce:
-			// Rebuild the pool when script or libraries change
-			// The loader reads files on-demand, so no separate libdir reload needed
-			if err := sr.loadScript(); err != nil {
-				sr.logger.Warn("routing script reload failed", "error", err)
-			} else {
-				sr.logger.Debug("routing script reloaded", "path", sr.scriptPath)
-			}
-			debounce = nil
-		case err, ok := <-sr.watcher.Errors:
-			if !ok {
-				return
-			}
-			sr.logger.Warn("routing script watcher error", "error", err)
-		}
+func (sr *SmartRouter) Stop() {
+	select {
+	case <-sr.stopCh:
+	default:
+		close(sr.stopCh)
 	}
 }
 
-func (sr *SmartRouter) Stop() {
-	close(sr.stopCh)
+// reconfigure swaps in a new script path/config (from a changed .toml/.py) and
+// rebuilds the pool. Vars are baked into VMs at build time, so any vars change
+// requires a pool rebuild.
+func (sr *SmartRouter) reconfigure(scriptPath, defaultModel string, vars map[string]string) {
+	newSrc := ""
+	if scriptPath != "" {
+		if data, err := os.ReadFile(scriptPath); err == nil {
+			newSrc = string(data)
+		} else {
+			sr.logger.Warn("smart routing script reload failed", "router", sr.name, "path", scriptPath, "error", err)
+		}
+	}
+	sr.mu.Lock()
+	sr.scriptPath = scriptPath
+	sr.scriptSrc = newSrc
+	sr.defaultModel = defaultModel
+	sr.vars = vars
+	sr.mu.Unlock()
+	pool := sr.buildPool()
+	sr.mu.Lock()
+	sr.pool = pool
+	sr.mu.Unlock()
+}
+
+// rebuildPool builds a fresh VM pool and swaps it in (used when a shared library changes).
+func (sr *SmartRouter) rebuildPool() {
+	pool := sr.buildPool()
+	sr.mu.Lock()
+	sr.pool = pool
+	sr.mu.Unlock()
 }
 
 // RouteResult holds the model and optional provider hint from the routing script.
@@ -320,4 +329,301 @@ func toolsForScript(tools []Tool) []interface{} {
 		}
 	}
 	return out
+}
+
+// smartRouterFor returns the smart router registered under the given model name,
+// or nil if smart routing is disabled or no router matches.
+func (r *Router) smartRouterFor(model string) *SmartRouter {
+	if r.smartRouters == nil {
+		return nil
+	}
+	return r.smartRouters.get(model)
+}
+
+// smartRouterNames returns the trigger model names of all registered smart routers.
+func (r *Router) smartRouterNames() []string {
+	if r.smartRouters == nil {
+		return nil
+	}
+	return r.smartRouters.names()
+}
+
+// SmartRouterManager owns the set of SmartRouters discovered from a folder of
+// <model>.toml (+ optional <model>.py) pairs. It watches the folder and the
+// global library path, adding/removing/rebuilding routers as files change.
+//
+// The folder is always the first library search path (so shared .py libs placed
+// alongside routers are importable by all of them), followed by the global
+// libpath directories.
+type SmartRouterManager struct {
+	folder        string
+	routerLibDirs []string // [folder] + globalLibDirs, passed to each router
+	router        *Router
+	logger        Logger
+
+	mu      sync.RWMutex
+	routers map[string]*SmartRouter
+
+	watcher *fsnotify.Watcher
+	stopCh  chan struct{}
+}
+
+func newSmartRouterManager(folder string, globalLibDirs []string, r *Router, logger Logger) (*SmartRouterManager, error) {
+	folder = strings.TrimRight(folder, string(filepath.Separator))
+	libDirs := make([]string, 0, 1+len(globalLibDirs))
+	libDirs = append(libDirs, folder)
+	libDirs = append(libDirs, globalLibDirs...)
+	return &SmartRouterManager{
+		folder:        folder,
+		routerLibDirs: libDirs,
+		router:        r,
+		logger:        logger,
+		routers:       make(map[string]*SmartRouter),
+		stopCh:        make(chan struct{}),
+	}, nil
+}
+
+// Start performs the initial scan and begins watching the folder and libpath dirs.
+func (m *SmartRouterManager) Start() error {
+	if err := m.scan(false); err != nil {
+		m.logger.Warn("smart-router initial scan failed", "folder", m.folder, "error", err)
+	}
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		return err
+	}
+	m.watcher = watcher
+	if err := watcher.Add(m.folder); err != nil {
+		m.logger.Warn("could not watch smart-router folder, live reload disabled", "path", m.folder, "error", err)
+	}
+	for _, dir := range m.routerLibDirs {
+		if dir == "" || dir == m.folder {
+			continue
+		}
+		if err := watcher.Add(dir); err != nil {
+			m.logger.Warn("could not watch smart-router libpath dir, live reload disabled for it", "path", dir, "error", err)
+		}
+	}
+	go m.watchLoop()
+	return nil
+}
+
+func (m *SmartRouterManager) Stop() {
+	select {
+	case <-m.stopCh:
+		return
+	default:
+		close(m.stopCh)
+	}
+	if m.watcher != nil {
+		m.watcher.Close()
+	}
+	m.mu.Lock()
+	for _, sr := range m.routers {
+		sr.Stop()
+	}
+	m.routers = nil
+	m.mu.Unlock()
+}
+
+func (m *SmartRouterManager) get(name string) *SmartRouter {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.routers[name]
+}
+
+func (m *SmartRouterManager) names() []string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	out := make([]string, 0, len(m.routers))
+	for n := range m.routers {
+		out = append(out, n)
+	}
+	return out
+}
+
+// reconcileCollisions removes any router whose name is now served by a real
+// provider model, so smart-router names never shadow a provider model. Called
+// after model discovery refreshes the model map.
+func (m *SmartRouterManager) reconcileCollisions(modelMap map[string][]string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for name, sr := range m.routers {
+		if _, ok := modelMap[name]; ok {
+			m.logger.Warn("smart router name collides with a provider model, disabling router", "router", name)
+			sr.Stop()
+			delete(m.routers, name)
+		}
+	}
+}
+
+// desiredRouter holds the parsed configuration for one router discovered on disk.
+type desiredRouter struct {
+	defaultModel string
+	vars         map[string]string
+	scriptPath   string // empty when no <name>.py exists (alias-only router)
+	sig          string
+}
+
+// scan reads the folder, parses each <model>.toml, and reconciles the router
+// set: adding new routers, removing gone ones, and reloading those whose config
+// or script changed. When forceRebuild is true every surviving router's pool is
+// rebuilt (used after a shared-library change).
+func (m *SmartRouterManager) scan(forceRebuild bool) error {
+	entries, err := os.ReadDir(m.folder)
+	if err != nil {
+		return err
+	}
+
+	desired := make(map[string]desiredRouter)
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		name := e.Name()
+		if strings.HasPrefix(name, ".") || filepath.Ext(name) != ".toml" {
+			continue
+		}
+		stem := strings.TrimSuffix(name, ".toml")
+		if !validRouterName(stem) {
+			m.logger.Warn("skipping smart-router file: invalid router name", "file", name)
+			continue
+		}
+		tomlPath := filepath.Join(m.folder, name)
+		var cfg types.RouterFileConfig
+		if _, err := toml.DecodeFile(tomlPath, &cfg); err != nil {
+			m.logger.Warn("skipping smart-router file: invalid TOML", "file", name, "error", err)
+			continue
+		}
+		if !cfg.Enabled {
+			continue
+		}
+		scriptPath := ""
+		pyPath := filepath.Join(m.folder, stem+".py")
+		if fi, err := os.Stat(pyPath); err == nil && !fi.IsDir() {
+			scriptPath = pyPath
+		}
+		desired[stem] = desiredRouter{
+			defaultModel: cfg.DefaultModel,
+			vars:         cfg.Vars,
+			scriptPath:   scriptPath,
+			sig:          signatureFor(tomlPath, scriptPath),
+		}
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	// remove routers no longer present (or disabled)
+	for name, sr := range m.routers {
+		if _, ok := desired[name]; !ok {
+			m.logger.Info("removed smart router", "router", name)
+			sr.Stop()
+			delete(m.routers, name)
+		}
+	}
+
+	// refuse routers whose name collides with a real provider model
+	m.router.ModelMapMu.RLock()
+	for name := range desired {
+		if _, ok := m.router.ModelMap[name]; ok {
+			m.logger.Warn("smart router name collides with a provider model, skipping", "router", name)
+			delete(desired, name)
+		}
+	}
+	m.router.ModelMapMu.RUnlock()
+
+	// add or update
+	for name, d := range desired {
+		if sr, ok := m.routers[name]; ok {
+			if sr.sig != d.sig {
+				m.logger.Info("reloading smart router", "router", name)
+				sr.reconfigure(d.scriptPath, d.defaultModel, d.vars)
+				sr.sig = d.sig
+			} else if forceRebuild {
+				sr.rebuildPool()
+			}
+			continue
+		}
+		sr, err := newSmartRouter(name, d.scriptPath, d.defaultModel, d.vars, m.routerLibDirs, m.router, m.logger)
+		if err != nil {
+			m.logger.Warn("failed to create smart router", "router", name, "error", err)
+			continue
+		}
+		sr.sig = d.sig
+		m.routers[name] = sr
+		m.logger.Info("loaded smart router", "router", name, "script", d.scriptPath, "default_model", d.defaultModel)
+	}
+	return nil
+}
+
+func (m *SmartRouterManager) watchLoop() {
+	var debounce <-chan time.Time
+	var folderDirty, libDirty bool
+	for {
+		select {
+		case <-m.stopCh:
+			return
+		case event, ok := <-m.watcher.Events:
+			if !ok {
+				return
+			}
+			if !(event.Has(fsnotify.Write) || event.Has(fsnotify.Create) || event.Has(fsnotify.Remove) || event.Has(fsnotify.Rename)) {
+				continue
+			}
+			if m.isFolderPath(event.Name) {
+				folderDirty = true
+			} else {
+				libDirty = true
+			}
+			debounce = time.After(100 * time.Millisecond)
+		case err, ok := <-m.watcher.Errors:
+			if !ok {
+				return
+			}
+			m.logger.Warn("smart-router watcher error", "error", err)
+		case <-debounce:
+			if folderDirty || libDirty {
+				if err := m.scan(libDirty); err != nil {
+					m.logger.Warn("smart-router rescan failed", "error", err)
+				}
+			}
+			folderDirty, libDirty = false, false
+			debounce = nil
+		}
+	}
+}
+
+// isFolderPath reports whether p is inside the routers folder.
+func (m *SmartRouterManager) isFolderPath(p string) bool {
+	dir := filepath.Dir(p)
+	rel, err := filepath.Rel(m.folder, dir)
+	if err != nil {
+		return false
+	}
+	return rel == "." || !strings.HasPrefix(rel, "..")
+}
+
+// signatureFor returns a change signature built from file modification times.
+func signatureFor(paths ...string) string {
+	var b strings.Builder
+	for _, p := range paths {
+		fi, err := os.Stat(p)
+		if err != nil {
+			fmt.Fprintf(&b, "ERR|")
+			continue
+		}
+		fmt.Fprintf(&b, "%d|", fi.ModTime().UnixNano())
+	}
+	return b.String()
+}
+
+// validRouterName reports whether stem is an acceptable router (model) name.
+// Names must be a single path segment (no slashes) so they cannot collide with
+// namespaced provider models and map cleanly to filenames.
+func validRouterName(name string) bool {
+	if name == "" || name == "." || name == ".." {
+		return false
+	}
+	return !strings.ContainsAny(name, `/\`)
 }

@@ -110,7 +110,7 @@ func newSmartTestRouter(t *testing.T, script string) (*Router, *SmartRouter) {
 	r.ModelTags["model-b"] = []string{"capable"}
 
 	sr := newSmartRouterFromSource(script, "model-a", r, &testLogger{})
-	r.smartRouter = sr
+	r.smartRouters = &SmartRouterManager{routers: map[string]*SmartRouter{"auto": sr}, stopCh: make(chan struct{})}
 	return r, sr
 }
 

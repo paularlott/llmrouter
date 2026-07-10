@@ -80,7 +80,7 @@ type Router struct {
 	sharedStore          *storage.Store
 	responsesService     *responses.Service
 	conversationsService *conversations.Service
-	smartRouter          *SmartRouter
+	smartRouters         *SmartRouterManager
 	admin                *admin.Admin
 	chatServer           *lmchatkit.Server
 	mcpStorage           storage.MCPStorage

@@ -115,11 +115,7 @@ provider = "ollama"
 base_url = "http://localhost:11434/v1"
 enabled = true
 
-[smart_routing]
-enabled = false
-script = "router.py"  # Scriptling script for routing decisions
-default_model = "mistralai/ministral-3-3b"  # Fallback if script returns nothing
-libdir = "./router_libs"  # Optional: directory of .py script libraries
+routes_dir = "./routers"  # Optional: directory of smart-router <model>.toml/.py pairs
 
 [mcp]
 [[mcp.remote_servers]]
@@ -154,22 +150,32 @@ tool_denylist = ["delete"]           # Optional: these tools are disabled
 
 ### Smart Routing
 
-When a client requests the model name `auto`, the router runs a [Scriptling](https://scriptling.dev/) script to pick the best provider and model. If the script returns nothing or fails, `default_model` is used.
-
-`libdir` is an optional directory of `.py` files. Each file is registered as a script library (named after the file without the `.py` extension) and is available for `import` in the routing script. The directory is watched for changes — any modification triggers a full VM pool rebuild.
+Smart routing lets a client request a *virtual* model name that triggers a [Scriptling](https://scriptling.dev/) script, which picks the real provider and model. You define routers as files in a folder: each `<model>.toml` (plus an optional `<model>.py` companion) becomes a router triggered by the model name `<model>` (the filename stem).
 
 ```toml
-[smart_routing]
-enabled = true
-script = "router.py"  # Scriptling script for routing decisions
-default_model = "mistralai/ministral-3-3b"
-
-[smart_routing.vars]  # Optional key-value pairs exposed to the script
-openai_key = "sk-..."
-my_endpoint = "https://api.example.com"
+routes_dir = "./routers"   # directory of <model>.toml/.py pairs
 ```
 
-The `auto` model appears in `/v1/models` so clients can discover it.
+For example, `./routers/auto.toml` + `./routers/auto.py` make clients that request the model `auto` run `auto.py`:
+
+```toml
+# routers/auto.toml — the stem ("auto") is the model name clients send
+enabled = true
+default_model = "mistralai/ministral-3-3b"   # used when the script returns nothing or fails
+
+[vars]              # optional key-value pairs exposed to the script as the `vars` library
+openai_key = "sk-..."
+```
+
+```python
+# routers/auto.py
+import router
+router.set_model("mistralai/mistral-small-latest")
+```
+
+A `.toml` without a `.py` companion is a pure alias — every request for that name goes to `default_model`. A `.py` without a `.toml` is just an importable library (shared by all routers in the folder). Router names must be a single path segment (no `/`); a name that collides with a real provider model is skipped. Every router model is injected into `/v1/models` so clients can discover it.
+
+Shared libraries placed in the routers folder are importable by every router. Add more search directories with the global, repeatable `--libpath` flag (`libpath` / `lib_paths` in config), shared with the scriptling MCP tools. The folder and every libpath dir are watched — script, config, or library changes are picked up within ~100 ms with no restart.
 
 #### Provider and Model Tags
 
@@ -251,10 +257,11 @@ Filesystem access (`os`, `pathlib`, `glob`), subprocess execution, and `wait_for
 
 #### Script Variables
 
-Use `[smart_routing.vars]` to pass tokens or other config to the script without hard-coding them:
+Use the `[vars]` table in a router's `.toml` to pass tokens or other config to the script without hard-coding them:
 
 ```toml
-[smart_routing.vars]
+# routers/auto.toml
+[vars]
 openai_key = "sk-..."
 ```
 
@@ -262,8 +269,12 @@ openai_key = "sk-..."
 import vars
 import scriptling.ai as ai
 
-client = ai.Client("", api_key=vars.openai_key)
+client = ai.Client("", api_key=vars.openai_key)   # attribute access
+key = vars.get("openai_key")                       # or dynamic lookup
+key = vars.get("missing", "")                      # with a default
 ```
+
+All values are strings. `vars` is always available (even with no vars defined), so `vars.get(name, default="")` is always callable.
 
 ### Weight-Based Load Balancing
 

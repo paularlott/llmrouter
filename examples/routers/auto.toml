@@ -1,0 +1,12 @@
+# Smart router "auto".
+# A client requesting model "auto" triggers auto.py, which picks a real model.
+# The filename stem ("auto") is the trigger model name clients send.
+
+enabled = true
+default_model = "mistralai/ministral-3-3b"
+
+[vars]
+# Optional key-value pairs exposed to the script as the `vars` library:
+#   import vars
+#   vars.endpoint            # attribute access
+#   vars.get("endpoint")     # dynamic lookup, vars.get(name, default="")

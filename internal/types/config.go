@@ -10,7 +10,7 @@ type Config struct {
 	Storage       StorageConfig       `json:"storage"`
 	Responses     ResponsesConfig     `json:"responses"`
 	Conversations ConversationsConfig `json:"conversations"`
-	SmartRouting  SmartRoutingConfig  `json:"smart_routing"`
+	RoutesDir     string              `json:"routes_dir,omitempty" toml:"routes_dir"` // directory of smart-router <model>.toml/.py pairs
 	Scripting     ScriptingConfig     `json:"scripting"`
 	Chat          ChatConfig          `json:"chat"`
 }
@@ -78,12 +78,13 @@ type ConversationsConfig struct {
 	TTLDays int `json:"ttl_days,omitempty"`
 }
 
-type SmartRoutingConfig struct {
-	Enabled      bool              `json:"enabled"`
-	Script       string            `json:"script,omitempty"`
-	DefaultModel string            `json:"default_model,omitempty"`
-	Vars         map[string]string `json:"vars,omitempty"`    // key-value pairs exposed to routing scripts
-	LibPath      []string          `json:"libpath,omitempty"` // additional directories to search for libraries (script dir is always first)
+// RouterFileConfig is the contents of a single smart-router <model>.toml file.
+// The router's trigger model name is the file's stem (no name field).
+// A missing companion <model>.py makes the router a pure alias to default_model.
+type RouterFileConfig struct {
+	DefaultModel string            `json:"default_model,omitempty" toml:"default_model"` // fallback model when the script returns nothing
+	Enabled      bool              `json:"enabled" toml:"enabled"`                       // defaults handled by loader (absent = enabled)
+	Vars         map[string]string `json:"vars,omitempty" toml:"vars"`                   // exposed to the script as the vars library
 }
 
 // ScriptingConfig holds configuration for scriptling-served MCP content.

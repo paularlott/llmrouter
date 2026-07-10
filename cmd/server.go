@@ -54,25 +54,10 @@ var ServerCmd = &cli.Command{
 			ConfigPath:   []string{"conversations.ttl_days"},
 			DefaultValue: 30,
 		},
-		&cli.BoolFlag{
-			Name:       "smart-routing",
-			Usage:      "Enable smart routing",
-			ConfigPath: []string{"smart_routing.enabled"},
-		},
 		&cli.StringFlag{
-			Name:       "router-script",
-			Usage:      "Path to the smart routing script",
-			ConfigPath: []string{"smart_routing.script"},
-		},
-		&cli.StringFlag{
-			Name:       "router-libdir",
-			Usage:      "Directory of .py script libraries auto-loaded into every routing VM",
-			ConfigPath: []string{"smart_routing.libdir"},
-		},
-		&cli.StringFlag{
-			Name:       "router-default-model",
-			Usage:      "Default model when smart routing returns nothing",
-			ConfigPath: []string{"smart_routing.default_model"},
+			Name:       "routes-dir",
+			Usage:      "Directory of smart-router <model>.toml/.py pairs (traffic for <model> is routed by <model>.py)",
+			ConfigPath: []string{"routes_dir"},
 		},
 		&cli.StringFlag{
 			Name:         "tools-dir",

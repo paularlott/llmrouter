@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"math/rand"
 	"net/http"
-	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -180,32 +179,16 @@ func NewRouter(config *types.Config, logger Logger) (*Router, error) {
 		logger.Info("conversations endpoints available")
 	}
 
-	// Initialize smart routing if enabled
-	if config.SmartRouting.Enabled {
-		// Build lib dirs: script dir first, then any additional libpath entries
-		var libDirs []string
-		if config.SmartRouting.Script != "" {
-			libDirs = append(libDirs, filepath.Dir(config.SmartRouting.Script))
-		}
-		for _, dir := range config.SmartRouting.LibPath {
-			if dir != "" {
-				libDirs = append(libDirs, dir)
-			}
-		}
-
-		sr, err := newSmartRouter(
-			config.SmartRouting.Script,
-			config.SmartRouting.DefaultModel,
-			config.SmartRouting.Vars,
-			libDirs,
-			router,
-			logger,
-		)
+	// Initialize smart routers from a folder of <model>.toml/.py pairs
+	if config.RoutesDir != "" {
+		mgr, err := newSmartRouterManager(config.RoutesDir, config.Scripting.LibPaths, router, logger)
 		if err != nil {
-			logger.Warn("failed to initialize smart router", "error", err)
+			logger.Warn("failed to initialize smart routers", "error", err)
+		} else if err := mgr.Start(); err != nil {
+			logger.Warn("failed to start smart routers", "error", err)
 		} else {
-			router.smartRouter = sr
-			logger.Info("smart routing enabled", "script", config.SmartRouting.Script, "default_model", config.SmartRouting.DefaultModel)
+			router.smartRouters = mgr
+			logger.Info("smart routers enabled", "folder", config.RoutesDir)
 		}
 	} else {
 		logger.Info("smart routing disabled")
@@ -387,6 +370,14 @@ func (r *Router) RefreshModels(ctx context.Context) error {
 		}(providerName, provider)
 	}
 	wg.Wait()
+
+	// Now that the model map is fresh, drop any smart router whose name collides
+	// with a real provider model (smart-router names must not shadow real models).
+	if r.smartRouters != nil {
+		r.ModelMapMu.RLock()
+		r.smartRouters.reconcileCollisions(r.ModelMap)
+		r.ModelMapMu.RUnlock()
+	}
 
 	return nil
 }
@@ -646,10 +637,10 @@ func (r *Router) ListModels() ModelsResponse {
 		})
 	}
 
-	// Inject "auto" model if smart routing is enabled
-	if r.smartRouter != nil {
+	// Inject smart-router trigger models
+	for _, name := range r.smartRouterNames() {
 		models = append(models, Model{
-			ID:      "auto",
+			ID:      name,
 			Object:  "model",
 			Created: time.Now().Unix(),
 			OwnedBy: "router",
@@ -683,11 +674,11 @@ func (r *Router) ListModelsAnthropic() anthropicModelsResponse {
 		})
 	}
 
-	if r.smartRouter != nil {
+	for _, name := range r.smartRouterNames() {
 		models = append(models, claude.ModelInfo{
 			Type:        "model",
-			ID:          "auto",
-			DisplayName: "auto",
+			ID:          name,
+			DisplayName: name,
 			CreatedAt:   time.Now().UTC().Format(time.RFC3339),
 		})
 	}
@@ -706,10 +697,10 @@ func (r *Router) ListModelsAnthropic() anthropicModelsResponse {
 
 func (r *Router) CreateChatCompletion(ctx context.Context, req *ChatCompletionRequest) (*ChatCompletionResponse, error) {
 	providerHint := ""
-	if req.Model == "auto" && r.smartRouter != nil {
-		result := r.smartRouter.Route(ctx, req)
+	if sr := r.smartRouterFor(req.Model); sr != nil {
+		result := sr.Route(ctx, req)
 		if result.Model == "" {
-			return nil, fmt.Errorf("model auto not found in any provider")
+			return nil, fmt.Errorf("model %s not found in any provider", req.Model)
 		}
 		req.Model = result.Model
 		providerHint = result.ProviderHint
@@ -1104,11 +1095,11 @@ func (r *Router) handleNonStreamingChatCompletion(w http.ResponseWriter, req *ht
 func (r *Router) handleStreamingChatCompletion(w http.ResponseWriter, req *http.Request, completionReq *ChatCompletionRequest) {
 	ctx := req.Context()
 
-	// Resolve "auto" model before streaming
-	if completionReq.Model == "auto" && r.smartRouter != nil {
-		result := r.smartRouter.Route(ctx, completionReq)
+	// Resolve smart-router model before streaming
+	if sr := r.smartRouterFor(completionReq.Model); sr != nil {
+		result := sr.Route(ctx, completionReq)
 		if result.Model == "" {
-			http.Error(w, "auto routing failed: no model available", http.StatusServiceUnavailable)
+			http.Error(w, "smart routing failed: no model available", http.StatusServiceUnavailable)
 			return
 		}
 		completionReq.Model = result.Model
@@ -1158,10 +1149,10 @@ func (r *Router) HandleMessages(w http.ResponseWriter, req *http.Request) {
 
 	if messagesReq.Stream {
 		providerHint := ""
-		if openaiReq.Model == "auto" && r.smartRouter != nil {
-			result := r.smartRouter.Route(ctx, &openaiReq)
+		if sr := r.smartRouterFor(openaiReq.Model); sr != nil {
+			result := sr.Route(ctx, &openaiReq)
 			if result.Model == "" {
-				http.Error(w, "auto routing failed: no model available", http.StatusServiceUnavailable)
+				http.Error(w, "smart routing failed: no model available", http.StatusServiceUnavailable)
 				return
 			}
 			openaiReq.Model = result.Model
@@ -1247,10 +1238,10 @@ func (r *Router) createChatCompletionWithHeaders(ctx context.Context, req *ChatC
 	}
 
 	providerHint := ""
-	if req.Model == "auto" && r.smartRouter != nil {
-		result := r.smartRouter.Route(ctx, req)
+	if sr := r.smartRouterFor(req.Model); sr != nil {
+		result := sr.Route(ctx, req)
 		if result.Model == "" {
-			return nil, fmt.Errorf("model auto not found in any provider")
+			return nil, fmt.Errorf("model %s not found in any provider", req.Model)
 		}
 		req.Model = result.Model
 		providerHint = result.ProviderHint
@@ -1696,10 +1687,14 @@ func (r *Router) startMCPCacheRefreshTimer(interval time.Duration) {
 
 // getModels returns model information for the admin UI
 func (r *Router) getModels() []admin.ModelInfo {
+	// Collect smart-router trigger names first (takes the manager lock), before
+	// acquiring ModelMapMu, to avoid nesting the two locks.
+	routerModelNames := r.smartRouterNames()
+
 	r.ModelMapMu.RLock()
 	defer r.ModelMapMu.RUnlock()
 
-	models := make([]admin.ModelInfo, 0, len(r.ModelMap))
+	models := make([]admin.ModelInfo, 0, len(r.ModelMap)+len(routerModelNames))
 	for modelID, providers := range r.ModelMap {
 		providersCopy := make([]string, len(providers))
 		copy(providersCopy, providers)
@@ -1707,6 +1702,13 @@ func (r *Router) getModels() []admin.ModelInfo {
 		models = append(models, admin.ModelInfo{
 			ID:        modelID,
 			Providers: providersCopy,
+		})
+	}
+	// Inject smart-router trigger models (virtual models backed by a routing script)
+	for _, name := range routerModelNames {
+		models = append(models, admin.ModelInfo{
+			ID:        name,
+			Providers: []string{"router"},
 		})
 	}
 	sort.Slice(models, func(i, j int) bool { return models[i].ID < models[j].ID })
@@ -1717,8 +1719,8 @@ func (r *Router) getModels() []admin.ModelInfo {
 func (r *Router) Shutdown() {
 	r.shutdownOnce.Do(func() {
 		close(r.shutdownChan)
-		if r.smartRouter != nil {
-			r.smartRouter.Stop()
+		if r.smartRouters != nil {
+			r.smartRouters.Stop()
 		}
 		if r.sharedStore != nil {
 			r.sharedStore.Close()

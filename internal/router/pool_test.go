@@ -164,69 +164,61 @@ func TestPool_ProviderHintIsolation(t *testing.T) {
 	}
 }
 
-// TestPool_FileWatchRebuildsPool writes a real script file, starts a SmartRouter with
-// the file watcher, overwrites the file, and verifies the pool is rebuilt with the new script.
-func TestPool_FileWatchRebuildsPool(t *testing.T) {
-	r, _ := newSmartTestRouter(t, "") // router only, no SR yet
+// TestManager_FileWatchRebuildsRouter writes a router folder, starts a manager,
+// overwrites the .py, and verifies the router is rebuilt with the new script.
+func TestManager_FileWatchRebuildsRouter(t *testing.T) {
+	r, _ := newSmartTestRouter(t, "") // router with model-a/model-b providers
 
-	// Write initial script
-	scriptFile, err := os.CreateTemp(t.TempDir(), "router-*.py")
+	folder := t.TempDir()
+	if err := os.WriteFile(folder+"/auto.toml", []byte("enabled = true\ndefault_model = \"model-a\"\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(folder+"/auto.py", []byte("import router; router.set_model(\"model-a\")\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	mgr, err := newSmartRouterManager(folder, nil, r, &testLogger{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	scriptFile.WriteString(`import router; router.set_model("model-a")`)
-	scriptFile.Close()
-
-	sr, err := newSmartRouter(scriptFile.Name(), "model-a", nil, nil, r, &testLogger{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer sr.Stop()
-
-	// Confirm initial script works
-	result := sr.Route(context.Background(), &ChatCompletionRequest{Model: "auto"})
-	if result.Model != "model-a" {
-		t.Fatalf("before file change: want model-a, got %q", result.Model)
-	}
-
-	// Capture the current pool pointer
-	sr.mu.RLock()
-	oldPool := sr.pool
-	sr.mu.RUnlock()
-
-	// Overwrite the script file
-	if err := os.WriteFile(scriptFile.Name(), []byte(`import router; router.set_model("model-b")`), 0644); err != nil {
+	defer mgr.Stop()
+	if err := mgr.Start(); err != nil {
 		t.Fatal(err)
 	}
 
-	// Wait for debounce (100ms) + reload; poll up to 2s
+	// Wait for initial scan
 	deadline := time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) {
-		sr.mu.RLock()
-		newPool := sr.pool
-		sr.mu.RUnlock()
-		if newPool != oldPool {
+		if sr := mgr.get("auto"); sr != nil {
+			if result := sr.Route(context.Background(), &ChatCompletionRequest{Model: "auto"}); result.Model == "model-a" {
+				break
+			}
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	sr := mgr.get("auto")
+	if sr == nil {
+		t.Fatal("router 'auto' not loaded")
+	}
+	if result := sr.Route(context.Background(), &ChatCompletionRequest{Model: "auto"}); result.Model != "model-a" {
+		t.Fatalf("before change: want model-a, got %q", result.Model)
+	}
+
+	// Overwrite the script
+	if err := os.WriteFile(folder+"/auto.py", []byte("import router; router.set_model(\"model-b\")\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Wait for the watcher to rebuild and route to model-b
+	deadline = time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if result := sr.Route(context.Background(), &ChatCompletionRequest{Model: "auto"}); result.Model == "model-b" {
 			break
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
-
-	sr.mu.RLock()
-	newPool := sr.pool
-	sr.mu.RUnlock()
-	if newPool == oldPool {
+	if result := sr.Route(context.Background(), &ChatCompletionRequest{Model: "auto"}); result.Model != "model-b" {
 		t.Fatal("pool was not rebuilt after script file change")
-	}
-
-	// New script should route to model-b
-	result = sr.Route(context.Background(), &ChatCompletionRequest{Model: "auto"})
-	if result.Model != "model-b" {
-		t.Fatalf("after file change: want model-b, got %q", result.Model)
-	}
-
-	// Pool should be full again
-	if len(sr.pool) != vmPoolSize {
-		t.Fatalf("want pool size %d after rebuild, got %d", vmPoolSize, len(sr.pool))
 	}
 }
 func TestPool_RebuildOnScriptChange(t *testing.T) {
@@ -301,7 +293,7 @@ router.set_model(mylib.pick())
 `)
 	scriptFile.Close()
 
-	sr, err := newSmartRouter(scriptFile.Name(), "model-a", nil, []string{dir}, r, &testLogger{})
+	sr, err := newSmartRouter("auto", scriptFile.Name(), "model-a", nil, []string{dir}, r, &testLogger{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -313,75 +305,63 @@ router.set_model(mylib.pick())
 	}
 }
 
-// TestLibDir_WatchRebuildsPool verifies that modifying a library file in libdir
-// triggers a pool rebuild.
-func TestLibDir_WatchRebuildsPool(t *testing.T) {
-	r, _ := newSmartTestRouter(t, "")
+// TestManager_LibPathChangeRebuilds verifies that changing a shared library in a
+// global libpath dir triggers a rebuild of all routers (manager-watched libpath).
+func TestManager_LibPathChangeRebuilds(t *testing.T) {
+	r, _ := newSmartTestRouter(t, "") // router with model-a/model-b providers
 
-	dir := t.TempDir()
-	if err := os.WriteFile(dir+"/mylib.py", []byte(`
-def pick():
-    return "model-a"
-`), 0644); err != nil {
+	folder := t.TempDir()
+	libDir := t.TempDir()
+	if err := os.WriteFile(folder+"/auto.toml", []byte("enabled = true\ndefault_model = \"model-a\"\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(folder+"/auto.py", []byte("import router\nimport mylib\nrouter.set_model(mylib.pick())\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(libDir+"/mylib.py", []byte("def pick():\n    return 'model-a'\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
 
-	scriptFile, err := os.CreateTemp(t.TempDir(), "router-*.py")
+	mgr, err := newSmartRouterManager(folder, []string{libDir}, r, &testLogger{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	scriptFile.WriteString(`
-import router
-import mylib
-router.set_model(mylib.pick())
-`)
-	scriptFile.Close()
-
-	sr, err := newSmartRouter(scriptFile.Name(), "model-a", nil, []string{dir}, r, &testLogger{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer sr.Stop()
-
-	result := sr.Route(context.Background(), &ChatCompletionRequest{Model: "auto"})
-	if result.Model != "model-a" {
-		t.Fatalf("before lib change: want model-a, got %q", result.Model)
-	}
-
-	sr.mu.RLock()
-	oldPool := sr.pool
-	sr.mu.RUnlock()
-
-	// Update the library to return model-b
-	if err := os.WriteFile(dir+"/mylib.py", []byte(`
-def pick():
-    return "model-b"
-`), 0644); err != nil {
+	defer mgr.Stop()
+	if err := mgr.Start(); err != nil {
 		t.Fatal(err)
 	}
 
-	// Wait for debounce + reload
+	// Wait for initial scan
 	deadline := time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) {
-		sr.mu.RLock()
-		newPool := sr.pool
-		sr.mu.RUnlock()
-		if newPool != oldPool {
+		if mgr.get("auto") != nil {
 			break
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
-
-	sr.mu.RLock()
-	rebuilt := sr.pool != oldPool
-	sr.mu.RUnlock()
-	if !rebuilt {
-		t.Fatal("pool was not rebuilt after libdir file change")
+	sr := mgr.get("auto")
+	if sr == nil {
+		t.Fatal("router 'auto' not loaded")
+	}
+	if result := sr.Route(context.Background(), &ChatCompletionRequest{Model: "auto"}); result.Model != "model-a" {
+		t.Fatalf("before lib change: want model-a, got %q", result.Model)
 	}
 
-	result = sr.Route(context.Background(), &ChatCompletionRequest{Model: "auto"})
-	if result.Model != "model-b" {
-		t.Fatalf("after lib change: want model-b, got %q", result.Model)
+	// Update the shared library
+	if err := os.WriteFile(libDir+"/mylib.py", []byte("def pick():\n    return 'model-b'\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Wait for the watcher to rebuild and route to model-b
+	deadline = time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if result := sr.Route(context.Background(), &ChatCompletionRequest{Model: "auto"}); result.Model == "model-b" {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if result := sr.Route(context.Background(), &ChatCompletionRequest{Model: "auto"}); result.Model != "model-b" {
+		t.Fatal("pool was not rebuilt after libpath file change")
 	}
 }
 
@@ -397,7 +377,7 @@ func TestLibDir_NoLibDirNoWatcher(t *testing.T) {
 	scriptFile.WriteString(`import router; router.set_model("model-a")`)
 	scriptFile.Close()
 
-	sr, err := newSmartRouter(scriptFile.Name(), "model-a", nil, nil, r, &testLogger{})
+	sr, err := newSmartRouter("auto", scriptFile.Name(), "model-a", nil, nil, r, &testLogger{})
 	if err != nil {
 		t.Fatal(err)
 	}

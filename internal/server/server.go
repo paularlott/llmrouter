@@ -43,6 +43,7 @@ func RunServer(ctx context.Context, cmd *cli.Command) error {
 		Conversations: types.ConversationsConfig{
 			TTLDays: cmd.GetInt("conversations-ttl"),
 		},
+		RoutesDir: cmd.GetString("routes-dir"),
 		Scripting: types.ScriptingConfig{
 			ToolsDir:     cmd.GetString("tools-dir"),
 			ResourcesDir: cmd.GetString("resources-dir"),
@@ -111,11 +112,8 @@ func RunServer(ctx context.Context, cmd *cli.Command) error {
 				})
 			}
 		}
-		if srCfg := typedConfig.GetObject("smart_routing"); srCfg != nil {
-			config.SmartRouting.Enabled = srCfg.GetBool("enabled")
-			config.SmartRouting.Script = srCfg.GetString("script")
-			config.SmartRouting.DefaultModel = srCfg.GetString("default_model")
-			config.SmartRouting.LibPath = srCfg.GetStringSlice("libpath")
+		if srDir := typedConfig.GetString("routes_dir"); srDir != "" {
+			config.RoutesDir = srDir
 		}
 		if scriptingCfg := typedConfig.GetObject("scripting"); scriptingCfg != nil {
 			config.Scripting.ToolsDir = scriptingCfg.GetString("tools_dir")

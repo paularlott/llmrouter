@@ -148,6 +148,7 @@ tasks:
         --commands-dir ./examples/commands
         --resources-dir ./examples/resources
         --prompts-dir ./examples/prompts
+        --routes-dir ./examples/routers
 
   watch:
     desc: Watch for changes and rebuild

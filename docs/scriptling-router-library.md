@@ -4,29 +4,44 @@ The `router` library is automatically available in routing scripts. It exposes l
 
 ## Configuration
 
-```toml
-[smart_routing]
-enabled = true
-script = "router.scriptling"
-default_model = "mistralai/ministral-3-3b"
-libpath = ["./router_libs", "/shared/libs"]  # Optional: additional directories to search for libraries
+Smart routers live in a folder of `<model>.toml` (+ optional `<model>.py`) pairs. Point llmrouter at it with `routes_dir`:
 
-[smart_routing.vars]
+```toml
+routes_dir = "./routers"
+```
+
+Each `<model>.toml` defines a router whose trigger model name is the filename stem (`auto.toml` → model `auto`). The companion `<model>.py` is the routing script. When a client requests that model name, the script runs and picks a real model.
+
+```toml
+# routers/auto.toml
+enabled = true
+default_model = "mistralai/ministral-3-3b"
+
+[vars]
 openai_key = "sk-..."
 my_endpoint = "https://api.example.com"
 ```
 
-Smart routing activates when a client requests the model name `auto`. The script picks a provider and model. On any failure or empty result, `default_model` is used. The `auto` model is injected into `/v1/models` so clients can discover it.
+| File                          | Effect                                                                          |
+| ----------------------------- | ------------------------------------------------------------------------------- |
+| `<model>.toml`                | Defines a router named `<model>`. Required for a router to exist.               |
+| `<model>.py`                  | Optional routing script. Absent → the router is a pure alias to `default_model`. |
+| `<name>.py` (no matching .toml) | Just an importable library, shared by every router in the folder.             |
 
-`vars` is an optional map of key-value string pairs made available to the script as the `vars` library (see [Script Variables](#script-variables)).
+`default_model` is used when the script returns nothing, errors, or times out (5 s limit). Every router model is injected into `/v1/models` so clients can discover it. Router names must be a single path segment (no `/`); a name colliding with a real provider model is skipped.
+
+`vars` is an optional table of key-value string pairs made available to the script as the `vars` library (see [Script Variables](#script-variables)).
 
 ### Library Path
 
-Libraries are searched in the following order:
-1. **Script directory** - the directory containing the routing script is always searched first
-2. **libpath entries** - any directories specified in `libpath` are searched in order
+The routers folder is always the first library search path, so a `.py` placed alongside routers is importable by all of them. Add more search directories with the global, repeatable `--libpath` flag (`libpath` on the CLI, `lib_paths` in config), shared with the scriptling MCP tools:
 
-This matches the behaviour of the scriptling CLI's `--libpath` / `-L` flag. The script directory is implicitly the first search path, allowing libraries placed alongside the script to be imported without additional configuration.
+```toml
+[scripting]
+lib_paths = ["./router_libs", "/shared/libs"]
+```
+
+The folder and every libpath directory are watched for changes — script, config, or library edits are picked up within ~100 ms with no restart, rebuilding affected router pools.
 
 ### Provider Tags
 
@@ -122,15 +137,17 @@ The following extended libraries are enabled. Filesystem access (`os`, `os.path`
 
 ### Script Variables
 
-Key-value pairs defined in `[smart_routing.vars]` are exposed as the `vars` library:
+Key-value pairs defined in the `[vars]` table of a router's `.toml` are exposed as the `vars` library. Each key is available as an attribute, and `get(name, default="")` looks one up dynamically:
 
 ```python
 import vars
 
-client = scriptling.ai.Client("", api_key=vars.openai_key)
+key = vars.openai_key            # attribute access
+key = vars.get("openai_key")     # dynamic lookup
+key = vars.get("missing", "")    # with a default
 ```
 
-All values are strings. Use this to pass tokens, endpoints, or other configuration to the script without hard-coding them.
+All values are strings. `vars` is always registered (even when no vars are defined), so `vars.get()` is always callable. Use this to pass tokens, endpoints, or other configuration to the script without hard-coding them.
 
 ---
 
@@ -220,19 +237,21 @@ Return nothing or don't call `set_model` to fall back to `default_model`.
 
 ## Hot Reload
 
-The routing script and any libraries in the library search paths are watched with a filesystem watcher. Changes are picked up within ~100ms — no restart required. When any file in a watched directory changes, all VM pools are rebuilt with the updated libraries.
+The routers folder and every library search path are watched with a filesystem watcher. Changes are picked up within ~100ms — no restart required:
+
+- Editing a router's `.py` or `.toml` rebuilds that router's VM pool.
+- Adding a `<model>.toml` registers a new router; deleting it removes the router.
+- Changing a shared library (in the folder or a `libpath` dir) rebuilds all router pools, since any router may import it.
 
 ---
 
 ## Script Libraries (`libpath`)
 
-Set `libpath` to a list of directories containing `.py` files to make shared libraries available to routing scripts. The directory containing the routing script is always searched first, followed by any `libpath` entries in order.
+The routers folder is always searched first, so a `.py` placed next to routers is importable by all of them. Add more search directories with the global, repeatable `--libpath` flag (shared with the scriptling MCP tools), or `lib_paths` in config:
 
 ```toml
-[smart_routing]
-enabled = true
-script = "router.py"
-libpath = ["./router_libs", "/shared/libs"]
+[scripting]
+lib_paths = ["./router_libs", "/shared/libs"]
 ```
 
 Given `./router_libs/utils.py`:
