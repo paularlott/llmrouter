@@ -82,13 +82,32 @@ func (m *mergedPersonaSource) infos(ctx context.Context) []admin.PersonaInfo {
 	return out
 }
 
-// entries builds the merged, name-sorted persona list. The Default persona is
-// always first by convention. Duplicate names between file and stored sources
-// are allowed (they keep distinct IDs); config-file personas are NOT treated
-// as authoritative the way config-file providers are, because personas have no
-// runtime health/state to shadow.
+// entries builds the merged, name-sorted persona list. The Default persona
+// is always present: if it's been saved to storage (user set a model / params
+// via the admin UI) the stored version is used; otherwise a bare synthetic
+// entry serves as a read-only fallback until first edit. Duplicate names
+// between file and stored sources are allowed (they keep distinct IDs).
 func (m *mergedPersonaSource) entries(ctx context.Context) []personaEntry {
-	out := []personaEntry{{ID: "default", Name: "Default"}}
+	var out []personaEntry
+
+	// Default persona: stored version if it exists, else synthetic.
+	if m.storage != nil {
+		if stored, err := m.storage.Get(ctx, "default"); err == nil {
+			out = append(out, personaEntry{
+				ID:           stored.ID,
+				Name:         stored.Name,
+				Description:  stored.Description,
+				SystemPrompt: stored.SystemPrompt,
+				DefaultModel: stored.DefaultModel,
+				Params:       stored.Params,
+				Static:       false,
+			})
+		} else {
+			out = append(out, personaEntry{ID: "default", Name: "Default"})
+		}
+	} else {
+		out = append(out, personaEntry{ID: "default", Name: "Default"})
+	}
 
 	// File-backed personas (read-only in the UI).
 	for _, e := range readFilePersonas(m.dir) {
@@ -96,11 +115,14 @@ func (m *mergedPersonaSource) entries(ctx context.Context) []personaEntry {
 		out = append(out, e)
 	}
 
-	// Stored personas (managed via UI).
+	// Stored personas (managed via UI), excluding "default" (handled above).
 	if m.storage != nil {
 		stored, err := m.storage.List(ctx)
 		if err == nil {
 			for _, p := range stored {
+				if p.ID == "default" {
+					continue
+				}
 				out = append(out, personaEntry{
 					ID:           p.ID,
 					Name:         p.Name,

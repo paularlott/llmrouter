@@ -29,6 +29,8 @@ github.com/paularlott/gossip v0.12.7 h1:k17471+iNCHMG9wg7AdRW/+F0jVXhIugPkhPw1s8
 github.com/paularlott/gossip v0.12.7/go.mod h1:ME1A8VWeCe/YBG7jaDZFjp7h4APG+FWLxJbjNy48Rn0=
 github.com/paularlott/jsonrpc v0.1.0 h1:SbHR1kHTp0yOdW+FOeHHUWTsD1zwZfv8uFbHSSQlm8w=
 github.com/paularlott/jsonrpc v0.1.0/go.mod h1:mXoOPTPQf87HF3wR064n23dmsAQs3/EICA3Cbha3Sk4=
+github.com/paularlott/lmchatkit v0.8.0 h1:t/n3QKMR9818Nskzf9MsWihWdMY04T3spQcAHhr2RKg=
+github.com/paularlott/lmchatkit v0.8.0/go.mod h1:UG+lpOKE5RodE9v2i2sftV3w5cFZlkvBwu8pZivLt64=
 github.com/paularlott/logger v0.3.0 h1:QwVUoxmlEFkfHI25y5dn56OJvK4Bpe3OvoJu4GZM7ng=
 github.com/paularlott/logger v0.3.0/go.mod h1:vjAOY1vUvYigmJxxQ0eMclryIjDS6VWNK6FprtTMce0=
 github.com/paularlott/mcp v0.22.0 h1:FeNsMn0jNFKAddgRbIx4lLHkfivLyYDCY2Jh+424SGg=
@@ -63,6 +65,8 @@ github.com/vmihailenco/tagparser/v2 v2.0.0 h1:y09buUbR+b5aycVFQs/g70pqKVZNBmxwAh
 github.com/vmihailenco/tagparser/v2 v2.0.0/go.mod h1:Wri+At7QHww0WTrCBeu4J6bNtoV6mEfg5OIWRZA9qds=
 github.com/yuin/goldmark v1.8.2 h1:kEGpgqJXdgbkhcOgBxkC0X0PmoPG1ZyoZ117rDVp4zE=
 github.com/yuin/goldmark v1.8.2/go.mod h1:ip/1k0VRfGynBgxOz0yCqHrbZXhcjxyuS66Brc7iBKg=
+github.com/yuin/goldmark v1.8.4 h1:oat/nd3U6NeQqFEL3xpEJq7d7c86NI+DbSNGAs4xnjA=
+github.com/yuin/goldmark v1.8.4/go.mod h1:ip/1k0VRfGynBgxOz0yCqHrbZXhcjxyuS66Brc7iBKg=
 github.com/yusufpapurcu/wmi v1.2.4 h1:zFUKzehAFReQwLys1b/iSMl+JQGSCSjtVqQn9bBrPo0=
 github.com/yusufpapurcu/wmi v1.2.4/go.mod h1:SBZ9tNy3G9/m5Oi98Zks0QjeHVDvuK0qfxQmPyzfmi0=
 golang.org/x/net v0.57.0 h1:K5+3DljvIuDG9/Jv9rvyMywYNFCQ9RSUY6OOTTkT+tE=

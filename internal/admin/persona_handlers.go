@@ -107,9 +107,10 @@ func (a *Admin) HandleCreatePersona(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// HandleUpdatePersona updates a stored persona. File-based personas are
-// immutable from the UI — attempting to update one returns 404 so the caller
-// surfaces a clear error rather than silently no-op'ing.
+// HandleUpdatePersona updates a stored persona. The "default" persona is
+// special: it may not exist in storage yet (it starts as a synthetic entry),
+// so the first edit creates it (upsert). Its name is always "Default" and
+// cannot be changed. File-based personas are immutable from the UI.
 func (a *Admin) HandleUpdatePersona(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	if id == "" {
@@ -119,12 +120,6 @@ func (a *Admin) HandleUpdatePersona(w http.ResponseWriter, r *http.Request) {
 
 	if a.personaStorage == nil || !a.personaStorageWritable {
 		writeError(w, http.StatusBadRequest, "persona storage requires a configured storage path")
-		return
-	}
-
-	persona, err := a.personaStorage.Get(r.Context(), id)
-	if err != nil {
-		writeError(w, http.StatusNotFound, "persona not found or is a config-file persona")
 		return
 	}
 
@@ -141,19 +136,46 @@ func (a *Admin) HandleUpdatePersona(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// The ID stays anchored to the original name so saved conversations keep
-	// resolving; only display fields are editable.
-	if name := strings.TrimSpace(req.Name); name != "" {
-		persona.Name = name
+	// The "default" persona may not exist in storage yet — on first edit
+	// we create it (upsert). The name is always "Default".
+	var persona *storage.StoredPersona
+	isDefault := id == "default"
+	if isDefault {
+		if existing, err := a.personaStorage.Get(r.Context(), id); err == nil {
+			persona = existing
+		} else {
+			persona = &storage.StoredPersona{ID: "default", Name: "Default"}
+		}
+	} else {
+		var err error
+		persona, err = a.personaStorage.Get(r.Context(), id)
+		if err != nil {
+			writeError(w, http.StatusNotFound, "persona not found or is a config-file persona")
+			return
+		}
+	}
+
+	if !isDefault {
+		if name := strings.TrimSpace(req.Name); name != "" {
+			persona.Name = name
+		}
 	}
 	persona.Description = strings.TrimSpace(req.Description)
 	persona.SystemPrompt = req.SystemPrompt
 	persona.DefaultModel = strings.TrimSpace(req.DefaultModel)
 	persona.Params = req.Params
 
-	if err := a.personaStorage.Update(r.Context(), persona); err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to update persona")
-		return
+	// Create (first edit of "default") or update.
+	if isDefault && persona.CreatedAt == 0 {
+		if err := a.personaStorage.Create(r.Context(), persona); err != nil {
+			writeError(w, http.StatusInternalServerError, "failed to save persona")
+			return
+		}
+	} else {
+		if err := a.personaStorage.Update(r.Context(), persona); err != nil {
+			writeError(w, http.StatusInternalServerError, "failed to update persona")
+			return
+		}
 	}
 
 	if a.onPersonaChange != nil {
@@ -182,6 +204,11 @@ func (a *Admin) HandleDeletePersona(w http.ResponseWriter, r *http.Request) {
 
 	if a.personaStorage == nil || !a.personaStorageWritable {
 		writeError(w, http.StatusBadRequest, "persona storage requires a configured storage path")
+		return
+	}
+
+	if id == "default" {
+		writeError(w, http.StatusBadRequest, "the Default persona cannot be deleted")
 		return
 	}
 

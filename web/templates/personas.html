@@ -282,7 +282,7 @@
               </div>
               <div class="flex items-center gap-1">
                 <button
-                  x-show="!p.static && p.id !== 'default'"
+                  x-show="storageWritable && !p.static"
                   @click="openEdit(p)"
                   title="Edit"
                   class="icon-btn icon-btn-edit"
@@ -302,7 +302,7 @@
                   </svg>
                 </button>
                 <button
-                  x-show="!p.static && p.id !== 'default'"
+                  x-show="storageWritable && !p.static && p.id !== 'default'"
                   @click="confirmDelete(p)"
                   title="Delete"
                   class="icon-btn icon-btn-delete"
@@ -395,7 +395,12 @@
                 class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1"
                 >Name</label
               >
-              <input type="text" x-model="form.name" class="input-field" />
+              <input
+                type="text"
+                x-model="form.name"
+                :disabled="editingId === 'default'"
+                class="input-field"
+              />
             </div>
             <div>
               <label
