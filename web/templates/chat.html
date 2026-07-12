@@ -383,6 +383,7 @@
               <button
                 @click="fetch('/admin/api/logout', {method:'POST'}).finally(() => window.location.href='/admin/login')"
                 class="nav-link cursor-pointer text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
+                aria-label="Logout"
               >
                 <svg
                   class="w-4 h-4"
@@ -397,7 +398,6 @@
                     d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
                   />
                 </svg>
-                Logout
               </button>
             </div>
           </div>
@@ -497,7 +497,19 @@
                 @click="newChat(); mobileMenuOpen = false"
                 class="btn-add w-full mb-3 justify-center"
               >
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
+                <svg
+                  class="w-5 h-5"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M12 4v16m8-8H4"
+                  />
+                </svg>
                 New Chat
               </button>
               <div class="space-y-1 overflow-y-auto" style="max-height: 40vh">
@@ -577,11 +589,20 @@
         <aside
           class="wc-sidebar w-64 shrink-0 flex-col border-r border-slate-200 dark:border-slate-800 pr-4"
         >
-          <button
-            @click="newChat()"
-            class="btn-add w-full mb-4 justify-center"
-          >
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
+          <button @click="newChat()" class="btn-add w-full mb-4 justify-center">
+            <svg
+              class="w-5 h-5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M12 4v16m8-8H4"
+              />
+            </svg>
             New Chat
           </button>
           <div class="flex-1 overflow-y-auto space-y-1">
@@ -657,8 +678,13 @@
           <!-- Loading: hidden once lmchatkit's initial conversations fetch
                resolves, so the setup form can't flash before a restored
                currentId is applied. The setTimeout is just a safety net. -->
-          <div x-show="!chatReady" class="flex-1 flex items-center justify-center">
-            <div class="animate-spin rounded-full h-8 w-8 border-2 border-blue-500 border-t-transparent"></div>
+          <div
+            x-show="!chatReady"
+            class="flex-1 flex items-center justify-center"
+          >
+            <div
+              class="animate-spin rounded-full h-8 w-8 border-2 border-blue-500 border-t-transparent"
+            ></div>
           </div>
           <!-- Empty / setup state -->
           <div
@@ -878,7 +904,10 @@
           </div>
 
           <!-- Active chat -->
-          <div x-show="currentId && chatReady" class="flex-1 flex flex-col min-h-0">
+          <div
+            x-show="currentId && chatReady"
+            class="flex-1 flex flex-col min-h-0"
+          >
             <!-- Chat header: persona/model + tool availability -->
             <div class="flex items-center justify-between mb-4 px-1">
               <div class="flex items-center gap-3 min-w-0">
@@ -896,7 +925,6 @@
             <!-- Messages -->
             <div
               x-ref="messages"
-              @wheel.passive="onWheel($event)"
               class="wc-messages flex-1 overflow-y-auto space-y-4 pr-1 relative"
             >
               <template x-for="(m, idx) in messages" :key="m.id">
@@ -1006,28 +1034,28 @@
                             <span
                               x-text="m.tool_calls.length + ' tool call' + (m.tool_calls.length === 1 ? '' : 's')"
                             ></span>
+                            <span
+                              class="ml-auto flex items-center gap-1 text-[10px]"
+                            >
                               <span
-                                class="ml-auto flex items-center gap-1 text-[10px]"
+                                x-show="m.tool_calls.some(c => c.running)"
+                                class="px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 flex items-center gap-1"
                               >
                                 <span
-                                  x-show="m.tool_calls.some(c => c.running)"
-                                  class="px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 flex items-center gap-1"
-                                >
-                                  <span
-                                    class="w-1.5 h-1.5 bg-blue-500 dark:bg-blue-400 rounded-full lmchatkit-bounce"
-                                  ></span>
-                                  running
-                                </span>
-                                <span
-                                  class="px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300"
-                                  x-text="m.tool_calls.filter(c => c.approval === 'approved' && !c.running).length + ' ok'"
+                                  class="w-1.5 h-1.5 bg-blue-500 dark:bg-blue-400 rounded-full lmchatkit-bounce"
                                 ></span>
-                                <span
-                                  x-show="m.tool_calls.some(c => c.approval === 'denied' || c.approval === 'error')"
-                                  class="px-1.5 py-0.5 rounded bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300"
-                                  >issues</span
-                                >
+                                running
                               </span>
+                              <span
+                                class="px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300"
+                                x-text="m.tool_calls.filter(c => c.approval === 'approved' && !c.running).length + ' ok'"
+                              ></span>
+                              <span
+                                x-show="m.tool_calls.some(c => c.approval === 'denied' || c.approval === 'error')"
+                                class="px-1.5 py-0.5 rounded bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300"
+                                >issues</span
+                              >
+                            </span>
                           </button>
                           <div
                             x-show="open"
@@ -1361,18 +1389,16 @@
                    until the first delta arrives, then carries the streaming
                    text + typing cursor. One bubble, one place to look. -->
 
-              <!-- Jump-to-bottom button: appears when the user has scrolled
-                   up while a response is streaming, so they can snap back
-                   to the latest output without having to wheel all the way
-                   down. Clicking also clears userHasScrolled so auto-scroll
-                   resumes. -->
+              <!-- Jump-to-bottom button: appears whenever follow mode is
+                   paused (the user scrolled up to read). Clicking it re-arms
+                   follow and snaps back to the newest output. -->
               <div
-                x-show="userHasScrolled"
+                x-show="!following"
                 x-transition.opacity
                 class="sticky bottom-2 flex justify-center pointer-events-none"
               >
                 <button
-                  @click="userHasScrolled = false; scrollToBottom()"
+                  @click="jumpToBottom()"
                   class="pointer-events-auto px-3 py-1.5 rounded-full bg-white dark:bg-slate-800 shadow-lg border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer flex items-center gap-1.5"
                 >
                   <svg
@@ -1593,9 +1619,7 @@
           class="absolute inset-0 bg-black/50"
           @click="showDeleteChatModal = false"
         ></div>
-        <div
-          class="modal max-w-sm p-6"
-        >
+        <div class="modal max-w-sm p-6">
           <h3 class="text-lg font-bold text-slate-900 dark:text-white mb-2">
             Delete Conversation
           </h3>
@@ -1604,10 +1628,7 @@
             undone.
           </p>
           <div class="flex justify-end gap-2">
-            <button
-              @click="showDeleteChatModal = false"
-              class="btn-cancel"
-            >
+            <button @click="showDeleteChatModal = false" class="btn-cancel">
               Cancel
             </button>
             <button
@@ -1615,7 +1636,19 @@
               class="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-medium cursor-pointer inline-flex items-center gap-1.5"
             >
               Delete
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 14l-4-4m0 0l4-4m-4 4h11a4 4 0 010 8h-1" /></svg>
+              <svg
+                class="w-4 h-4"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M9 14l-4-4m0 0l4-4m-4 4h11a4 4 0 010 8h-1"
+                />
+              </svg>
             </button>
           </div>
         </div>
@@ -1633,13 +1666,8 @@
           class="absolute inset-0 bg-black/50"
           @click="showEditModal = false"
         ></div>
-        <div
-          class="modal max-w-lg max-h-[90vh] overflow-y-auto"
-          @click.stop
-        >
-          <div
-            class="modal-header"
-          >
+        <div class="modal max-w-lg max-h-[90vh] overflow-y-auto" @click.stop>
+          <div class="modal-header">
             <h2 class="text-lg font-bold text-slate-900 dark:text-white">
               Edit conversation
             </h2>
@@ -1864,13 +1892,8 @@
               </div>
             </div>
           </div>
-          <div
-            class="modal-footer"
-          >
-            <button
-              @click="showEditModal = false"
-              class="btn-cancel"
-            >
+          <div class="modal-footer">
+            <button @click="showEditModal = false" class="btn-cancel">
               Cancel
             </button>
             <button
