@@ -1,140 +1,425 @@
 <!doctype html>
 <html lang="en" x-data :class="{ 'dark': $store.darkMode.value }">
   <head>
-    <script>(()=>{if(localStorage.getItem('darkMode')==='true')document.documentElement.classList.add('dark')})()</script>
+    <script>
+      (() => {
+        if (localStorage.getItem("darkMode") === "true")
+          document.documentElement.classList.add("dark");
+      })();
+    </script>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Personas - LLM Router Admin</title>
     <link rel="stylesheet" href="{{.CSSFile}}" />
     <script type="module" src="{{.JSFile}}"></script>
   </head>
-  <body class="min-h-screen bg-slate-100 dark:bg-slate-950 transition-colors duration-300">
+  <body
+    class="min-h-screen bg-slate-100 dark:bg-slate-950 transition-colors duration-300"
+  >
     <div x-data="personasPage()">
       <div x-data="{ mobileMenuOpen: false }">
-      <header class="sticky top-0 z-40 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shadow-sm">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
-          <div class="flex items-center gap-3">
-            <button class="wc-hamburger items-center justify-center p-2 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer" @click="mobileMenuOpen = true" aria-label="Open menu">
-              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" /></svg>
-            </button>
-            <a href="/admin/" class="flex items-center gap-3">
-              <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow shadow-blue-500/25">
-                <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" /></svg>
-              </div>
-              <span class="font-bold text-slate-900 dark:text-white">LLM Router</span>
-            </a>
+        <header
+          class="sticky top-0 z-40 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shadow-sm"
+        >
+          <div
+            class="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between"
+          >
+            <div class="flex items-center gap-3">
+              <button
+                class="wc-hamburger items-center justify-center p-2 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+                @click="mobileMenuOpen = true"
+                aria-label="Open menu"
+              >
+                <svg
+                  class="w-6 h-6"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M4 6h16M4 12h16M4 18h16"
+                  />
+                </svg>
+              </button>
+              <a href="/admin/" class="flex items-center gap-3">
+                <div
+                  class="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow shadow-blue-500/25"
+                >
+                  <svg
+                    class="w-4 h-4 text-white"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"
+                    />
+                  </svg>
+                </div>
+                <span class="font-bold text-slate-900 dark:text-white"
+                  >LLM Router</span
+                >
+              </a>
+            </div>
+            <div class="flex items-center gap-1">
+              <nav class="wc-nav-links flex items-center gap-1">
+                <a href="/admin/" class="nav-link">Dashboard</a>
+                <a href="/chat" class="nav-link">Chat</a>
+                <a href="/admin/personas" class="nav-link nav-link-active"
+                  >Personas</a
+                >
+                <a href="/admin/models" class="nav-link">Models</a>
+                <a href="/admin/providers" class="nav-link">Providers</a>
+                <a href="/admin/mcp-servers" class="nav-link">MCP Servers</a>
+              </nav>
+              <div class="w-px h-5 bg-slate-200 dark:bg-slate-700 mx-2"></div>
+              <button
+                @click="$store.darkMode.toggle()"
+                class="nav-link cursor-pointer"
+                aria-label="Toggle dark mode"
+                title="Toggle dark mode"
+              >
+                <svg
+                  x-show="!$store.darkMode.value"
+                  class="w-4 h-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"
+                  />
+                </svg>
+                <svg
+                  x-show="$store.darkMode.value"
+                  class="w-4 h-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"
+                  />
+                </svg>
+              </button>
+              <button
+                @click="logout"
+                class="nav-link cursor-pointer text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
+                aria-label="Logout"
+              >
+                <svg
+                  class="w-4 h-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
+                  />
+                </svg>
+              </button>
+            </div>
           </div>
-          <div class="flex items-center gap-1">
-            <nav class="wc-nav-links flex items-center gap-1">
+        </header>
+        <div class="wc-mobile-panel" x-show="mobileMenuOpen" x-cloak>
+          <div
+            @click="mobileMenuOpen = false"
+            style="
+              position: fixed;
+              inset: 0;
+              background: rgba(0, 0, 0, 0.5);
+              z-index: 45;
+            "
+          ></div>
+          <div
+            style="
+              position: fixed;
+              top: 0;
+              bottom: 0;
+              left: 0;
+              width: 18rem;
+              max-width: 80vw;
+              z-index: 50;
+              overflow-y: auto;
+            "
+            class="bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800"
+          >
+            <div
+              class="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-800"
+            >
+              <span class="font-bold text-slate-900 dark:text-white">Menu</span>
+              <button
+                @click="mobileMenuOpen = false"
+                class="p-1 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 cursor-pointer"
+                aria-label="Close menu"
+              >
+                <svg
+                  class="w-5 h-5"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M6 18L18 6M6 6l12 12"
+                  />
+                </svg>
+              </button>
+            </div>
+            <nav class="flex flex-col gap-1 px-3 py-3">
               <a href="/admin/" class="nav-link">Dashboard</a>
               <a href="/chat" class="nav-link">Chat</a>
-              <a href="/admin/personas" class="nav-link nav-link-active">Personas</a>
+              <a href="/admin/personas" class="nav-link nav-link-active"
+                >Personas</a
+              >
               <a href="/admin/models" class="nav-link">Models</a>
               <a href="/admin/providers" class="nav-link">Providers</a>
               <a href="/admin/mcp-servers" class="nav-link">MCP Servers</a>
             </nav>
-            <div class="w-px h-5 bg-slate-200 dark:bg-slate-700 mx-2"></div>
-            <button @click="$store.darkMode.toggle()" class="nav-link cursor-pointer" aria-label="Toggle dark mode" title="Toggle dark mode">
-              <svg x-show="!$store.darkMode.value" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" /></svg>
-              <svg x-show="$store.darkMode.value" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
-            </button>
-            <button @click="logout" class="nav-link cursor-pointer text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20">
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
-              Logout
-            </button>
           </div>
-        </div>
-      </header>
-      <div class="wc-mobile-panel" x-show="mobileMenuOpen" x-cloak>
-        <div @click="mobileMenuOpen = false" style="position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:45;"></div>
-        <div style="position:fixed;top:0;bottom:0;left:0;width:18rem;max-width:80vw;z-index:50;overflow-y:auto;" class="bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800">
-          <div class="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-800">
-            <span class="font-bold text-slate-900 dark:text-white">Menu</span>
-            <button @click="mobileMenuOpen = false" class="p-1 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 cursor-pointer" aria-label="Close menu"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg></button>
-          </div>
-          <nav class="flex flex-col gap-1 px-3 py-3">
-            <a href="/admin/" class="nav-link">Dashboard</a>
-            <a href="/chat" class="nav-link">Chat</a>
-            <a href="/admin/personas" class="nav-link nav-link-active">Personas</a>
-            <a href="/admin/models" class="nav-link">Models</a>
-            <a href="/admin/providers" class="nav-link">Providers</a>
-            <a href="/admin/mcp-servers" class="nav-link">MCP Servers</a>
-          </nav>
         </div>
       </div>
-      </div><!-- /mobileMenuOpen scope -->
+      <!-- /mobileMenuOpen scope -->
 
       <main class="max-w-7xl mx-auto px-4 sm:px-6 py-8">
         <div class="flex items-center justify-between mb-8">
-          <h1 class="text-2xl font-bold text-slate-900 dark:text-white">Personas</h1>
+          <h1 class="text-2xl font-bold text-slate-900 dark:text-white">
+            Personas
+          </h1>
           <button x-show="storageWritable" @click="openAdd()" class="btn-add">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
+            <svg
+              class="w-5 h-5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M12 4v16m8-8H4"
+              />
+            </svg>
             Add Persona
           </button>
         </div>
 
-        <div x-show="!loading && !storageWritable" class="mb-6 p-4 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-sm text-amber-800 dark:text-amber-200">
-          Persona management requires a configured storage path. Personas from the config file are shown read-only.
+        <div
+          x-show="!loading && !storageWritable"
+          class="mb-6 p-4 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-sm text-amber-800 dark:text-amber-200"
+        >
+          Persona management requires a configured storage path. Personas from
+          the config file are shown read-only.
         </div>
 
         <div x-show="loading" class="flex items-center justify-center py-12">
-          <div class="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+          <div
+            class="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"
+          ></div>
         </div>
 
-        <div x-show="!loading && personas.length > 0" class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+        <div
+          x-show="!loading && personas.length > 0"
+          class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden"
+        >
           <template x-for="p in personas" :key="p.id">
-            <div class="flex items-center gap-4 px-4 py-3 border-b border-slate-100 dark:border-slate-800 last:border-0 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+            <div
+              class="flex items-center gap-4 px-4 py-3 border-b border-slate-100 dark:border-slate-800 last:border-0 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
+            >
               <div class="flex-1 min-w-0">
                 <div class="flex items-center gap-2">
-                  <span class="font-medium text-slate-900 dark:text-white" x-text="p.name"></span>
-                  <span x-show="p.id === 'default'" class="text-[10px] px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 font-medium uppercase">built-in</span>
-                  <span x-show="p.static && p.id !== 'default'" class="text-[10px] px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 font-medium uppercase">config</span>
-                  <span x-show="!p.static && p.id !== 'default'" class="text-[10px] px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 font-medium uppercase">stored</span>
+                  <span
+                    class="font-medium text-slate-900 dark:text-white"
+                    x-text="p.name"
+                  ></span>
+                  <span
+                    x-show="p.id === 'default'"
+                    class="text-[10px] px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 font-medium uppercase"
+                    >built-in</span
+                  >
+                  <span
+                    x-show="p.static && p.id !== 'default'"
+                    class="text-[10px] px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 font-medium uppercase"
+                    >config</span
+                  >
+                  <span
+                    x-show="!p.static && p.id !== 'default'"
+                    class="text-[10px] px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 font-medium uppercase"
+                    >stored</span
+                  >
                 </div>
-                <div class="flex items-center gap-3 mt-0.5 text-xs text-slate-500 dark:text-slate-400">
-                  <span x-show="p.description" class="truncate" x-text="p.description"></span>
-                  <span x-show="p.default_model" class="truncate font-mono" x-text="p.default_model"></span>
+                <div
+                  class="flex items-center gap-3 mt-0.5 text-xs text-slate-500 dark:text-slate-400"
+                >
+                  <span
+                    x-show="p.description"
+                    class="truncate"
+                    x-text="p.description"
+                  ></span>
+                  <span
+                    x-show="p.default_model"
+                    class="truncate font-mono"
+                    x-text="p.default_model"
+                  ></span>
                 </div>
               </div>
               <div class="flex items-center gap-1">
-                <button x-show="!p.static && p.id !== 'default'" @click="openEdit(p)" title="Edit" class="icon-btn icon-btn-edit">
-                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                <button
+                  x-show="!p.static && p.id !== 'default'"
+                  @click="openEdit(p)"
+                  title="Edit"
+                  class="icon-btn icon-btn-edit"
+                >
+                  <svg
+                    class="w-4 h-4"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                    />
+                  </svg>
                 </button>
-                <button x-show="!p.static && p.id !== 'default'" @click="confirmDelete(p)" title="Delete" class="icon-btn icon-btn-delete">
-                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                <button
+                  x-show="!p.static && p.id !== 'default'"
+                  @click="confirmDelete(p)"
+                  title="Delete"
+                  class="icon-btn icon-btn-delete"
+                >
+                  <svg
+                    class="w-4 h-4"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                    />
+                  </svg>
                 </button>
               </div>
             </div>
           </template>
         </div>
 
-        <div x-show="!loading && personas.length === 0" class="text-center py-12">
-          <p class="text-slate-500 dark:text-slate-400 mb-4">No personas configured.</p>
-          <button x-show="storageWritable" @click="openAdd()" class="btn-add"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>Add Persona</button>
+        <div
+          x-show="!loading && personas.length === 0"
+          class="text-center py-12"
+        >
+          <p class="text-slate-500 dark:text-slate-400 mb-4">
+            No personas configured.
+          </p>
+          <button x-show="storageWritable" @click="openAdd()" class="btn-add">
+            <svg
+              class="w-5 h-5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M12 4v16m8-8H4"
+              /></svg
+            >Add Persona
+          </button>
         </div>
       </main>
 
       <!-- Add/Edit Modal -->
-      <div x-show="showModal" x-cloak x-trap="showModal" class="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
-        <div class="absolute inset-0 bg-black/50" @click="showModal = false"></div>
+      <div
+        x-show="showModal"
+        x-cloak
+        x-trap="showModal"
+        class="fixed inset-0 z-50 flex items-center justify-center p-4"
+        role="dialog"
+        aria-modal="true"
+      >
+        <div
+          class="absolute inset-0 bg-black/50"
+          @click="showModal = false"
+        ></div>
         <div class="modal max-w-lg max-h-[90vh] overflow-y-auto" @click.stop>
           <div class="modal-header">
-            <h2 class="text-lg font-bold text-slate-900 dark:text-white" x-text="editing ? 'Edit Persona' : 'Add Persona'"></h2>
-            <button @click="showModal = false" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer">
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+            <h2
+              class="text-lg font-bold text-slate-900 dark:text-white"
+              x-text="editing ? 'Edit Persona' : 'Add Persona'"
+            ></h2>
+            <button
+              @click="showModal = false"
+              class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
+            >
+              <svg
+                class="w-5 h-5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M6 18L18 6M6 6l12 12"
+                />
+              </svg>
             </button>
           </div>
           <div class="modal-body">
             <div>
-              <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Name</label>
+              <label
+                class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1"
+                >Name</label
+              >
               <input type="text" x-model="form.name" class="input-field" />
             </div>
             <div>
-              <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Description <span class="text-slate-400 font-normal">(shown in the persona picker)</span></label>
-              <input type="text" x-model="form.description" placeholder="Helps with code review and debugging." class="input-field" />
+              <label
+                class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1"
+                >Description
+                <span class="text-slate-400 font-normal"
+                  >(shown in the persona picker)</span
+                ></label
+              >
+              <input
+                type="text"
+                x-model="form.description"
+                placeholder="Helps with code review and debugging."
+                class="input-field"
+              />
             </div>
             <div>
-              <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Default Model <span class="text-slate-400 font-normal">(optional)</span></label>
+              <label
+                class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1"
+                >Default Model
+                <span class="text-slate-400 font-normal"
+                  >(optional)</span
+                ></label
+              >
               <div class="relative">
                 <input
                   type="text"
@@ -154,9 +439,25 @@
                   class="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
                   aria-label="Clear default model"
                 >
-                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                  <svg
+                    class="w-4 h-4"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M6 18L18 6M6 6l12 12"
+                    />
+                  </svg>
                 </button>
-                <div x-show="modelOpen && modelMatches.length > 0" x-cloak class="ac-menu">
+                <div
+                  x-show="modelOpen && modelMatches.length > 0"
+                  x-cloak
+                  class="ac-menu"
+                >
                   <template x-for="(m, i) in modelMatches" :key="m.id">
                     <button
                       type="button"
@@ -166,8 +467,15 @@
                       :class="i === modelIndex ? 'ac-item-active' : 'ac-item-hover'"
                     >
                       <div class="flex-1 min-w-0">
-                        <div class="font-mono text-slate-900 dark:text-white truncate" x-text="m.id"></div>
-                        <div x-show="(m.providers || []).length" class="text-xs text-slate-500 dark:text-slate-400 truncate" x-text="(m.providers || []).join(', ')"></div>
+                        <div
+                          class="font-mono text-slate-900 dark:text-white truncate"
+                          x-text="m.id"
+                        ></div>
+                        <div
+                          x-show="(m.providers || []).length"
+                          class="text-xs text-slate-500 dark:text-slate-400 truncate"
+                          x-text="(m.providers || []).join(', ')"
+                        ></div>
                       </div>
                     </button>
                   </template>
@@ -175,43 +483,117 @@
               </div>
             </div>
             <div>
-              <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">System Prompt</label>
-              <textarea x-model="form.system_prompt" rows="5" placeholder="You are a senior software engineer..." class="input-field font-mono"></textarea>
+              <label
+                class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1"
+                >System Prompt</label
+              >
+              <textarea
+                x-model="form.system_prompt"
+                rows="5"
+                placeholder="You are a senior software engineer..."
+                class="input-field font-mono"
+              ></textarea>
             </div>
             <div>
-              <p class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Parameters <span class="text-xs text-slate-400 font-normal">(optional)</span></p>
+              <p
+                class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2"
+              >
+                Parameters
+                <span class="text-xs text-slate-400 font-normal"
+                  >(optional)</span
+                >
+              </p>
               <div class="grid grid-cols-2 gap-x-4 gap-y-3">
                 <div>
-                  <label class="block text-xs text-slate-500 dark:text-slate-400 mb-0.5">Temperature</label>
-                  <input type="number" step="0.05" x-model.number="form.params.temperature" placeholder="default" class="input-field" />
+                  <label
+                    class="block text-xs text-slate-500 dark:text-slate-400 mb-0.5"
+                    >Temperature</label
+                  >
+                  <input
+                    type="number"
+                    step="0.05"
+                    x-model.number="form.params.temperature"
+                    placeholder="default"
+                    class="input-field"
+                  />
                 </div>
                 <div>
-                  <label class="block text-xs text-slate-500 dark:text-slate-400 mb-0.5">Top P</label>
-                  <input type="number" step="0.05" x-model.number="form.params.top_p" placeholder="default" class="input-field" />
+                  <label
+                    class="block text-xs text-slate-500 dark:text-slate-400 mb-0.5"
+                    >Top P</label
+                  >
+                  <input
+                    type="number"
+                    step="0.05"
+                    x-model.number="form.params.top_p"
+                    placeholder="default"
+                    class="input-field"
+                  />
                 </div>
                 <div>
-                  <label class="block text-xs text-slate-500 dark:text-slate-400 mb-0.5">Top K</label>
-                  <input type="number" step="1" x-model.number="form.params.top_k" placeholder="default" class="input-field" />
+                  <label
+                    class="block text-xs text-slate-500 dark:text-slate-400 mb-0.5"
+                    >Top K</label
+                  >
+                  <input
+                    type="number"
+                    step="1"
+                    x-model.number="form.params.top_k"
+                    placeholder="default"
+                    class="input-field"
+                  />
                 </div>
                 <div>
-                  <label class="block text-xs text-slate-500 dark:text-slate-400 mb-0.5">Repeat Penalty</label>
-                  <input type="number" step="0.05" x-model.number="form.params.repeat_penalty" placeholder="default" class="input-field" />
+                  <label
+                    class="block text-xs text-slate-500 dark:text-slate-400 mb-0.5"
+                    >Repeat Penalty</label
+                  >
+                  <input
+                    type="number"
+                    step="0.05"
+                    x-model.number="form.params.repeat_penalty"
+                    placeholder="default"
+                    class="input-field"
+                  />
                 </div>
                 <div>
-                  <label class="block text-xs text-slate-500 dark:text-slate-400 mb-0.5">Context Length</label>
-                  <input type="number" step="512" x-model.number="form.params.context_length" placeholder="default" class="input-field" />
+                  <label
+                    class="block text-xs text-slate-500 dark:text-slate-400 mb-0.5"
+                    >Context Length</label
+                  >
+                  <input
+                    type="number"
+                    step="512"
+                    x-model.number="form.params.context_length"
+                    placeholder="default"
+                    class="input-field"
+                  />
                 </div>
                 <div>
-                  <label class="block text-xs text-slate-500 dark:text-slate-400 mb-0.5">Output Length</label>
-                  <input type="number" step="256" x-model.number="form.params.max_tokens" placeholder="default" class="input-field" />
+                  <label
+                    class="block text-xs text-slate-500 dark:text-slate-400 mb-0.5"
+                    >Output Length</label
+                  >
+                  <input
+                    type="number"
+                    step="256"
+                    x-model.number="form.params.max_tokens"
+                    placeholder="default"
+                    class="input-field"
+                  />
                 </div>
               </div>
             </div>
           </div>
           <div class="modal-footer">
-            <button @click="showModal = false" class="btn-cancel">Cancel</button>
+            <button @click="showModal = false" class="btn-cancel">
+              Cancel
+            </button>
             <button @click="save()" :disabled="saving" class="btn-submit">
-              <span x-show="!saving" x-text="editing ? 'Save' : 'Create'"></span>
+              <span
+                x-show="!saving"
+                x-text="editing ? 'Save' : 'Create'"
+              ></span>
               <span x-show="saving">Saving...</span>
             </button>
           </div>
@@ -219,19 +601,58 @@
       </div>
 
       <!-- Delete confirmation -->
-      <div x-show="showDeleteModal" x-cloak x-trap="showDeleteModal" @keydown.window.escape="if (showDeleteModal) showDeleteModal = false" @keydown.window.enter="if (showDeleteModal) { $event.preventDefault(); doDelete() }" class="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
-        <div class="absolute inset-0 bg-black/50" @click="showDeleteModal = false"></div>
+      <div
+        x-show="showDeleteModal"
+        x-cloak
+        x-trap="showDeleteModal"
+        @keydown.window.escape="if (showDeleteModal) showDeleteModal = false"
+        @keydown.window.enter="if (showDeleteModal) { $event.preventDefault(); doDelete() }"
+        class="fixed inset-0 z-50 flex items-center justify-center p-4"
+        role="dialog"
+        aria-modal="true"
+      >
+        <div
+          class="absolute inset-0 bg-black/50"
+          @click="showDeleteModal = false"
+        ></div>
         <div class="modal max-w-sm p-6">
-          <h3 class="text-lg font-bold text-slate-900 dark:text-white mb-2">Delete Persona</h3>
-          <p class="text-sm text-slate-600 dark:text-slate-300 mb-4">Are you sure you want to delete <span class="font-semibold" x-text="deleteTarget?.name"></span>? Existing chats that reference it will fall back to the Default persona. This cannot be undone.</p>
+          <h3 class="text-lg font-bold text-slate-900 dark:text-white mb-2">
+            Delete Persona
+          </h3>
+          <p class="text-sm text-slate-600 dark:text-slate-300 mb-4">
+            Are you sure you want to delete
+            <span class="font-semibold" x-text="deleteTarget?.name"></span>?
+            Existing chats that reference it will fall back to the Default
+            persona. This cannot be undone.
+          </p>
           <div class="flex justify-end gap-2">
-            <button @click="showDeleteModal = false" class="btn-cancel">Cancel</button>
-            <button @click="doDelete()" class="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-medium cursor-pointer inline-flex items-center gap-1.5">Delete <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 14l-4-4m0 0l4-4m-4 4h11a4 4 0 010 8h-1" /></svg></button>
+            <button @click="showDeleteModal = false" class="btn-cancel">
+              Cancel
+            </button>
+            <button
+              @click="doDelete()"
+              class="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-medium cursor-pointer inline-flex items-center gap-1.5"
+            >
+              Delete
+              <svg
+                class="w-4 h-4"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M9 14l-4-4m0 0l4-4m-4 4h11a4 4 0 010 8h-1"
+                />
+              </svg>
+            </button>
           </div>
         </div>
       </div>
-
-    </div><!-- /personasPage -->
+    </div>
+    <!-- /personasPage -->
 
     <script>
       function personasPage() {
@@ -243,12 +664,25 @@
           editing: false,
           editingId: null,
           saving: false,
-          form: { name: '', description: '', default_model: '', system_prompt: '', params: { temperature: null, top_p: null, top_k: null, repeat_penalty: null, context_length: null, max_tokens: null } },
+          form: {
+            name: "",
+            description: "",
+            default_model: "",
+            system_prompt: "",
+            params: {
+              temperature: null,
+              top_p: null,
+              top_k: null,
+              repeat_penalty: null,
+              context_length: null,
+              max_tokens: null,
+            },
+          },
           showDeleteModal: false,
           deleteTarget: null,
           deleting: false,
           models: [],
-          modelSearch: '',
+          modelSearch: "",
           modelOpen: false,
           modelIndex: 0,
 
@@ -258,30 +692,34 @@
           },
           async checkStorage() {
             try {
-              const r = await fetch('/admin/api/mcp-storage-status');
+              const r = await fetch("/admin/api/mcp-storage-status");
               if (r.ok) this.storageWritable = (await r.json()).writable;
             } catch {}
           },
           async load() {
             this.loading = true;
             try {
-              const r = await fetch('/admin/api/personas');
+              const r = await fetch("/admin/api/personas");
               if (r.ok) this.personas = await r.json();
-            } catch {} finally { this.loading = false; }
+            } catch {
+            } finally {
+              this.loading = false;
+            }
           },
           async loadModels() {
             try {
-              const r = await fetch('/admin/api/models');
+              const r = await fetch("/admin/api/models");
               if (r.ok) this.models = await r.json();
             } catch {}
           },
           get modelMatches() {
-            const q = (this.modelSearch || '').toLowerCase().trim();
+            const q = (this.modelSearch || "").toLowerCase().trim();
             let list = this.models;
             if (q) {
-              list = list.filter(m =>
-                m.id.toLowerCase().includes(q) ||
-                (m.providers || []).some(p => p.toLowerCase().includes(q))
+              list = list.filter(
+                (m) =>
+                  m.id.toLowerCase().includes(q) ||
+                  (m.providers || []).some((p) => p.toLowerCase().includes(q)),
               );
             }
             return list.slice(0, 50);
@@ -289,41 +727,60 @@
           onModelKeydown(e) {
             if (!this.modelOpen) return;
             const matches = this.modelMatches;
-            if (e.key === 'ArrowDown') {
+            if (e.key === "ArrowDown") {
               e.preventDefault();
-              this.modelIndex = Math.min(this.modelIndex + 1, matches.length - 1);
-            } else if (e.key === 'ArrowUp') {
+              this.modelIndex = Math.min(
+                this.modelIndex + 1,
+                matches.length - 1,
+              );
+            } else if (e.key === "ArrowUp") {
               e.preventDefault();
               this.modelIndex = Math.max(this.modelIndex - 1, 0);
-            } else if (e.key === 'Enter') {
+            } else if (e.key === "Enter") {
               e.preventDefault();
-              if (matches[this.modelIndex]) this.selectModel(matches[this.modelIndex]);
-            } else if (e.key === 'Escape') {
+              if (matches[this.modelIndex])
+                this.selectModel(matches[this.modelIndex]);
+            } else if (e.key === "Escape") {
               this.modelOpen = false;
             }
           },
           selectModel(m) {
             this.form.default_model = m.id;
-            this.modelSearch = '';
+            this.modelSearch = "";
             this.modelOpen = false;
           },
           emptyParams() {
-            return { temperature: null, top_p: null, top_k: null, repeat_penalty: null, context_length: null, max_tokens: null };
+            return {
+              temperature: null,
+              top_p: null,
+              top_k: null,
+              repeat_penalty: null,
+              context_length: null,
+              max_tokens: null,
+            };
           },
           pruneParams(src) {
             // Drop empty/null keys so we don't store no-op overrides; matches
             // the persona TOML convention where absent = inherit default.
             const out = {};
-            if (src) for (const k of Object.keys(src)) {
-              if (src[k] !== null && src[k] !== '' && !(Number.isNaN(src[k]))) out[k] = src[k];
-            }
+            if (src)
+              for (const k of Object.keys(src)) {
+                if (src[k] !== null && src[k] !== "" && !Number.isNaN(src[k]))
+                  out[k] = src[k];
+              }
             return out;
           },
           openAdd() {
             this.editing = false;
             this.editingId = null;
-            this.form = { name: '', description: '', default_model: '', system_prompt: '', params: this.emptyParams() };
-            this.modelSearch = '';
+            this.form = {
+              name: "",
+              description: "",
+              default_model: "",
+              system_prompt: "",
+              params: this.emptyParams(),
+            };
+            this.modelSearch = "";
             this.modelOpen = false;
             this.showModal = true;
           },
@@ -331,20 +788,25 @@
             this.editing = true;
             this.editingId = p.id;
             try {
-              const r = await fetch('/admin/api/personas/' + encodeURIComponent(p.id));
+              const r = await fetch(
+                "/admin/api/personas/" + encodeURIComponent(p.id),
+              );
               if (r.ok) {
                 const data = await r.json();
-                const params = { ...this.emptyParams(), ...(data.params || {}) };
-                  this.form = {
-                    name: data.name || '',
-                    description: data.description || '',
-                    default_model: data.default_model || '',
-                    system_prompt: data.system_prompt || '',
-                    params,
-                  };
-                  this.modelSearch = '';
-                  this.modelOpen = false;
-                  this.showModal = true;
+                const params = {
+                  ...this.emptyParams(),
+                  ...(data.params || {}),
+                };
+                this.form = {
+                  name: data.name || "",
+                  description: data.description || "",
+                  default_model: data.default_model || "",
+                  system_prompt: data.system_prompt || "",
+                  params,
+                };
+                this.modelSearch = "";
+                this.modelOpen = false;
+                this.showModal = true;
               }
             } catch {}
           },
@@ -359,20 +821,26 @@
             };
             try {
               const url = this.editing
-                ? '/admin/api/personas/' + encodeURIComponent(this.editingId)
-                : '/admin/api/personas';
-              const method = this.editing ? 'PUT' : 'POST';
-              const r = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+                ? "/admin/api/personas/" + encodeURIComponent(this.editingId)
+                : "/admin/api/personas";
+              const method = this.editing ? "PUT" : "POST";
+              const r = await fetch(url, {
+                method,
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(body),
+              });
               if (r.ok) {
                 this.showModal = false;
                 await this.load();
               } else {
-                const err = await r.json().catch(() => ({ error: 'failed' }));
-                alert(err.error || 'Failed to save persona');
+                const err = await r.json().catch(() => ({ error: "failed" }));
+                alert(err.error || "Failed to save persona");
               }
             } catch (e) {
-              alert('Error: ' + e.message);
-            } finally { this.saving = false; }
+              alert("Error: " + e.message);
+            } finally {
+              this.saving = false;
+            }
           },
           confirmDelete(p) {
             this.deleteTarget = p;
@@ -385,19 +853,21 @@
             const id = this.deleteTarget.id;
             this.deleteTarget = null;
             try {
-              await fetch('/admin/api/personas/' + encodeURIComponent(id), { method: 'DELETE' });
-            } catch {} finally {
+              await fetch("/admin/api/personas/" + encodeURIComponent(id), {
+                method: "DELETE",
+              });
+            } catch {
+            } finally {
               this.deleting = false;
               await this.load();
             }
           },
           async logout() {
-            await fetch('/admin/api/logout', { method: 'POST' });
-            window.location.href = '/admin/login';
+            await fetch("/admin/api/logout", { method: "POST" });
+            window.location.href = "/admin/login";
           },
         };
       }
     </script>
-
   </body>
 </html>

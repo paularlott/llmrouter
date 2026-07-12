@@ -117,6 +117,7 @@
               <button
                 @click="logout"
                 class="nav-link cursor-pointer text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
+                aria-label="Logout"
               >
                 <svg
                   class="w-4 h-4"
@@ -131,7 +132,6 @@
                     d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
                   />
                 </svg>
-                Logout
               </button>
             </div>
           </div>
@@ -203,11 +203,7 @@
           <h1 class="text-2xl font-bold text-slate-900 dark:text-white">
             Providers
           </h1>
-          <button
-            x-show="storageWritable"
-            @click="openAdd()"
-            class="btn-add"
-          >
+          <button x-show="storageWritable" @click="openAdd()" class="btn-add">
             <svg
               class="w-5 h-5"
               fill="none"
@@ -295,7 +291,10 @@
                   ><span class="w-2 h-2 rounded-full bg-red-500"></span>
                   unhealthy</span
                 >
-                <span x-show="p.enabled" x-text="p.model_count + ' models'"></span>
+                <span
+                  x-show="p.enabled"
+                  x-text="p.model_count + ' models'"
+                ></span>
                 <span x-text="'w:' + p.weight"></span>
               </div>
               <div class="flex items-center gap-1">
@@ -310,7 +309,9 @@
                       @change="toggleProviderEnabled(p)"
                       class="sr-only peer"
                     />
-                    <div class="relative w-9 h-5 bg-slate-200 dark:bg-slate-600 rounded-full peer peer-checked:bg-green-500 after:content-[''] after:absolute after:top-0.5 after:start-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-4"></div>
+                    <div
+                      class="relative w-9 h-5 bg-slate-200 dark:bg-slate-600 rounded-full peer peer-checked:bg-green-500 after:content-[''] after:absolute after:top-0.5 after:start-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-4"
+                    ></div>
                   </label>
                 </template>
                 <button
@@ -365,12 +366,20 @@
           <p class="text-slate-500 dark:text-slate-400 mb-4">
             No providers configured.
           </p>
-          <button
-            x-show="storageWritable"
-            @click="openAdd()"
-            class="btn-add"
-          >
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
+          <button x-show="storageWritable" @click="openAdd()" class="btn-add">
+            <svg
+              class="w-5 h-5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M12 4v16m8-8H4"
+              />
+            </svg>
             Add Provider
           </button>
         </div>
@@ -389,13 +398,8 @@
           class="absolute inset-0 bg-black/50"
           @click="showModal = false"
         ></div>
-        <div
-          class="modal max-w-lg max-h-[90vh] overflow-y-auto"
-          @click.stop
-        >
-          <div
-            class="modal-header"
-          >
+        <div class="modal max-w-lg max-h-[90vh] overflow-y-auto" @click.stop>
+          <div class="modal-header">
             <h2
               class="text-lg font-bold text-slate-900 dark:text-white"
               x-text="editing ? 'Edit Provider' : 'Add Provider'"
@@ -437,10 +441,7 @@
                 class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1"
                 >Provider Type</label
               >
-              <select
-                x-model="form.provider"
-                class="input-field"
-              >
+              <select x-model="form.provider" class="input-field">
                 <option value="openai">OpenAI compatible</option>
                 <option value="claude">Claude</option>
                 <option value="gemini">Gemini</option>
@@ -516,25 +517,21 @@
                   class="sr-only peer"
                   aria-label="Enable provider"
                 />
-                <div class="relative w-9 h-5 bg-slate-200 dark:bg-slate-600 rounded-full peer peer-checked:bg-green-500 after:content-[''] after:absolute after:top-0.5 after:start-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-4"></div>
+                <div
+                  class="relative w-9 h-5 bg-slate-200 dark:bg-slate-600 rounded-full peer peer-checked:bg-green-500 after:content-[''] after:absolute after:top-0.5 after:start-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-4"
+                ></div>
               </label>
-              <span class="text-sm font-medium text-slate-700 dark:text-slate-300">Enabled</span>
+              <span
+                class="text-sm font-medium text-slate-700 dark:text-slate-300"
+                >Enabled</span
+              >
             </div>
           </div>
-          <div
-            class="modal-footer"
-          >
-            <button
-              @click="showModal = false"
-              class="btn-cancel"
-            >
+          <div class="modal-footer">
+            <button @click="showModal = false" class="btn-cancel">
               Cancel
             </button>
-            <button
-              @click="save()"
-              :disabled="saving"
-              class="btn-submit"
-            >
+            <button @click="save()" :disabled="saving" class="btn-submit">
               <span
                 x-show="!saving"
                 x-text="editing ? 'Save' : 'Create'"
@@ -560,9 +557,7 @@
           class="absolute inset-0 bg-black/50"
           @click="showDeleteModal = false"
         ></div>
-        <div
-          class="modal max-w-sm p-6"
-        >
+        <div class="modal max-w-sm p-6">
           <h3 class="text-lg font-bold text-slate-900 dark:text-white mb-2">
             Delete Provider
           </h3>
@@ -572,10 +567,7 @@
             This cannot be undone.
           </p>
           <div class="flex justify-end gap-2">
-            <button
-              @click="showDeleteModal = false"
-              class="btn-cancel"
-            >
+            <button @click="showDeleteModal = false" class="btn-cancel">
               Cancel
             </button>
             <button
@@ -583,7 +575,19 @@
               class="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-medium cursor-pointer inline-flex items-center gap-1.5"
             >
               Delete
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 14l-4-4m0 0l4-4m-4 4h11a4 4 0 010 8h-1" /></svg>
+              <svg
+                class="w-4 h-4"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M9 14l-4-4m0 0l4-4m-4 4h11a4 4 0 010 8h-1"
+                />
+              </svg>
             </button>
           </div>
         </div>
@@ -767,6 +771,5 @@
         };
       }
     </script>
-
   </body>
 </html>

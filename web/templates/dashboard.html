@@ -120,6 +120,7 @@
               <button
                 @click="logout"
                 class="nav-link cursor-pointer text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
+                aria-label="Logout"
               >
                 <svg
                   class="w-4 h-4"
@@ -134,7 +135,6 @@
                     d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
                   />
                 </svg>
-                Logout
               </button>
             </div>
           </div>
@@ -424,12 +424,8 @@
         aria-modal="true"
         aria-labelledby="provider-modal-title"
       >
-        <div
-          class="modal max-w-lg max-h-[80vh] flex flex-col"
-        >
-          <div
-            class="modal-header"
-          >
+        <div class="modal max-w-lg max-h-[80vh] flex flex-col">
+          <div class="modal-header">
             <div>
               <h3
                 id="provider-modal-title"

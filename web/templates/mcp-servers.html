@@ -1,278 +1,621 @@
 <!doctype html>
 <html lang="en" x-data :class="{ 'dark': $store.darkMode.value }">
   <head>
-    <script>(()=>{if(localStorage.getItem('darkMode')==='true')document.documentElement.classList.add('dark')})()</script>
+    <script>
+      (() => {
+        if (localStorage.getItem("darkMode") === "true")
+          document.documentElement.classList.add("dark");
+      })();
+    </script>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>MCP Servers - LLM Router Admin</title>
     <link rel="stylesheet" href="{{.CSSFile}}" />
     <script type="module" src="{{.JSFile}}"></script>
   </head>
-  <body class="min-h-screen bg-slate-100 dark:bg-slate-950 transition-colors duration-300">
+  <body
+    class="min-h-screen bg-slate-100 dark:bg-slate-950 transition-colors duration-300"
+  >
     <div x-data="mcpServers()">
       <div x-data="{ mobileMenuOpen: false }">
-      <header class="sticky top-0 z-40 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shadow-sm">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
-          <div class="flex items-center gap-3">
-            <button class="wc-hamburger items-center justify-center p-2 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer" @click="mobileMenuOpen = true" aria-label="Open menu">
-              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" /></svg>
-            </button>
-            <a href="/admin/" class="flex items-center gap-3">
-              <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow shadow-blue-500/25">
-                <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" /></svg>
-              </div>
-              <span class="font-bold text-slate-900 dark:text-white">LLM Router</span>
-            </a>
+        <header
+          class="sticky top-0 z-40 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shadow-sm"
+        >
+          <div
+            class="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between"
+          >
+            <div class="flex items-center gap-3">
+              <button
+                class="wc-hamburger items-center justify-center p-2 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+                @click="mobileMenuOpen = true"
+                aria-label="Open menu"
+              >
+                <svg
+                  class="w-6 h-6"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M4 6h16M4 12h16M4 18h16"
+                  />
+                </svg>
+              </button>
+              <a href="/admin/" class="flex items-center gap-3">
+                <div
+                  class="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow shadow-blue-500/25"
+                >
+                  <svg
+                    class="w-4 h-4 text-white"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"
+                    />
+                  </svg>
+                </div>
+                <span class="font-bold text-slate-900 dark:text-white"
+                  >LLM Router</span
+                >
+              </a>
+            </div>
+            <div class="flex items-center gap-1">
+              <nav class="wc-nav-links flex items-center gap-1">
+                <a href="/admin/" class="nav-link">Dashboard</a>
+                <a href="/chat" class="nav-link">Chat</a>
+                <a href="/admin/personas" class="nav-link">Personas</a>
+                <a href="/admin/models" class="nav-link">Models</a>
+                <a href="/admin/providers" class="nav-link">Providers</a>
+                <a href="/admin/mcp-servers" class="nav-link nav-link-active"
+                  >MCP Servers</a
+                >
+              </nav>
+              <div class="w-px h-5 bg-slate-200 dark:bg-slate-700 mx-2"></div>
+              <button
+                @click="$store.darkMode.toggle()"
+                class="nav-link cursor-pointer"
+                aria-label="Toggle dark mode"
+                title="Toggle dark mode"
+              >
+                <svg
+                  x-show="!$store.darkMode.value"
+                  class="w-4 h-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"
+                  />
+                </svg>
+                <svg
+                  x-show="$store.darkMode.value"
+                  class="w-4 h-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"
+                  />
+                </svg>
+              </button>
+              <button
+                @click="logout"
+                class="nav-link cursor-pointer text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
+                aria-label="Logout"
+              >
+                <svg
+                  class="w-4 h-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
+                  />
+                </svg>
+              </button>
+            </div>
           </div>
-          <div class="flex items-center gap-1">
-            <nav class="wc-nav-links flex items-center gap-1">
+        </header>
+        <div class="wc-mobile-panel" x-show="mobileMenuOpen" x-cloak>
+          <div
+            @click="mobileMenuOpen = false"
+            style="
+              position: fixed;
+              inset: 0;
+              background: rgba(0, 0, 0, 0.5);
+              z-index: 45;
+            "
+          ></div>
+          <div
+            style="
+              position: fixed;
+              top: 0;
+              bottom: 0;
+              left: 0;
+              width: 18rem;
+              max-width: 80vw;
+              z-index: 50;
+              overflow-y: auto;
+            "
+            class="bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800"
+          >
+            <div
+              class="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-800"
+            >
+              <span class="font-bold text-slate-900 dark:text-white">Menu</span>
+              <button
+                @click="mobileMenuOpen = false"
+                class="p-1 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 cursor-pointer"
+                aria-label="Close menu"
+              >
+                <svg
+                  class="w-5 h-5"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M6 18L18 6M6 6l12 12"
+                  />
+                </svg>
+              </button>
+            </div>
+            <nav class="flex flex-col gap-1 px-3 py-3">
               <a href="/admin/" class="nav-link">Dashboard</a>
               <a href="/chat" class="nav-link">Chat</a>
               <a href="/admin/personas" class="nav-link">Personas</a>
               <a href="/admin/models" class="nav-link">Models</a>
               <a href="/admin/providers" class="nav-link">Providers</a>
-            <a href="/admin/mcp-servers" class="nav-link nav-link-active">MCP Servers</a>
+              <a href="/admin/mcp-servers" class="nav-link nav-link-active"
+                >MCP Servers</a
+              >
             </nav>
-            <div class="w-px h-5 bg-slate-200 dark:bg-slate-700 mx-2"></div>
-            <button @click="$store.darkMode.toggle()" class="nav-link cursor-pointer" aria-label="Toggle dark mode" title="Toggle dark mode">
-              <svg x-show="!$store.darkMode.value" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" /></svg>
-              <svg x-show="$store.darkMode.value" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
-            </button>
-            <button @click="logout" class="nav-link cursor-pointer text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20">
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
-              Logout
-            </button>
           </div>
-        </div>
-      </header>
-      <div class="wc-mobile-panel" x-show="mobileMenuOpen" x-cloak>
-        <div @click="mobileMenuOpen = false" style="position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:45;"></div>
-        <div style="position:fixed;top:0;bottom:0;left:0;width:18rem;max-width:80vw;z-index:50;overflow-y:auto;" class="bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800">
-          <div class="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-800">
-            <span class="font-bold text-slate-900 dark:text-white">Menu</span>
-            <button @click="mobileMenuOpen = false" class="p-1 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 cursor-pointer" aria-label="Close menu"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg></button>
-          </div>
-          <nav class="flex flex-col gap-1 px-3 py-3">
-            <a href="/admin/" class="nav-link">Dashboard</a>
-            <a href="/chat" class="nav-link">Chat</a>
-            <a href="/admin/personas" class="nav-link">Personas</a>
-            <a href="/admin/models" class="nav-link">Models</a>
-            <a href="/admin/providers" class="nav-link">Providers</a>
-            <a href="/admin/mcp-servers" class="nav-link nav-link-active">MCP Servers</a>
-          </nav>
         </div>
       </div>
-      </div><!-- /mobileMenuOpen scope -->
+      <!-- /mobileMenuOpen scope -->
 
       <!-- Main content -->
       <main class="max-w-7xl mx-auto px-4 sm:px-6 py-8">
-          <!-- Header -->
-          <div class="flex justify-between items-center mb-8">
-            <div>
-              <h2 class="text-2xl font-bold text-slate-900 dark:text-white">MCP Servers</h2>
-              <p class="text-slate-600 dark:text-slate-300 mt-1">Manage remote MCP server connections</p>
-            </div>
-            <div class="flex items-center gap-3">
-              <button
-                @click="refreshCache()"
-                :disabled="refreshing"
-                class="px-4 py-2 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl hover:bg-slate-200 dark:hover:bg-slate-600 transition-all duration-200 flex items-center gap-2 cursor-pointer disabled:opacity-50"
-                title="Refresh tool cache from all remote servers"
-              >
-                <svg class="w-5 h-5" :class="{ 'animate-spin': refreshing }" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                </svg>
-                <span x-text="refreshing ? 'Refreshing...' : 'Refresh Tools'"></span>
-              </button>
-              <button
-                x-show="storageWritable"
-                @click="showAddModal = true"
-                class="btn-add"
-              >
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-                </svg>
-                Add Server
-              </button>
-            </div>
+        <!-- Header -->
+        <div class="flex justify-between items-center mb-8">
+          <div>
+            <h2 class="text-2xl font-bold text-slate-900 dark:text-white">
+              MCP Servers
+            </h2>
+            <p class="text-slate-600 dark:text-slate-300 mt-1">
+              Manage remote MCP server connections
+            </p>
           </div>
-
-          <!-- Storage not configured warning -->
-          <div x-show="!loading && !storageWritable" class="card bg-amber-50 dark:bg-amber-900/30 border-amber-200 dark:border-amber-800 mb-6">
-            <div class="flex items-start gap-3">
-              <svg class="w-5 h-5 text-amber-600 dark:text-amber-300 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-              </svg>
-              <div>
-                <p class="font-medium text-amber-800 dark:text-amber-200">Storage Not Configured</p>
-                <p class="text-sm text-amber-700 dark:text-amber-200 mt-1">MCP servers cannot be added because no storage path is configured. To enable dynamic MCP server management, configure a storage path in your configuration file.</p>
-              </div>
-            </div>
-          </div>
-
-          <!-- Loading state -->
-          <div x-show="loading" class="flex items-center justify-center py-16">
-            <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
-          </div>
-
-          <!-- Error state -->
-          <div x-show="error && !loading" class="card bg-red-50 dark:bg-red-900/30 border-red-200 dark:border-red-800">
-            <p class="text-red-700 dark:text-red-400" x-text="error"></p>
-          </div>
-
-          <!-- Empty state -->
-          <div x-show="!loading && !error && servers.length === 0 && storageWritable" class="card text-center py-16">
-            <div class="w-20 h-20 mx-auto bg-slate-100 dark:bg-slate-700 rounded-2xl flex items-center justify-center mb-6">
-              <svg class="w-10 h-10 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01" />
-              </svg>
-            </div>
-            <h3 class="text-xl font-semibold text-slate-900 dark:text-white mb-2">No MCP Servers</h3>
-            <p class="text-slate-600 dark:text-slate-300 mb-6">Add your first MCP server to extend available tools</p>
+          <div class="flex items-center gap-3">
             <button
-              x-show="true"
-              @click="showAddModal = true"
-              class="px-6 py-3 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-xl shadow-lg shadow-blue-500/25 hover:shadow-xl transition-all cursor-pointer"
+              @click="refreshCache()"
+              :disabled="refreshing"
+              class="px-4 py-2 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl hover:bg-slate-200 dark:hover:bg-slate-600 transition-all duration-200 flex items-center gap-2 cursor-pointer disabled:opacity-50"
+              title="Refresh tool cache from all remote servers"
             >
-              Add Your First Server
+              <svg
+                class="w-5 h-5"
+                :class="{ 'animate-spin': refreshing }"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                />
+              </svg>
+              <span
+                x-text="refreshing ? 'Refreshing...' : 'Refresh Tools'"
+              ></span>
+            </button>
+            <button
+              x-show="storageWritable"
+              @click="showAddModal = true"
+              class="btn-add"
+            >
+              <svg
+                class="w-5 h-5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M12 4v16m8-8H4"
+                />
+              </svg>
+              Add Server
             </button>
           </div>
+        </div>
 
-          <!-- Empty state without storage -->
-          <div x-show="!loading && !error && servers.length === 0 && !storageWritable" class="card text-center py-16">
-            <div class="w-20 h-20 mx-auto bg-slate-100 dark:bg-slate-700 rounded-2xl flex items-center justify-center mb-6">
-              <svg class="w-10 h-10 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01" />
-              </svg>
+        <!-- Storage not configured warning -->
+        <div
+          x-show="!loading && !storageWritable"
+          class="card bg-amber-50 dark:bg-amber-900/30 border-amber-200 dark:border-amber-800 mb-6"
+        >
+          <div class="flex items-start gap-3">
+            <svg
+              class="w-5 h-5 text-amber-600 dark:text-amber-300 flex-shrink-0 mt-0.5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+              />
+            </svg>
+            <div>
+              <p class="font-medium text-amber-800 dark:text-amber-200">
+                Storage Not Configured
+              </p>
+              <p class="text-sm text-amber-700 dark:text-amber-200 mt-1">
+                MCP servers cannot be added because no storage path is
+                configured. To enable dynamic MCP server management, configure a
+                storage path in your configuration file.
+              </p>
             </div>
-            <h3 class="text-xl font-semibold text-slate-900 dark:text-white mb-2">No MCP Servers</h3>
-            <p class="text-slate-600 dark:text-slate-300 mb-6">Configure a storage path to enable dynamic MCP server management</p>
           </div>
+        </div>
 
-          <!-- Server list -->
-          <div x-show="!loading && !error && servers.length > 0" class="space-y-4">
-            <template x-for="server in servers" :key="server.namespace">
-              <div class="card hover:shadow-lg transition-shadow" :class="{ 'opacity-50': !server.static_server && !server.enabled }">
-                <div class="flex justify-between items-start">
-                  <div class="flex-1">
-                    <div class="flex items-center gap-3 mb-2">
-                      <h3 class="text-lg font-semibold text-slate-900 dark:text-white" x-text="server.namespace"></h3>
-                      <span
-                        x-show="server.static_server"
-                        class="px-2 py-0.5 text-xs font-medium rounded-full bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-400"
-                      >
-                        Static
-                      </span>
-                      <span
-                        x-show="!server.static_server && !server.enabled"
-                        class="px-2 py-0.5 text-xs font-medium rounded-full bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
-                      >
-                        Disabled
-                      </span>
-                      <span
-                        x-show="server.tool_visibility === 'ondemand'"
-                        class="px-2 py-0.5 text-xs font-medium rounded-full bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400"
-                      >
-                        On-demand
-                      </span>
-                      <span
-                        x-show="!server.static_server && server.auth_type === 'oauth2'"
-                        class="px-2 py-0.5 text-xs font-medium rounded-full bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
-                      >
-                        OAuth2
-                      </span>
-                    </div>
-                    <div class="flex items-center gap-4 text-sm text-slate-600 dark:text-slate-300">
-                      <span class="flex items-center gap-1">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
-                        </svg>
-                        <span class="truncate max-w-xs" x-text="server.url"></span>
-                      </span>
-                    </div>
+        <!-- Loading state -->
+        <div x-show="loading" class="flex items-center justify-center py-16">
+          <div
+            class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"
+          ></div>
+        </div>
+
+        <!-- Error state -->
+        <div
+          x-show="error && !loading"
+          class="card bg-red-50 dark:bg-red-900/30 border-red-200 dark:border-red-800"
+        >
+          <p class="text-red-700 dark:text-red-400" x-text="error"></p>
+        </div>
+
+        <!-- Empty state -->
+        <div
+          x-show="!loading && !error && servers.length === 0 && storageWritable"
+          class="card text-center py-16"
+        >
+          <div
+            class="w-20 h-20 mx-auto bg-slate-100 dark:bg-slate-700 rounded-2xl flex items-center justify-center mb-6"
+          >
+            <svg
+              class="w-10 h-10 text-slate-400"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01"
+              />
+            </svg>
+          </div>
+          <h3 class="text-xl font-semibold text-slate-900 dark:text-white mb-2">
+            No MCP Servers
+          </h3>
+          <p class="text-slate-600 dark:text-slate-300 mb-6">
+            Add your first MCP server to extend available tools
+          </p>
+          <button
+            x-show="true"
+            @click="showAddModal = true"
+            class="px-6 py-3 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-xl shadow-lg shadow-blue-500/25 hover:shadow-xl transition-all cursor-pointer"
+          >
+            Add Your First Server
+          </button>
+        </div>
+
+        <!-- Empty state without storage -->
+        <div
+          x-show="!loading && !error && servers.length === 0 && !storageWritable"
+          class="card text-center py-16"
+        >
+          <div
+            class="w-20 h-20 mx-auto bg-slate-100 dark:bg-slate-700 rounded-2xl flex items-center justify-center mb-6"
+          >
+            <svg
+              class="w-10 h-10 text-slate-400"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01"
+              />
+            </svg>
+          </div>
+          <h3 class="text-xl font-semibold text-slate-900 dark:text-white mb-2">
+            No MCP Servers
+          </h3>
+          <p class="text-slate-600 dark:text-slate-300 mb-6">
+            Configure a storage path to enable dynamic MCP server management
+          </p>
+        </div>
+
+        <!-- Server list -->
+        <div
+          x-show="!loading && !error && servers.length > 0"
+          class="space-y-4"
+        >
+          <template x-for="server in servers" :key="server.namespace">
+            <div
+              class="card hover:shadow-lg transition-shadow"
+              :class="{ 'opacity-50': !server.static_server && !server.enabled }"
+            >
+              <div class="flex justify-between items-start">
+                <div class="flex-1">
+                  <div class="flex items-center gap-3 mb-2">
+                    <h3
+                      class="text-lg font-semibold text-slate-900 dark:text-white"
+                      x-text="server.namespace"
+                    ></h3>
+                    <span
+                      x-show="server.static_server"
+                      class="px-2 py-0.5 text-xs font-medium rounded-full bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-400"
+                    >
+                      Static
+                    </span>
+                    <span
+                      x-show="!server.static_server && !server.enabled"
+                      class="px-2 py-0.5 text-xs font-medium rounded-full bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
+                    >
+                      Disabled
+                    </span>
+                    <span
+                      x-show="server.tool_visibility === 'ondemand'"
+                      class="px-2 py-0.5 text-xs font-medium rounded-full bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400"
+                    >
+                      On-demand
+                    </span>
+                    <span
+                      x-show="!server.static_server && server.auth_type === 'oauth2'"
+                      class="px-2 py-0.5 text-xs font-medium rounded-full bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                    >
+                      OAuth2
+                    </span>
                   </div>
-                  <div class="flex items-center gap-2">
-                    <!-- Enable/Disable toggle (only for non-static servers, admin only) -->
-                    <template x-if="!server.static_server">
-                      <label class="flex items-center cursor-pointer" :aria-label="'Enable or disable ' + server.namespace + ' server'">
-                        <input type="checkbox" :checked="server.enabled" @change="toggleServerEnabled(server)" class="sr-only peer" />
-                        <div class="relative w-9 h-5 bg-slate-200 dark:bg-slate-600 rounded-full peer peer-checked:bg-green-500 after:content-[''] after:absolute after:top-0.5 after:start-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-4"></div>
-                      </label>
-                    </template>
-                    <button
-                      @click="viewTools(server)"
-                      class="icon-btn icon-btn-view"
-                      :aria-label="'View tools for ' + server.namespace"
-                      title="View Tools"
-                    >
-                      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21.75 6.75a4.5 4.5 0 01-4.884 4.484c-1.076-.091-2.264.071-2.95.904l-7.152 8.684a2.548 2.548 0 11-3.586-3.586l8.684-7.152c.833-.686.995-1.874.904-2.95a4.5 4.5 0 016.336-4.486l-3.276 3.276a3.004 3.004 0 002.25 2.25l3.276-3.276c.256.565.398 1.192.398 1.852z" />
+                  <div
+                    class="flex items-center gap-4 text-sm text-slate-600 dark:text-slate-300"
+                  >
+                    <span class="flex items-center gap-1">
+                      <svg
+                        class="w-4 h-4"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          stroke-width="2"
+                          d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"
+                        />
                       </svg>
-                    </button>
-                    <button
-                      @click="viewResources(server)"
-                      class="icon-btn icon-btn-view"
-                      :aria-label="'View resources for ' + server.namespace"
-                      title="View Resources"
-                    >
-                      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
-                      </svg>
-                    </button>
-                    <button
-                      @click="viewPrompts(server)"
-                      class="icon-btn icon-btn-view"
-                      :aria-label="'View prompts for ' + server.namespace"
-                      title="View Prompts"
-                    >
-                      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h-3.5a1.5 1.5 0 010-3H8m0 0V5a2 2 0 012-2h4a2 2 0 012 2v2m-8 0h8m-8 0v3m8-3v3m0 0h3.5a1.5 1.5 0 010 3H16m0 0v3a2 2 0 01-2 2h-4a2 2 0 01-2-2v-3m8 0H8" />
-                      </svg>
-                    </button>
-                    <button
-                      x-show="!server.static_server"
-                      @click="editServer(server)"
-                      class="icon-btn icon-btn-edit"
-                      :aria-label="'Edit ' + server.namespace"
-                      title="Edit"
-                    >
-                      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                      </svg>
-                    </button>
-                    <button
-                      x-show="!server.static_server"
-                      @click="confirmDelete(server)"
-                      class="icon-btn icon-btn-delete"
-                      :aria-label="'Delete ' + server.namespace"
-                      title="Delete"
-                    >
-                      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                      </svg>
-                    </button>
+                      <span
+                        class="truncate max-w-xs"
+                        x-text="server.url"
+                      ></span>
+                    </span>
                   </div>
                 </div>
+                <div class="flex items-center gap-2">
+                  <!-- Enable/Disable toggle (only for non-static servers, admin only) -->
+                  <template x-if="!server.static_server">
+                    <label
+                      class="flex items-center cursor-pointer"
+                      :aria-label="'Enable or disable ' + server.namespace + ' server'"
+                    >
+                      <input
+                        type="checkbox"
+                        :checked="server.enabled"
+                        @change="toggleServerEnabled(server)"
+                        class="sr-only peer"
+                      />
+                      <div
+                        class="relative w-9 h-5 bg-slate-200 dark:bg-slate-600 rounded-full peer peer-checked:bg-green-500 after:content-[''] after:absolute after:top-0.5 after:start-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-4"
+                      ></div>
+                    </label>
+                  </template>
+                  <button
+                    @click="viewTools(server)"
+                    class="icon-btn icon-btn-view"
+                    :aria-label="'View tools for ' + server.namespace"
+                    title="View Tools"
+                  >
+                    <svg
+                      class="w-5 h-5"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M21.75 6.75a4.5 4.5 0 01-4.884 4.484c-1.076-.091-2.264.071-2.95.904l-7.152 8.684a2.548 2.548 0 11-3.586-3.586l8.684-7.152c.833-.686.995-1.874.904-2.95a4.5 4.5 0 016.336-4.486l-3.276 3.276a3.004 3.004 0 002.25 2.25l3.276-3.276c.256.565.398 1.192.398 1.852z"
+                      />
+                    </svg>
+                  </button>
+                  <button
+                    @click="viewResources(server)"
+                    class="icon-btn icon-btn-view"
+                    :aria-label="'View resources for ' + server.namespace"
+                    title="View Resources"
+                  >
+                    <svg
+                      class="w-5 h-5"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"
+                      />
+                    </svg>
+                  </button>
+                  <button
+                    @click="viewPrompts(server)"
+                    class="icon-btn icon-btn-view"
+                    :aria-label="'View prompts for ' + server.namespace"
+                    title="View Prompts"
+                  >
+                    <svg
+                      class="w-5 h-5"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M8 10h-3.5a1.5 1.5 0 010-3H8m0 0V5a2 2 0 012-2h4a2 2 0 012 2v2m-8 0h8m-8 0v3m8-3v3m0 0h3.5a1.5 1.5 0 010 3H16m0 0v3a2 2 0 01-2 2h-4a2 2 0 01-2-2v-3m8 0H8"
+                      />
+                    </svg>
+                  </button>
+                  <button
+                    x-show="!server.static_server"
+                    @click="editServer(server)"
+                    class="icon-btn icon-btn-edit"
+                    :aria-label="'Edit ' + server.namespace"
+                    title="Edit"
+                  >
+                    <svg
+                      class="w-5 h-5"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                      />
+                    </svg>
+                  </button>
+                  <button
+                    x-show="!server.static_server"
+                    @click="confirmDelete(server)"
+                    class="icon-btn icon-btn-delete"
+                    :aria-label="'Delete ' + server.namespace"
+                    title="Delete"
+                  >
+                    <svg
+                      class="w-5 h-5"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                      />
+                    </svg>
+                  </button>
+                </div>
               </div>
-            </template>
-          </div>
+            </div>
+          </template>
+        </div>
       </main>
 
       <!-- Add/Edit Modal -->
-      <div x-show="showAddModal" x-cloak x-trap="showAddModal" class="fixed inset-0 z-50 overflow-y-auto" @keydown.escape.window="showAddModal = false; resetForm()" role="dialog" aria-modal="true" aria-labelledby="add-edit-modal-title">
+      <div
+        x-show="showAddModal"
+        x-cloak
+        x-trap="showAddModal"
+        class="fixed inset-0 z-50 overflow-y-auto"
+        @keydown.escape.window="showAddModal = false; resetForm()"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="add-edit-modal-title"
+      >
         <div class="flex items-center justify-center min-h-screen px-4">
-          <div class="fixed inset-0 bg-black/50 backdrop-blur-sm transition-opacity" @click="showAddModal = false; resetForm()"></div>
+          <div
+            class="fixed inset-0 bg-black/50 backdrop-blur-sm transition-opacity"
+            @click="showAddModal = false; resetForm()"
+          ></div>
           <div class="modal max-w-lg p-6">
             <div class="flex items-center justify-between mb-6">
-              <h2 id="add-edit-modal-title" class="text-xl font-bold text-slate-900 dark:text-white" x-text="editingServer ? 'Edit Server' : 'Add MCP Server'"></h2>
-              <button @click="showAddModal = false; resetForm()" class="icon-btn icon-btn-close" aria-label="Close modal">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+              <h2
+                id="add-edit-modal-title"
+                class="text-xl font-bold text-slate-900 dark:text-white"
+                x-text="editingServer ? 'Edit Server' : 'Add MCP Server'"
+              ></h2>
+              <button
+                @click="showAddModal = false; resetForm()"
+                class="icon-btn icon-btn-close"
+                aria-label="Close modal"
+              >
+                <svg
+                  class="w-5 h-5"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M6 18L18 6M6 6l12 12"
+                  />
+                </svg>
               </button>
             </div>
 
             <form @submit.prevent="saveServer" class="space-y-4">
               <div>
-                <label for="namespace" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Namespace</label>
+                <label
+                  for="namespace"
+                  class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1"
+                  >Namespace</label
+                >
                 <input
                   id="namespace"
                   type="text"
@@ -284,13 +627,22 @@
                   placeholder="e.g., github"
                 />
                 <p class="text-xs text-slate-500 dark:text-slate-300 mt-1">
-                  Lowercase letters, numbers, hyphens, underscores. Tools will be prefixed (e.g., github/search)
+                  Lowercase letters, numbers, hyphens, underscores. Tools will
+                  be prefixed (e.g., github/search)
                 </p>
               </div>
 
               <div>
-                <label for="transport" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Transport</label>
-                <select id="transport" x-model="form.transport" class="input-field">
+                <label
+                  for="transport"
+                  class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1"
+                  >Transport</label
+                >
+                <select
+                  id="transport"
+                  x-model="form.transport"
+                  class="input-field"
+                >
                   <option value="http">HTTP (remote URL)</option>
                   <option value="stdio">Stdio (local subprocess)</option>
                 </select>
@@ -298,7 +650,11 @@
 
               <!-- HTTP fields -->
               <div x-show="form.transport === 'http'">
-                <label for="server-url" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Server URL</label>
+                <label
+                  for="server-url"
+                  class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1"
+                  >Server URL</label
+                >
                 <input
                   id="server-url"
                   type="url"
@@ -309,16 +665,30 @@
               </div>
 
               <div x-show="form.transport === 'http'">
-                <label for="auth-type" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Authentication</label>
-                <select id="auth-type" x-model="form.auth_type" class="input-field">
+                <label
+                  for="auth-type"
+                  class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1"
+                  >Authentication</label
+                >
+                <select
+                  id="auth-type"
+                  x-model="form.auth_type"
+                  class="input-field"
+                >
                   <option value="bearer">Bearer Token</option>
                   <option value="oauth2">OAuth2 Client Credentials</option>
                 </select>
               </div>
 
               <!-- Bearer token fields -->
-              <div x-show="form.transport === 'http' && form.auth_type !== 'oauth2'">
-                <label for="bearer-token" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Bearer Token (optional)</label>
+              <div
+                x-show="form.transport === 'http' && form.auth_type !== 'oauth2'"
+              >
+                <label
+                  for="bearer-token"
+                  class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1"
+                  >Bearer Token (optional)</label
+                >
                 <input
                   id="bearer-token"
                   type="password"
@@ -326,18 +696,35 @@
                   class="input-field"
                   placeholder="Your API key"
                 />
-                <p x-show="editingServer" class="text-xs text-slate-500 dark:text-slate-300 mt-1">Leave empty to keep existing token</p>
+                <p
+                  x-show="editingServer"
+                  class="text-xs text-slate-500 dark:text-slate-300 mt-1"
+                >
+                  Leave empty to keep existing token
+                </p>
               </div>
 
               <!-- OAuth2 fields -->
-              <template x-if="form.transport === 'http' && form.auth_type === 'oauth2'">
-                <div class="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl text-sm text-blue-700 dark:text-blue-200">
+              <template
+                x-if="form.transport === 'http' && form.auth_type === 'oauth2'"
+              >
+                <div
+                  class="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl text-sm text-blue-700 dark:text-blue-200"
+                >
                   <template x-if="!editingServer">
-                    <p>Clicking <strong>Connect via OAuth2</strong> will open the provider's login page. You'll be redirected back automatically once authorized.</p>
+                    <p>
+                      Clicking <strong>Connect via OAuth2</strong> will open the
+                      provider's login page. You'll be redirected back
+                      automatically once authorized.
+                    </p>
                   </template>
                   <template x-if="editingServer">
                     <div class="flex items-center justify-between gap-3">
-                      <p>This server uses OAuth2 authentication. Click <strong>Re-authenticate</strong> to refresh the OAuth tokens.</p>
+                      <p>
+                        This server uses OAuth2 authentication. Click
+                        <strong>Re-authenticate</strong> to refresh the OAuth
+                        tokens.
+                      </p>
                       <button
                         type="button"
                         @click="reauth()"
@@ -353,7 +740,11 @@
 
               <!-- Stdio fields -->
               <div x-show="form.transport === 'stdio'">
-                <label for="command" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Command</label>
+                <label
+                  for="command"
+                  class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1"
+                  >Command</label
+                >
                 <input
                   id="command"
                   type="text"
@@ -361,11 +752,17 @@
                   class="input-field"
                   placeholder="e.g., npx"
                 />
-                <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">The executable to launch as a subprocess</p>
+                <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                  The executable to launch as a subprocess
+                </p>
               </div>
 
               <div x-show="form.transport === 'stdio'">
-                <label for="args" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Arguments</label>
+                <label
+                  for="args"
+                  class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1"
+                  >Arguments</label
+                >
                 <input
                   id="args"
                   type="text"
@@ -373,50 +770,111 @@
                   class="input-field"
                   placeholder="e.g., -y @modelcontextprotocol/server-filesystem /data"
                 />
-                <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Space-separated command-line arguments</p>
+                <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                  Space-separated command-line arguments
+                </p>
               </div>
 
               <div>
-                <label for="tool-visibility" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Tool Visibility</label>
-                <select id="tool-visibility" x-model="form.tool_visibility" class="input-field">
+                <label
+                  for="tool-visibility"
+                  class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1"
+                  >Tool Visibility</label
+                >
+                <select
+                  id="tool-visibility"
+                  x-model="form.tool_visibility"
+                  class="input-field"
+                >
                   <option value="native">Native (show in tools/list)</option>
-                  <option value="ondemand">On-demand (searchable via tool_search only)</option>
+                  <option value="ondemand">
+                    On-demand (searchable via tool_search only)
+                  </option>
                 </select>
               </div>
 
               <div class="flex items-center gap-3">
                 <label class="flex items-center cursor-pointer">
-                  <input type="checkbox" x-model="form.remote_search" class="sr-only peer" aria-label="Enable remote tool search" />
-                  <div class="relative w-9 h-5 bg-slate-200 dark:bg-slate-600 rounded-full peer peer-checked:bg-green-500 after:content-[''] after:absolute after:top-0.5 after:start-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-4"></div>
+                  <input
+                    type="checkbox"
+                    x-model="form.remote_search"
+                    class="sr-only peer"
+                    aria-label="Enable remote tool search"
+                  />
+                  <div
+                    class="relative w-9 h-5 bg-slate-200 dark:bg-slate-600 rounded-full peer peer-checked:bg-green-500 after:content-[''] after:absolute after:top-0.5 after:start-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-4"
+                  ></div>
                 </label>
                 <div>
-                  <span class="text-sm font-medium text-slate-700 dark:text-slate-300">Remote Search</span>
-                  <p class="text-xs text-slate-500 dark:text-slate-400">Delegate tool_search to this server to discover its hidden tools</p>
+                  <span
+                    class="text-sm font-medium text-slate-700 dark:text-slate-300"
+                    >Remote Search</span
+                  >
+                  <p class="text-xs text-slate-500 dark:text-slate-400">
+                    Delegate tool_search to this server to discover its hidden
+                    tools
+                  </p>
                 </div>
               </div>
 
               <div class="flex items-center gap-3">
                 <label class="flex items-center cursor-pointer">
-                  <input type="checkbox" x-model="form.notifications" class="sr-only peer" aria-label="Enable notifications" />
-                  <div class="relative w-9 h-5 bg-slate-200 dark:bg-slate-600 rounded-full peer peer-checked:bg-green-500 after:content-[''] after:absolute after:top-0.5 after:start-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-4"></div>
+                  <input
+                    type="checkbox"
+                    x-model="form.notifications"
+                    class="sr-only peer"
+                    aria-label="Enable notifications"
+                  />
+                  <div
+                    class="relative w-9 h-5 bg-slate-200 dark:bg-slate-600 rounded-full peer peer-checked:bg-green-500 after:content-[''] after:absolute after:top-0.5 after:start-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-4"
+                  ></div>
                 </label>
                 <div>
-                  <span class="text-sm font-medium text-slate-700 dark:text-slate-300">Notifications</span>
-                  <p class="text-xs text-slate-500 dark:text-slate-400">Accept tool-change notifications from this server and propagate them to clients</p>
+                  <span
+                    class="text-sm font-medium text-slate-700 dark:text-slate-300"
+                    >Notifications</span
+                  >
+                  <p class="text-xs text-slate-500 dark:text-slate-400">
+                    Accept tool-change notifications from this server and
+                    propagate them to clients
+                  </p>
                 </div>
               </div>
 
               <div class="flex items-center gap-3">
                 <label class="flex items-center cursor-pointer">
-                  <input type="checkbox" x-model="form.enabled" class="sr-only peer" aria-label="Enable server" />
-                  <div class="relative w-9 h-5 bg-slate-200 dark:bg-slate-600 rounded-full peer peer-checked:bg-green-500 after:content-[''] after:absolute after:top-0.5 after:start-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-4"></div>
+                  <input
+                    type="checkbox"
+                    x-model="form.enabled"
+                    class="sr-only peer"
+                    aria-label="Enable server"
+                  />
+                  <div
+                    class="relative w-9 h-5 bg-slate-200 dark:bg-slate-600 rounded-full peer peer-checked:bg-green-500 after:content-[''] after:absolute after:top-0.5 after:start-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-4"
+                  ></div>
                 </label>
-                <span class="text-sm font-medium text-slate-700 dark:text-slate-300">Enabled</span>
+                <span
+                  class="text-sm font-medium text-slate-700 dark:text-slate-300"
+                  >Enabled</span
+                >
               </div>
 
-              <div x-show="formError" class="flex items-center gap-3 p-4 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-xl text-red-700 dark:text-red-400">
-                <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              <div
+                x-show="formError"
+                class="flex items-center gap-3 p-4 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-xl text-red-700 dark:text-red-400"
+              >
+                <svg
+                  class="w-5 h-5 flex-shrink-0"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
                 </svg>
                 <span x-text="formError"></span>
               </div>
@@ -429,16 +887,30 @@
                 >
                   Cancel
                 </button>
-                <button
-                  type="submit"
-                  :disabled="saving"
-                  class="btn-submit"
-                >
-                  <svg x-show="saving" class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
-                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                <button type="submit" :disabled="saving" class="btn-submit">
+                  <svg
+                    x-show="saving"
+                    class="animate-spin w-4 h-4"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                  >
+                    <circle
+                      class="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      stroke-width="4"
+                    ></circle>
+                    <path
+                      class="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                    ></path>
                   </svg>
-                  <span x-text="editingServer ? 'Save Changes' : (form.auth_type === 'oauth2' ? 'Connect via OAuth2' : 'Add Server')"></span>
+                  <span
+                    x-text="editingServer ? 'Save Changes' : (form.auth_type === 'oauth2' ? 'Connect via OAuth2' : 'Add Server')"
+                  ></span>
                 </button>
               </div>
             </form>
@@ -447,19 +919,39 @@
       </div>
 
       <!-- Delete Confirmation Modal -->
-      <div x-show="showDeleteModal" x-cloak x-trap="showDeleteModal" @keydown.window.escape="if (showDeleteModal) showDeleteModal = false" @keydown.window.enter="if (showDeleteModal && !deleting) { $event.preventDefault(); deleteServer() }" class="fixed inset-0 z-50 overflow-y-auto" role="dialog" aria-modal="true" aria-labelledby="delete-modal-title">
+      <div
+        x-show="showDeleteModal"
+        x-cloak
+        x-trap="showDeleteModal"
+        @keydown.window.escape="if (showDeleteModal) showDeleteModal = false"
+        @keydown.window.enter="if (showDeleteModal && !deleting) { $event.preventDefault(); deleteServer() }"
+        class="fixed inset-0 z-50 overflow-y-auto"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="delete-modal-title"
+      >
         <div class="flex items-center justify-center min-h-screen px-4">
-          <div class="fixed inset-0 bg-black/50 backdrop-blur-sm transition-opacity" @click="showDeleteModal = false"></div>
+          <div
+            class="fixed inset-0 bg-black/50 backdrop-blur-sm transition-opacity"
+            @click="showDeleteModal = false"
+          ></div>
           <div class="modal max-w-md p-6">
-            <h2 id="delete-modal-title" class="text-xl font-bold text-slate-900 dark:text-white mb-4">Delete Server</h2>
+            <h2
+              id="delete-modal-title"
+              class="text-xl font-bold text-slate-900 dark:text-white mb-4"
+            >
+              Delete Server
+            </h2>
             <p class="text-slate-600 dark:text-slate-300 mb-6">
-              Are you sure you want to delete <span class="font-semibold" x-text="deletingServer?.namespace"></span>? This action cannot be undone.
+              Are you sure you want to delete
+              <span
+                class="font-semibold"
+                x-text="deletingServer?.namespace"
+              ></span
+              >? This action cannot be undone.
             </p>
             <div class="flex justify-end gap-3">
-              <button
-                @click="showDeleteModal = false"
-                class="btn-cancel"
-              >
+              <button @click="showDeleteModal = false" class="btn-cancel">
                 Cancel
               </button>
               <button
@@ -467,11 +959,40 @@
                 :disabled="deleting"
                 class="px-4 py-2 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-all disabled:opacity-50 flex items-center gap-2 cursor-pointer"
               >
-                <svg x-show="deleting" class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
-                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                <svg
+                  x-show="deleting"
+                  class="animate-spin w-4 h-4"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                >
+                  <circle
+                    class="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    stroke-width="4"
+                  ></circle>
+                  <path
+                    class="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                  ></path>
                 </svg>
-                <svg x-show="!deleting" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 14l-4-4m0 0l4-4m-4 4h11a4 4 0 010 8h-1" /></svg>
+                <svg
+                  x-show="!deleting"
+                  class="w-4 h-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M9 14l-4-4m0 0l4-4m-4 4h11a4 4 0 010 8h-1"
+                  />
+                </svg>
                 <span x-text="deleting ? 'Deleting...' : 'Delete'"></span>
               </button>
             </div>
@@ -480,43 +1001,117 @@
       </div>
 
       <!-- Tools Modal -->
-      <div x-show="showToolsModal" x-cloak x-trap="showToolsModal" class="fixed inset-0 z-50 overflow-y-auto" @keydown.escape.window="showToolsModal = false" role="dialog" aria-modal="true" aria-labelledby="tools-modal-title">
+      <div
+        x-show="showToolsModal"
+        x-cloak
+        x-trap="showToolsModal"
+        class="fixed inset-0 z-50 overflow-y-auto"
+        @keydown.escape.window="showToolsModal = false"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="tools-modal-title"
+      >
         <div class="flex items-center justify-center min-h-screen px-4">
-          <div class="fixed inset-0 bg-black/50 backdrop-blur-sm transition-opacity" @click="showToolsModal = false"></div>
+          <div
+            class="fixed inset-0 bg-black/50 backdrop-blur-sm transition-opacity"
+            @click="showToolsModal = false"
+          ></div>
           <div class="modal max-w-2xl max-h-[80vh] flex flex-col">
-            <div class="p-6 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+            <div
+              class="p-6 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between"
+            >
               <div>
-                <h2 id="tools-modal-title" class="text-xl font-bold text-slate-900 dark:text-white">
+                <h2
+                  id="tools-modal-title"
+                  class="text-xl font-bold text-slate-900 dark:text-white"
+                >
                   Tools — <span x-text="toolsServer?.namespace"></span>
                 </h2>
-                <p class="text-sm text-slate-500 dark:text-slate-300 mt-0.5" x-show="!loadingTools && !toolsError">
+                <p
+                  class="text-sm text-slate-500 dark:text-slate-300 mt-0.5"
+                  x-show="!loadingTools && !toolsError"
+                >
                   <span x-show="toolFilter">
-                    <span x-text="filteredTools.length"></span> of <span x-text="tools.length"></span> shown —
+                    <span x-text="filteredTools.length"></span> of
+                    <span x-text="tools.length"></span> shown —
                   </span>
-                  <span x-text="tools.filter(t => t.enabled).length"></span> of <span x-text="tools.length"></span> enabled
+                  <span x-text="tools.filter(t => t.enabled).length"></span> of
+                  <span x-text="tools.length"></span> enabled
                 </p>
               </div>
-              <button @click="showToolsModal = false" class="icon-btn icon-btn-close" aria-label="Close modal">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+              <button
+                @click="showToolsModal = false"
+                class="icon-btn icon-btn-close"
+                aria-label="Close modal"
+              >
+                <svg
+                  class="w-5 h-5"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M6 18L18 6M6 6l12 12"
+                  />
+                </svg>
               </button>
             </div>
 
             <!-- Static server notice -->
-            <div x-show="toolsServer?.static_server" class="px-6 py-3 bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
+            <div
+              x-show="toolsServer?.static_server"
+              class="px-6 py-3 bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700"
+            >
               <p class="text-sm text-slate-600 dark:text-slate-300">
-                <svg class="w-4 h-4 inline-block mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                <svg
+                  class="w-4 h-4 inline-block mr-1"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
                 </svg>
-                Tool filtering is configured in config file. Modify <code class="px-1 py-0.5 bg-slate-200 dark:bg-slate-700 rounded text-xs">tool_allowlist</code> or <code class="px-1 py-0.5 bg-slate-200 dark:bg-slate-700 rounded text-xs">tool_denylist</code> to change enabled state.
+                Tool filtering is configured in config file. Modify
+                <code
+                  class="px-1 py-0.5 bg-slate-200 dark:bg-slate-700 rounded text-xs"
+                  >tool_allowlist</code
+                >
+                or
+                <code
+                  class="px-1 py-0.5 bg-slate-200 dark:bg-slate-700 rounded text-xs"
+                  >tool_denylist</code
+                >
+                to change enabled state.
               </p>
             </div>
 
             <div class="flex-1 min-h-0 overflow-y-auto p-6">
               <!-- Filter -->
-              <div x-show="!loadingTools && !toolsError && tools.length > 0" class="mb-4">
+              <div
+                x-show="!loadingTools && !toolsError && tools.length > 0"
+                class="mb-4"
+              >
                 <div class="relative">
-                  <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  <svg
+                    class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                    />
                   </svg>
                   <input
                     type="text"
@@ -530,20 +1125,50 @@
                     class="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
                     aria-label="Clear filter"
                   >
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                    <svg
+                      class="w-4 h-4"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M6 18L18 6M6 6l12 12"
+                      />
+                    </svg>
                   </button>
                 </div>
               </div>
 
               <!-- Loading state -->
-              <div x-show="loadingTools" class="flex items-center justify-center py-8">
-                <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+              <div
+                x-show="loadingTools"
+                class="flex items-center justify-center py-8"
+              >
+                <div
+                  class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"
+                ></div>
               </div>
 
               <!-- Error state -->
-              <div x-show="toolsError" class="flex items-center gap-3 p-4 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-xl text-red-700 dark:text-red-400">
-                <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              <div
+                x-show="toolsError"
+                class="flex items-center gap-3 p-4 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-xl text-red-700 dark:text-red-400"
+              >
+                <svg
+                  class="w-5 h-5 flex-shrink-0"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
                 </svg>
                 <span x-text="toolsError"></span>
               </div>
@@ -551,39 +1176,91 @@
               <!-- Tools list -->
               <div x-show="!loadingTools && !toolsError" class="space-y-2">
                 <template x-if="tools.length === 0">
-                  <p class="text-slate-500 dark:text-slate-300 text-center py-8">No tools available from this server.</p>
+                  <p
+                    class="text-slate-500 dark:text-slate-300 text-center py-8"
+                  >
+                    No tools available from this server.
+                  </p>
                 </template>
 
                 <template x-if="tools.length > 0 && filteredTools.length === 0">
-                  <p class="text-slate-500 dark:text-slate-300 text-center py-8">No tools match "<span class="font-mono" x-text="toolFilter"></span>".</p>
+                  <p
+                    class="text-slate-500 dark:text-slate-300 text-center py-8"
+                  >
+                    No tools match "<span
+                      class="font-mono"
+                      x-text="toolFilter"
+                    ></span
+                    >".
+                  </p>
                 </template>
 
                 <template x-for="tool in filteredTools" :key="tool.name">
-                  <div class="border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden" :class="{ 'opacity-50': !tool.enabled }">
+                  <div
+                    class="border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden"
+                    :class="{ 'opacity-50': !tool.enabled }"
+                  >
                     <!-- Tool header -->
-                    <div class="flex items-start gap-3 px-4 py-3 bg-slate-50 dark:bg-slate-800 cursor-pointer" @click="tool.expanded = !tool.expanded">
+                    <div
+                      class="flex items-start gap-3 px-4 py-3 bg-slate-50 dark:bg-slate-800 cursor-pointer"
+                      @click="tool.expanded = !tool.expanded"
+                    >
                       <!-- Enable toggle (interactive only for non-static servers).
                            Uses a <button> rather than a label+sr-only checkbox:
                            focusing a hidden position:absolute checkbox makes
                            browsers scroll-into-view and jump the dialog. -->
                       <template x-if="!toolsServer?.static_server">
-                        <button type="button" @click.stop="toggleTool(tool)" :disabled="togglingTool === tool.name" :aria-pressed="tool.enabled" :aria-busy="togglingTool === tool.name" :aria-label="'Enable or disable ' + tool.name + ' tool'"
+                        <button
+                          type="button"
+                          @click.stop="toggleTool(tool)"
+                          :disabled="togglingTool === tool.name"
+                          :aria-pressed="tool.enabled"
+                          :aria-busy="togglingTool === tool.name"
+                          :aria-label="'Enable or disable ' + tool.name + ' tool'"
                           class="relative flex items-center mt-0.5 shrink-0 w-9 h-5 rounded-full cursor-pointer transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed"
-                          :class="tool.enabled ? 'bg-blue-500' : 'bg-slate-200 dark:bg-slate-600'">
-                          <span x-show="togglingTool !== tool.name" class="absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform duration-200"
-                            :class="tool.enabled ? 'translate-x-4' : 'translate-x-0'"></span>
-                          <svg x-show="togglingTool === tool.name" x-cloak class="animate-spin absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-4 h-4" :class="tool.enabled ? 'text-white' : 'text-slate-600 dark:text-slate-300'" fill="none" viewBox="0 0 24 24">
-                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          :class="tool.enabled ? 'bg-blue-500' : 'bg-slate-200 dark:bg-slate-600'"
+                        >
+                          <span
+                            x-show="togglingTool !== tool.name"
+                            class="absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform duration-200"
+                            :class="tool.enabled ? 'translate-x-4' : 'translate-x-0'"
+                          ></span>
+                          <svg
+                            x-show="togglingTool === tool.name"
+                            x-cloak
+                            class="animate-spin absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-4 h-4"
+                            :class="tool.enabled ? 'text-white' : 'text-slate-600 dark:text-slate-300'"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                          >
+                            <circle
+                              class="opacity-25"
+                              cx="12"
+                              cy="12"
+                              r="10"
+                              stroke="currentColor"
+                              stroke-width="4"
+                            ></circle>
+                            <path
+                              class="opacity-75"
+                              fill="currentColor"
+                              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                            ></path>
                           </svg>
                         </button>
                       </template>
                       <!-- Name + description -->
                       <div class="flex-1 min-w-0">
                         <div class="flex items-center gap-2">
-                          <span class="font-mono text-sm font-semibold text-slate-900 dark:text-white" x-text="tool.name"></span>
+                          <span
+                            class="font-mono text-sm font-semibold text-slate-900 dark:text-white"
+                            x-text="tool.name"
+                          ></span>
                         </div>
-                        <p class="text-sm text-slate-500 dark:text-slate-300 mt-0.5" x-text="tool.description || 'No description'"></p>
+                        <p
+                          class="text-sm text-slate-500 dark:text-slate-300 mt-0.5"
+                          x-text="tool.description || 'No description'"
+                        ></p>
                       </div>
                       <!-- Try tool / Run -->
                       <button
@@ -592,29 +1269,81 @@
                         :aria-label="'Run ' + tool.name"
                         title="Run tool"
                       >
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        <svg
+                          class="w-5 h-5"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"
+                          />
+                          <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                          />
                         </svg>
                       </button>
                       <!-- Expand chevron -->
-                      <button @click.stop="tool.expanded = !tool.expanded" class="icon-btn icon-btn-close icon-btn-tinted shrink-0" :aria-label="(tool.expanded ? 'Collapse' : 'Expand') + ' parameters for ' + tool.name" :aria-expanded="tool.expanded">
-                        <svg class="w-5 h-5 transition-transform" :class="{ 'rotate-180': tool.expanded }" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                      <button
+                        @click.stop="tool.expanded = !tool.expanded"
+                        class="icon-btn icon-btn-close icon-btn-tinted shrink-0"
+                        :aria-label="(tool.expanded ? 'Collapse' : 'Expand') + ' parameters for ' + tool.name"
+                        :aria-expanded="tool.expanded"
+                      >
+                        <svg
+                          class="w-5 h-5 transition-transform"
+                          :class="{ 'rotate-180': tool.expanded }"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M19 9l-7 7-7-7"
+                          />
                         </svg>
                       </button>
                     </div>
                     <!-- Parameters (expanded) -->
-                    <div x-show="tool.expanded" x-transition class="px-4 py-3 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700">
-                      <template x-if="tool.input_schema && tool.input_schema.properties && Object.keys(tool.input_schema.properties).length > 0">
+                    <div
+                      x-show="tool.expanded"
+                      x-transition
+                      class="px-4 py-3 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700"
+                    >
+                      <template
+                        x-if="tool.input_schema && tool.input_schema.properties && Object.keys(tool.input_schema.properties).length > 0"
+                      >
                         <div>
-                          <p class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2">Parameters</p>
+                          <p
+                            class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2"
+                          >
+                            Parameters
+                          </p>
                           <div class="space-y-2">
-                            <template x-for="[param, def] in Object.entries(tool.input_schema.properties)" :key="param">
+                            <template
+                              x-for="[param, def] in Object.entries(tool.input_schema.properties)"
+                              :key="param"
+                            >
                               <div class="flex items-start gap-2 text-sm">
-                                <span class="font-mono text-blue-600 dark:text-blue-300 shrink-0" x-text="param"></span>
-                                <span class="text-slate-500 dark:text-slate-400 shrink-0" x-show="(tool.input_schema.required || []).includes(param)">*</span>
-                                <span class="text-slate-500 dark:text-slate-300 px-1.5 py-0.5 rounded text-xs font-mono"
+                                <span
+                                  class="font-mono text-blue-600 dark:text-blue-300 shrink-0"
+                                  x-text="param"
+                                ></span>
+                                <span
+                                  class="text-slate-500 dark:text-slate-400 shrink-0"
+                                  x-show="(tool.input_schema.required || []).includes(param)"
+                                  >*</span
+                                >
+                                <span
+                                  class="text-slate-500 dark:text-slate-300 px-1.5 py-0.5 rounded text-xs font-mono"
                                   :class="{
                                     'bg-green-100 dark:bg-green-800/60 text-green-700 dark:text-green-200': def.type === 'string',
                                     'bg-amber-100 dark:bg-amber-800/60 text-amber-700 dark:text-amber-200': def.type === 'number' || def.type === 'integer',
@@ -622,15 +1351,23 @@
                                     'bg-blue-100 dark:bg-blue-800/60 text-blue-700 dark:text-blue-200': def.type === 'array',
                                     'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-200': !def.type || (def.type !== 'string' && def.type !== 'number' && def.type !== 'integer' && def.type !== 'boolean' && def.type !== 'array'),
                                   }"
-                                  x-text="def.type || 'any'"></span>
-                                <span class="text-slate-600 dark:text-slate-300" x-text="def.description ? '— ' + def.description : ''"></span>
+                                  x-text="def.type || 'any'"
+                                ></span>
+                                <span
+                                  class="text-slate-600 dark:text-slate-300"
+                                  x-text="def.description ? '— ' + def.description : ''"
+                                ></span>
                               </div>
                             </template>
                           </div>
                         </div>
                       </template>
-                      <template x-if="!tool.input_schema || !tool.input_schema.properties || Object.keys(tool.input_schema.properties).length === 0">
-                        <p class="text-xs text-slate-500 dark:text-slate-400">No parameters</p>
+                      <template
+                        x-if="!tool.input_schema || !tool.input_schema.properties || Object.keys(tool.input_schema.properties).length === 0"
+                      >
+                        <p class="text-xs text-slate-500 dark:text-slate-400">
+                          No parameters
+                        </p>
                       </template>
                     </div>
                   </div>
@@ -638,11 +1375,10 @@
               </div>
             </div>
 
-            <div class="p-4 border-t border-slate-200 dark:border-slate-700 flex justify-end">
-              <button
-                @click="showToolsModal = false"
-                class="btn-cancel"
-              >
+            <div
+              class="p-4 border-t border-slate-200 dark:border-slate-700 flex justify-end"
+            >
+              <button @click="showToolsModal = false" class="btn-cancel">
                 Close
               </button>
             </div>
@@ -651,20 +1387,57 @@
       </div>
 
       <!-- Tool Call Modal -->
-      <div x-show="showToolCallModal" x-cloak x-trap="showToolCallModal" class="fixed inset-0 z-[60] overflow-y-auto" @keydown.escape.window="closeToolCall()" role="dialog" aria-modal="true" aria-labelledby="tool-call-modal-title">
+      <div
+        x-show="showToolCallModal"
+        x-cloak
+        x-trap="showToolCallModal"
+        class="fixed inset-0 z-[60] overflow-y-auto"
+        @keydown.escape.window="closeToolCall()"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="tool-call-modal-title"
+      >
         <div class="flex items-center justify-center min-h-screen px-4">
-          <div class="fixed inset-0 bg-black/50 backdrop-blur-sm transition-opacity" @click="closeToolCall()"></div>
+          <div
+            class="fixed inset-0 bg-black/50 backdrop-blur-sm transition-opacity"
+            @click="closeToolCall()"
+          ></div>
           <div class="modal max-w-3xl max-h-[85vh] flex flex-col">
             <!-- Header -->
-            <div class="p-6 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between gap-4">
+            <div
+              class="p-6 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between gap-4"
+            >
               <div class="min-w-0">
-                <h2 id="tool-call-modal-title" class="text-xl font-bold text-slate-900 dark:text-white">
-                  Execute — <span class="font-mono" x-text="callingTool?.name"></span>
+                <h2
+                  id="tool-call-modal-title"
+                  class="text-xl font-bold text-slate-900 dark:text-white"
+                >
+                  Execute —
+                  <span class="font-mono" x-text="callingTool?.name"></span>
                 </h2>
-                <p class="text-sm text-slate-500 dark:text-slate-300 mt-0.5 truncate" x-text="callingTool?.description || ''"></p>
+                <p
+                  class="text-sm text-slate-500 dark:text-slate-300 mt-0.5 truncate"
+                  x-text="callingTool?.description || ''"
+                ></p>
               </div>
-              <button @click="closeToolCall()" class="icon-btn icon-btn-close shrink-0" aria-label="Close modal">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+              <button
+                @click="closeToolCall()"
+                class="icon-btn icon-btn-close shrink-0"
+                aria-label="Close modal"
+              >
+                <svg
+                  class="w-5 h-5"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M6 18L18 6M6 6l12 12"
+                  />
+                </svg>
               </button>
             </div>
 
@@ -673,48 +1446,108 @@
               <!-- Parameters -->
               <div>
                 <div class="flex items-center justify-between mb-3">
-                  <p class="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Parameters</p>
-                  <button @click="resetToolCallArgs()" class="text-xs text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 cursor-pointer" x-show="callingTool?.input_schema?.properties && Object.keys(callingTool.input_schema.properties).length > 0">Reset</button>
+                  <p
+                    class="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400"
+                  >
+                    Parameters
+                  </p>
+                  <button
+                    @click="resetToolCallArgs()"
+                    class="text-xs text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 cursor-pointer"
+                    x-show="callingTool?.input_schema?.properties && Object.keys(callingTool.input_schema.properties).length > 0"
+                  >
+                    Reset
+                  </button>
                 </div>
 
                 <!-- No parameters -->
-                <template x-if="!callingTool?.input_schema?.properties || Object.keys(callingTool.input_schema.properties).length === 0">
-                  <p class="text-sm text-slate-500 dark:text-slate-400">This tool takes no parameters.</p>
+                <template
+                  x-if="!callingTool?.input_schema?.properties || Object.keys(callingTool.input_schema.properties).length === 0"
+                >
+                  <p class="text-sm text-slate-500 dark:text-slate-400">
+                    This tool takes no parameters.
+                  </p>
                 </template>
 
                 <!-- Parameter fields -->
                 <div class="space-y-4">
-                  <template x-for="[name, def] in Object.entries(callingTool?.input_schema?.properties || {})" :key="name">
+                  <template
+                    x-for="[name, def] in Object.entries(callingTool?.input_schema?.properties || {})"
+                    :key="name"
+                  >
                     <div>
-                      <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                      <label
+                        class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1"
+                      >
                         <span class="font-mono" x-text="name"></span>
-                        <span x-show="(callingTool.input_schema.required || []).includes(name)" class="text-red-500">*</span>
-                        <span class="ml-1 text-xs font-normal text-slate-400" x-text="def.type || 'any'"></span>
+                        <span
+                          x-show="(callingTool.input_schema.required || []).includes(name)"
+                          class="text-red-500"
+                          >*</span
+                        >
+                        <span
+                          class="ml-1 text-xs font-normal text-slate-400"
+                          x-text="def.type || 'any'"
+                        ></span>
                       </label>
-                      <p x-show="def.description" class="text-xs text-slate-500 dark:text-slate-400 mb-1" x-text="def.description"></p>
+                      <p
+                        x-show="def.description"
+                        class="text-xs text-slate-500 dark:text-slate-400 mb-1"
+                        x-text="def.description"
+                      ></p>
 
                       <!-- Boolean -->
                       <template x-if="def.type === 'boolean'">
                         <label class="flex items-center gap-2 cursor-pointer">
-                          <input type="checkbox" x-model="toolCallArgs[name]" class="sr-only peer" />
-                          <div class="relative w-9 h-5 bg-slate-200 dark:bg-slate-600 rounded-full peer peer-checked:bg-blue-500 after:content-[''] after:absolute after:top-0.5 after:start-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-4"></div>
-                          <span class="text-sm text-slate-600 dark:text-slate-300" x-text="toolCallArgs[name] ? 'true' : 'false'"></span>
+                          <input
+                            type="checkbox"
+                            x-model="toolCallArgs[name]"
+                            class="sr-only peer"
+                          />
+                          <div
+                            class="relative w-9 h-5 bg-slate-200 dark:bg-slate-600 rounded-full peer peer-checked:bg-blue-500 after:content-[''] after:absolute after:top-0.5 after:start-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-4"
+                          ></div>
+                          <span
+                            class="text-sm text-slate-600 dark:text-slate-300"
+                            x-text="toolCallArgs[name] ? 'true' : 'false'"
+                          ></span>
                         </label>
                       </template>
 
                       <!-- Integer / Number -->
-                      <template x-if="def.type === 'integer' || def.type === 'number'">
-                        <input type="number" step="any" x-model="toolCallArgs[name]" class="input-field" />
+                      <template
+                        x-if="def.type === 'integer' || def.type === 'number'"
+                      >
+                        <input
+                          type="number"
+                          step="any"
+                          x-model="toolCallArgs[name]"
+                          class="input-field"
+                        />
                       </template>
 
                       <!-- Array / Object -->
-                      <template x-if="def.type === 'array' || def.type === 'object'">
-                        <textarea x-model="toolCallArgs[name]" rows="3" class="input-field font-mono text-sm" :placeholder="def.type === 'array' ? '[1, 2, 3]' : '{&quot;key&quot;: &quot;value&quot;}'"></textarea>
+                      <template
+                        x-if="def.type === 'array' || def.type === 'object'"
+                      >
+                        <textarea
+                          x-model="toolCallArgs[name]"
+                          rows="3"
+                          class="input-field font-mono text-sm"
+                          :placeholder="def.type === 'array' ? '[1, 2, 3]' : '{&quot;key&quot;: &quot;value&quot;}'"
+                        ></textarea>
                       </template>
 
                       <!-- String / other -->
-                      <template x-if="def.type !== 'boolean' && def.type !== 'integer' && def.type !== 'number' && def.type !== 'array' && def.type !== 'object'">
-                        <input type="text" x-model="toolCallArgs[name]" class="input-field" :placeholder="def.default !== undefined ? String(def.default) : ''" />
+                      <template
+                        x-if="def.type !== 'boolean' && def.type !== 'integer' && def.type !== 'number' && def.type !== 'array' && def.type !== 'object'"
+                      >
+                        <input
+                          type="text"
+                          x-model="toolCallArgs[name]"
+                          class="input-field"
+                          :placeholder="def.default !== undefined ? String(def.default) : ''"
+                        />
                       </template>
                     </div>
                   </template>
@@ -722,9 +1555,22 @@
               </div>
 
               <!-- Validation error -->
-              <div x-show="toolCallError" class="flex items-start gap-3 p-4 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-xl text-red-700 dark:text-red-400 text-sm">
-                <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              <div
+                x-show="toolCallError"
+                class="flex items-start gap-3 p-4 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-xl text-red-700 dark:text-red-400 text-sm"
+              >
+                <svg
+                  class="w-5 h-5 flex-shrink-0"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
                 </svg>
                 <span x-text="toolCallError"></span>
               </div>
@@ -732,47 +1578,113 @@
               <!-- Output history -->
               <div x-show="toolCallHistory.length > 0">
                 <div class="flex items-center justify-between mb-3">
-                  <p class="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                    Output <span class="text-slate-400 font-normal normal-case" x-text="'(' + toolCallHistory.length + ')'"></span>
+                  <p
+                    class="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400"
+                  >
+                    Output
+                    <span
+                      class="text-slate-400 font-normal normal-case"
+                      x-text="'(' + toolCallHistory.length + ')'"
+                    ></span>
                   </p>
-                  <button @click="clearToolCallHistory()" class="text-xs text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 cursor-pointer">Clear history</button>
+                  <button
+                    @click="clearToolCallHistory()"
+                    class="text-xs text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 cursor-pointer"
+                  >
+                    Clear history
+                  </button>
                 </div>
                 <div class="space-y-3">
                   <template x-for="(entry, idx) in toolCallHistory" :key="idx">
-                    <div class="border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden">
+                    <div
+                      class="border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden"
+                    >
                       <!-- Call header -->
-                      <div class="px-4 py-2 bg-slate-50 dark:bg-slate-800 flex items-center justify-between text-xs">
-                        <span class="font-mono text-slate-500 dark:text-slate-400" x-text="entry.at"></span>
-                        <span x-show="entry.error" class="text-red-600 dark:text-red-400 font-medium">error</span>
-                        <span x-show="!entry.error" class="text-green-600 dark:text-green-400 font-medium">ok</span>
+                      <div
+                        class="px-4 py-2 bg-slate-50 dark:bg-slate-800 flex items-center justify-between text-xs"
+                      >
+                        <span
+                          class="font-mono text-slate-500 dark:text-slate-400"
+                          x-text="entry.at"
+                        ></span>
+                        <span
+                          x-show="entry.error"
+                          class="text-red-600 dark:text-red-400 font-medium"
+                          >error</span
+                        >
+                        <span
+                          x-show="!entry.error"
+                          class="text-green-600 dark:text-green-400 font-medium"
+                          >ok</span
+                        >
                       </div>
                       <!-- Args -->
-                      <div class="px-4 py-2 border-b border-slate-100 dark:border-slate-800">
+                      <div
+                        class="px-4 py-2 border-b border-slate-100 dark:border-slate-800"
+                      >
                         <span class="text-xs text-slate-400">Arguments</span>
-                        <pre class="text-xs font-mono text-slate-600 dark:text-slate-300 mt-1 overflow-x-auto" x-text="JSON.stringify(entry.args, null, 2)"></pre>
+                        <pre
+                          class="text-xs font-mono text-slate-600 dark:text-slate-300 mt-1 overflow-x-auto"
+                          x-text="JSON.stringify(entry.args, null, 2)"
+                        ></pre>
                       </div>
                       <!-- Error -->
-                      <div x-show="entry.error" class="px-4 py-3 bg-red-50 dark:bg-red-900/20">
-                        <pre class="text-xs font-mono text-red-600 dark:text-red-400 whitespace-pre-wrap break-all" x-text="entry.error"></pre>
+                      <div
+                        x-show="entry.error"
+                        class="px-4 py-3 bg-red-50 dark:bg-red-900/20"
+                      >
+                        <pre
+                          class="text-xs font-mono text-red-600 dark:text-red-400 whitespace-pre-wrap break-all"
+                          x-text="entry.error"
+                        ></pre>
                       </div>
                       <!-- Result -->
                       <div x-show="!entry.error" class="px-4 py-3 space-y-2">
-                        <template x-for="(c, ci) in (entry.result?.content || [])" :key="ci">
+                        <template
+                          x-for="(c, ci) in (entry.result?.content || [])"
+                          :key="ci"
+                        >
                           <div>
-                            <pre x-show="c.type === 'text'" class="text-xs font-mono text-slate-700 dark:text-slate-200 whitespace-pre-wrap break-all" x-text="formatToolOutput(c.text)"></pre>
+                            <pre
+                              x-show="c.type === 'text'"
+                              class="text-xs font-mono text-slate-700 dark:text-slate-200 whitespace-pre-wrap break-all"
+                              x-text="formatToolOutput(c.text)"
+                            ></pre>
                             <div x-show="c.type === 'image'" class="mt-1">
-                              <img :src="'data:' + (c.mimeType || 'image/png') + ';base64,' + c.data" class="max-w-full rounded-lg border border-slate-200 dark:border-slate-700" alt="Tool output image" />
+                              <img
+                                :src="'data:' + (c.mimeType || 'image/png') + ';base64,' + c.data"
+                                class="max-w-full rounded-lg border border-slate-200 dark:border-slate-700"
+                                alt="Tool output image"
+                              />
                             </div>
-                            <div x-show="c.type !== 'text' && c.type !== 'image'" class="text-xs font-mono text-slate-500 dark:text-slate-400" x-text="JSON.stringify(c, null, 2)"></div>
+                            <div
+                              x-show="c.type !== 'text' && c.type !== 'image'"
+                              class="text-xs font-mono text-slate-500 dark:text-slate-400"
+                              x-text="JSON.stringify(c, null, 2)"
+                            ></div>
                           </div>
                         </template>
-                        <template x-if="entry.result?.structuredContent != null">
-                          <div class="pt-2 border-t border-slate-100 dark:border-slate-800">
-                            <span class="text-xs text-slate-400">Structured content</span>
-                            <pre class="text-xs font-mono text-slate-600 dark:text-slate-300 mt-1 overflow-x-auto" x-text="JSON.stringify(entry.result.structuredContent, null, 2)"></pre>
+                        <template
+                          x-if="entry.result?.structuredContent != null"
+                        >
+                          <div
+                            class="pt-2 border-t border-slate-100 dark:border-slate-800"
+                          >
+                            <span class="text-xs text-slate-400"
+                              >Structured content</span
+                            >
+                            <pre
+                              class="text-xs font-mono text-slate-600 dark:text-slate-300 mt-1 overflow-x-auto"
+                              x-text="JSON.stringify(entry.result.structuredContent, null, 2)"
+                            ></pre>
                           </div>
                         </template>
-                        <p x-show="!entry.result?.content || entry.result.content.length === 0" class="text-xs text-slate-400 italic">Tool returned no content.</p>
+                        <p
+                          x-show="!entry.result?.content || entry.result.content.length === 0"
+                          class="text-xs text-slate-400 italic"
+                        >
+                          Tool returned no content.
+                        </p>
                       </div>
                     </div>
                   </template>
@@ -781,24 +1693,58 @@
             </div>
 
             <!-- Footer -->
-            <div class="p-4 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between gap-3">
-              <button @click="closeToolCall()" class="btn-cancel">
-                Close
-              </button>
+            <div
+              class="p-4 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between gap-3"
+            >
+              <button @click="closeToolCall()" class="btn-cancel">Close</button>
               <button
                 @click="runToolCall()"
                 :disabled="callingToolInProgress"
                 class="px-5 py-2 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-xl shadow-lg shadow-green-500/25 hover:from-green-600 hover:to-emerald-700 transition-all disabled:opacity-50 flex items-center gap-2 cursor-pointer"
               >
-                <svg x-show="callingToolInProgress" class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
-                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                <svg
+                  x-show="callingToolInProgress"
+                  class="animate-spin w-4 h-4"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                >
+                  <circle
+                    class="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    stroke-width="4"
+                  ></circle>
+                  <path
+                    class="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                  ></path>
                 </svg>
-                <svg x-show="!callingToolInProgress" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                <svg
+                  x-show="!callingToolInProgress"
+                  class="w-4 h-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"
+                  />
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
                 </svg>
-                <span x-text="callingToolInProgress ? 'Running...' : 'Run'"></span>
+                <span
+                  x-text="callingToolInProgress ? 'Running...' : 'Run'"
+                ></span>
               </button>
             </div>
           </div>
@@ -806,58 +1752,146 @@
       </div>
 
       <!-- Resources Modal -->
-      <div x-show="showResourcesModal" x-cloak x-trap="showResourcesModal" class="fixed inset-0 z-50 overflow-y-auto" @keydown.escape.window="showResourcesModal = false" role="dialog" aria-modal="true" aria-labelledby="resources-modal-title">
+      <div
+        x-show="showResourcesModal"
+        x-cloak
+        x-trap="showResourcesModal"
+        class="fixed inset-0 z-50 overflow-y-auto"
+        @keydown.escape.window="showResourcesModal = false"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="resources-modal-title"
+      >
         <div class="flex items-center justify-center min-h-screen px-4">
-          <div class="fixed inset-0 bg-black/50 backdrop-blur-sm transition-opacity" @click="showResourcesModal = false"></div>
+          <div
+            class="fixed inset-0 bg-black/50 backdrop-blur-sm transition-opacity"
+            @click="showResourcesModal = false"
+          ></div>
           <div class="modal max-w-2xl max-h-[80vh] flex flex-col">
-            <div class="p-6 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+            <div
+              class="p-6 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between"
+            >
               <div>
-                <h2 id="resources-modal-title" class="text-xl font-bold text-slate-900 dark:text-white">
+                <h2
+                  id="resources-modal-title"
+                  class="text-xl font-bold text-slate-900 dark:text-white"
+                >
                   Resources — <span x-text="resourcesServer?.namespace"></span>
                 </h2>
-                <p class="text-sm text-slate-500 dark:text-slate-300 mt-0.5" x-show="!loadingResources && !resourcesError">
-                  <span x-text="resources.length"></span> total (<span x-text="resources.filter(r => !r.template).length"></span> static, <span x-text="resources.filter(r => r.template).length"></span> templates)
+                <p
+                  class="text-sm text-slate-500 dark:text-slate-300 mt-0.5"
+                  x-show="!loadingResources && !resourcesError"
+                >
+                  <span x-text="resources.length"></span> total (<span
+                    x-text="resources.filter(r => !r.template).length"
+                  ></span>
+                  static,
+                  <span
+                    x-text="resources.filter(r => r.template).length"
+                  ></span>
+                  templates)
                 </p>
               </div>
-              <button @click="showResourcesModal = false" class="icon-btn icon-btn-close" aria-label="Close modal">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+              <button
+                @click="showResourcesModal = false"
+                class="icon-btn icon-btn-close"
+                aria-label="Close modal"
+              >
+                <svg
+                  class="w-5 h-5"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M6 18L18 6M6 6l12 12"
+                  />
+                </svg>
               </button>
             </div>
 
             <div class="flex-1 min-h-0 overflow-y-auto p-6">
               <!-- Loading state -->
-              <div x-show="loadingResources" class="flex items-center justify-center py-8">
-                <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+              <div
+                x-show="loadingResources"
+                class="flex items-center justify-center py-8"
+              >
+                <div
+                  class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"
+                ></div>
               </div>
 
               <!-- Error state -->
-              <div x-show="resourcesError" class="flex items-center gap-3 p-4 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-xl text-red-700 dark:text-red-400">
-                <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              <div
+                x-show="resourcesError"
+                class="flex items-center gap-3 p-4 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-xl text-red-700 dark:text-red-400"
+              >
+                <svg
+                  class="w-5 h-5 flex-shrink-0"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
                 </svg>
                 <span x-text="resourcesError"></span>
               </div>
 
               <!-- Resources list -->
-              <div x-show="!loadingResources && !resourcesError" class="space-y-2">
+              <div
+                x-show="!loadingResources && !resourcesError"
+                class="space-y-2"
+              >
                 <template x-if="resources.length === 0">
-                  <p class="text-slate-500 dark:text-slate-300 text-center py-8">No resources available from this server.</p>
+                  <p
+                    class="text-slate-500 dark:text-slate-300 text-center py-8"
+                  >
+                    No resources available from this server.
+                  </p>
                 </template>
 
                 <template x-for="resource in resources" :key="resource.uri">
-                  <div class="border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden">
-                    <div class="flex items-start gap-3 px-4 py-3 bg-slate-50 dark:bg-slate-800">
+                  <div
+                    class="border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden"
+                  >
+                    <div
+                      class="flex items-start gap-3 px-4 py-3 bg-slate-50 dark:bg-slate-800"
+                    >
                       <!-- Template/static badge -->
-                      <span class="mt-0.5 shrink-0 px-1.5 py-0.5 rounded text-xs font-mono"
+                      <span
+                        class="mt-0.5 shrink-0 px-1.5 py-0.5 rounded text-xs font-mono"
                         :class="resource.template ? 'bg-purple-100 dark:bg-purple-800/60 text-purple-700 dark:text-purple-200' : 'bg-blue-100 dark:bg-blue-800/60 text-blue-700 dark:text-blue-200'"
-                        x-text="resource.template ? 'TEMPLATE' : 'STATIC'"></span>
+                        x-text="resource.template ? 'TEMPLATE' : 'STATIC'"
+                      ></span>
                       <div class="flex-1 min-w-0">
                         <div class="flex items-center gap-2 flex-wrap">
-                          <span class="font-mono text-sm font-semibold text-slate-900 dark:text-white break-all" x-text="resource.uri"></span>
-                          <span x-show="resource.mime_type" class="text-xs text-slate-500 dark:text-slate-400 font-mono" x-text="resource.mime_type"></span>
+                          <span
+                            class="font-mono text-sm font-semibold text-slate-900 dark:text-white break-all"
+                            x-text="resource.uri"
+                          ></span>
+                          <span
+                            x-show="resource.mime_type"
+                            class="text-xs text-slate-500 dark:text-slate-400 font-mono"
+                            x-text="resource.mime_type"
+                          ></span>
                         </div>
-                        <p class="text-sm text-slate-500 dark:text-slate-300 mt-0.5" x-text="resource.name || resource.description || 'No description'"></p>
-                        <p x-show="resource.description && resource.name" class="text-xs text-slate-500 dark:text-slate-400 mt-0.5" x-text="resource.description"></p>
+                        <p
+                          class="text-sm text-slate-500 dark:text-slate-300 mt-0.5"
+                          x-text="resource.name || resource.description || 'No description'"
+                        ></p>
+                        <p
+                          x-show="resource.description && resource.name"
+                          class="text-xs text-slate-500 dark:text-slate-400 mt-0.5"
+                          x-text="resource.description"
+                        ></p>
                       </div>
                     </div>
                   </div>
@@ -865,11 +1899,10 @@
               </div>
             </div>
 
-            <div class="p-4 border-t border-slate-200 dark:border-slate-700 flex justify-end">
-              <button
-                @click="showResourcesModal = false"
-                class="btn-cancel"
-              >
+            <div
+              class="p-4 border-t border-slate-200 dark:border-slate-700 flex justify-end"
+            >
+              <button @click="showResourcesModal = false" class="btn-cancel">
                 Close
               </button>
             </div>
@@ -878,34 +1911,88 @@
       </div>
 
       <!-- Prompts Modal -->
-      <div x-show="showPromptsModal" x-cloak x-trap="showPromptsModal" class="fixed inset-0 z-50 overflow-y-auto" @keydown.escape.window="showPromptsModal = false" role="dialog" aria-modal="true" aria-labelledby="prompts-modal-title">
+      <div
+        x-show="showPromptsModal"
+        x-cloak
+        x-trap="showPromptsModal"
+        class="fixed inset-0 z-50 overflow-y-auto"
+        @keydown.escape.window="showPromptsModal = false"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="prompts-modal-title"
+      >
         <div class="flex items-center justify-center min-h-screen px-4">
-          <div class="fixed inset-0 bg-black/50 backdrop-blur-sm transition-opacity" @click="showPromptsModal = false"></div>
+          <div
+            class="fixed inset-0 bg-black/50 backdrop-blur-sm transition-opacity"
+            @click="showPromptsModal = false"
+          ></div>
           <div class="modal max-w-2xl max-h-[80vh] flex flex-col">
-            <div class="p-6 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+            <div
+              class="p-6 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between"
+            >
               <div>
-                <h2 id="prompts-modal-title" class="text-xl font-bold text-slate-900 dark:text-white">
+                <h2
+                  id="prompts-modal-title"
+                  class="text-xl font-bold text-slate-900 dark:text-white"
+                >
                   Prompts — <span x-text="promptsServer?.namespace"></span>
                 </h2>
-                <p class="text-sm text-slate-500 dark:text-slate-300 mt-0.5" x-show="!loadingPrompts && !promptsError">
+                <p
+                  class="text-sm text-slate-500 dark:text-slate-300 mt-0.5"
+                  x-show="!loadingPrompts && !promptsError"
+                >
                   <span x-text="prompts.length"></span> total
                 </p>
               </div>
-              <button @click="showPromptsModal = false" class="icon-btn icon-btn-close" aria-label="Close modal">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+              <button
+                @click="showPromptsModal = false"
+                class="icon-btn icon-btn-close"
+                aria-label="Close modal"
+              >
+                <svg
+                  class="w-5 h-5"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M6 18L18 6M6 6l12 12"
+                  />
+                </svg>
               </button>
             </div>
 
             <div class="flex-1 min-h-0 overflow-y-auto p-6">
               <!-- Loading state -->
-              <div x-show="loadingPrompts" class="flex items-center justify-center py-8">
-                <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+              <div
+                x-show="loadingPrompts"
+                class="flex items-center justify-center py-8"
+              >
+                <div
+                  class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"
+                ></div>
               </div>
 
               <!-- Error state -->
-              <div x-show="promptsError" class="flex items-center gap-3 p-4 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-xl text-red-700 dark:text-red-400">
-                <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              <div
+                x-show="promptsError"
+                class="flex items-center gap-3 p-4 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-xl text-red-700 dark:text-red-400"
+              >
+                <svg
+                  class="w-5 h-5 flex-shrink-0"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
                 </svg>
                 <span x-text="promptsError"></span>
               </div>
@@ -913,40 +2000,76 @@
               <!-- Prompts list -->
               <div x-show="!loadingPrompts && !promptsError" class="space-y-2">
                 <template x-if="prompts.length === 0">
-                  <p class="text-slate-500 dark:text-slate-300 text-center py-8">No prompts available from this server.</p>
+                  <p
+                    class="text-slate-500 dark:text-slate-300 text-center py-8"
+                  >
+                    No prompts available from this server.
+                  </p>
                 </template>
 
                 <template x-for="prompt in prompts" :key="prompt.name">
-                  <div class="border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden">
+                  <div
+                    class="border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden"
+                  >
                     <div class="px-4 py-3 bg-slate-50 dark:bg-slate-800">
-                      <span class="font-mono text-sm font-semibold text-slate-900 dark:text-white" x-text="prompt.name"></span>
-                      <p class="text-sm text-slate-500 dark:text-slate-300 mt-0.5" x-text="prompt.description || 'No description'"></p>
+                      <span
+                        class="font-mono text-sm font-semibold text-slate-900 dark:text-white"
+                        x-text="prompt.name"
+                      ></span>
+                      <p
+                        class="text-sm text-slate-500 dark:text-slate-300 mt-0.5"
+                        x-text="prompt.description || 'No description'"
+                      ></p>
                     </div>
-                    <div x-show="prompt.arguments && prompt.arguments.length > 0" class="px-4 py-3 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700">
-                      <p class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2">Arguments</p>
+                    <div
+                      x-show="prompt.arguments && prompt.arguments.length > 0"
+                      class="px-4 py-3 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700"
+                    >
+                      <p
+                        class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2"
+                      >
+                        Arguments
+                      </p>
                       <div class="space-y-2">
-                        <template x-for="arg in prompt.arguments" :key="arg.name">
+                        <template
+                          x-for="arg in prompt.arguments"
+                          :key="arg.name"
+                        >
                           <div class="flex items-start gap-2 text-sm">
-                            <span class="font-mono text-blue-600 dark:text-blue-300 shrink-0" x-text="arg.name"></span>
-                            <span class="text-slate-500 dark:text-slate-400 shrink-0" x-show="arg.required">*</span>
-                            <span class="text-slate-600 dark:text-slate-300" x-text="arg.description ? '— ' + arg.description : ''"></span>
+                            <span
+                              class="font-mono text-blue-600 dark:text-blue-300 shrink-0"
+                              x-text="arg.name"
+                            ></span>
+                            <span
+                              class="text-slate-500 dark:text-slate-400 shrink-0"
+                              x-show="arg.required"
+                              >*</span
+                            >
+                            <span
+                              class="text-slate-600 dark:text-slate-300"
+                              x-text="arg.description ? '— ' + arg.description : ''"
+                            ></span>
                           </div>
                         </template>
                       </div>
                     </div>
-                    <div x-show="!prompt.arguments || prompt.arguments.length === 0" class="px-4 py-3 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700">
-                      <p class="text-xs text-slate-500 dark:text-slate-400">No arguments</p>
+                    <div
+                      x-show="!prompt.arguments || prompt.arguments.length === 0"
+                      class="px-4 py-3 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700"
+                    >
+                      <p class="text-xs text-slate-500 dark:text-slate-400">
+                        No arguments
+                      </p>
                     </div>
                   </div>
                 </template>
               </div>
             </div>
 
-            <div class="p-4 border-t border-slate-200 dark:border-slate-700 flex justify-end">
-              <button
-                @click="showPromptsModal = false"
-                class="btn-cancel"
-              >
+            <div
+              class="p-4 border-t border-slate-200 dark:border-slate-700 flex justify-end"
+            >
+              <button @click="showPromptsModal = false" class="btn-cancel">
                 Close
               </button>
             </div>
@@ -954,6 +2077,5 @@
         </div>
       </div>
     </div>
-
   </body>
 </html>
