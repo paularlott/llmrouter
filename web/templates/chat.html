@@ -258,14 +258,6 @@
       }
 
       /* Slim scrollbars in the chat transcript. */
-      .wc-messages {
-        /* Disable browser scroll-anchoring: when the markdown re-render
-           replaces content each delta, scroll anchoring tries to hold a
-           viewport element steady and fights scrollToBottom()'s pin — on a
-           large jump (e.g. a header arriving in one delta) it wins and the
-           view stops following the stream. */
-        overflow-anchor: none;
-      }
       .wc-messages::-webkit-scrollbar {
         width: 6px;
       }
