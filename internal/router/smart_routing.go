@@ -13,15 +13,9 @@ import (
 	"github.com/BurntSushi/toml"
 	"github.com/fsnotify/fsnotify"
 	scriptling "github.com/paularlott/scriptling"
-	"github.com/paularlott/scriptling/extlibs"
-	"github.com/paularlott/scriptling/extlibs/agent"
-	"github.com/paularlott/scriptling/extlibs/ai"
-	"github.com/paularlott/scriptling/extlibs/mcp"
 	"github.com/paularlott/scriptling/extlibs/net/resolve"
-	"github.com/paularlott/scriptling/extlibs/similarity"
-	"github.com/paularlott/scriptling/libloader"
 	"github.com/paularlott/scriptling/object"
-	"github.com/paularlott/scriptling/stdlib"
+	scriptlingsetup "github.com/paularlott/scriptling/scriptling-cli/setup"
 	"github.com/paularlott/llmrouter/internal/types"
 )
 
@@ -73,26 +67,12 @@ func newSmartRouter(name, scriptPath, defaultModel string, vars map[string]strin
 // newVM creates and fully initialises a single Scriptling VM with all libraries registered.
 func (sr *SmartRouter) newVM() *scriptling.Scriptling {
 	vm := scriptling.New()
-	stdlib.RegisterAll(vm)
-	extlibs.RegisterRequestsLibrary(vm)
-	extlibs.RegisterSecretsLibrary(vm)
-	extlibs.RegisterHTMLParserLibrary(vm)
-	extlibs.RegisterLoggingLibraryDefault(vm)
-	extlibs.RegisterYAMLLibrary(vm)
-	extlibs.RegisterTOMLLibrary(vm)
-	extlibs.RegisterRuntimeLibrary(vm)
-	extlibs.RegisterRuntimeKVLibrary(vm)
-	extlibs.RegisterRuntimeSyncLibrary(vm)
-	ai.Register(vm)
-	if err := agent.Register(vm); err != nil {
-		sr.logger.Warn("failed to register scriptling.ai.agent", "error", err)
-	}
-	mcp.Register(vm)
-	mcp.RegisterToon(vm)
-	similarity.Register(vm)
+
+	// Register the full scriptling library set (all standard + extended libraries).
+	scriptlingsetup.Scriptling(vm, sr.libDirs, false, nil, nil, nil, sr.logger, "", "")
+
+	// Re-register resolve with llmrouter's DNS resolver (setup uses a default).
 	resolve.Register(vm, dnsResolver{timeout: 2 * time.Second})
-	extlibs.RegisterTemplateHTMLLibrary(vm)
-	extlibs.RegisterTemplateTextLibrary(vm)
 
 	// vars library: each config var is exposed as an attribute (vars.key) plus a
 	// get(name, default="") function for dynamic lookup. Always registered so
@@ -118,14 +98,6 @@ func (sr *SmartRouter) newVM() *scriptling.Scriptling {
 	vm.RegisterLibrary(vb.Build())
 
 	vm.RegisterLibrary(buildRouterLibrary(sr.router))
-
-	// Set up library loader for dynamic loading from libDirs
-	// Supports Python-style folder structure: knot/groups.py → import knot.groups
-	// Directories are searched in order: script dir first, then any additional libpath entries
-	if len(sr.libDirs) > 0 {
-		loader := libloader.NewMultiFilesystem(sr.libDirs...)
-		vm.SetLibraryLoader(loader)
-	}
 
 	return vm
 }
