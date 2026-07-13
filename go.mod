@@ -10,7 +10,7 @@ require (
 	github.com/paularlott/lmchatkit v0.8.0
 	github.com/paularlott/logger v0.3.0
 	github.com/paularlott/mcp v0.22.0
-	github.com/paularlott/scriptling v0.16.1
+	github.com/paularlott/scriptling v0.17.0
 	github.com/paularlott/snapshotkv v0.4.0
 )
 
