@@ -18,10 +18,10 @@ import (
 	"github.com/paularlott/llmrouter/internal/storage"
 	"github.com/paularlott/llmrouter/internal/types"
 	"github.com/paularlott/llmrouter/middleware"
+	"github.com/paularlott/lmchatkit"
+	mcplib "github.com/paularlott/mcp"
 	"github.com/paularlott/mcp/ai/claude"
 	"github.com/paularlott/mcp/ai/openai"
-	mcplib "github.com/paularlott/mcp"
-	"github.com/paularlott/lmchatkit"
 )
 
 func NewRouter(config *types.Config, logger Logger) (*Router, error) {
@@ -338,35 +338,10 @@ func (r *Router) RefreshModels(ctx context.Context) error {
 			r.logger.Debug("skipping provider", "provider", providerName, "enabled", provider.Enabled, "healthy", provider.Healthy.Load())
 			continue
 		}
-		if !provider.Fetching.CompareAndSwap(false, true) {
-			r.logger.Debug("skipping provider fetch already in progress", "provider", providerName)
-			continue
-		}
 		wg.Add(1)
 		go func(name string, p *Provider) {
 			defer wg.Done()
-			defer p.Fetching.Store(false)
-			r.logger.Debug("fetching models from provider", "provider", name)
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-			defer cancel()
-			modelsResp, err := p.Client.GetModels(ctx)
-			if err != nil {
-				r.logger.WithError(err).Error("failed to fetch models from provider", "provider", name)
-				r.DisableProvider(name, fmt.Sprintf("model fetch failed: %v", err))
-				return
-			}
-			var modelIDs []string
-			if len(p.Models) > 0 {
-				modelIDs = p.Models
-				r.logger.Info("using static models from config", "provider", name, "count", len(modelIDs))
-			} else {
-				modelIDs = make([]string, 0, len(modelsResp.Data))
-				for _, model := range modelsResp.Data {
-					modelIDs = append(modelIDs, model.ID)
-				}
-				r.logger.Debug("fetched models from provider", "provider", name, "count", len(modelsResp.Data), "models", modelIDs)
-			}
-			r.addProviderModels(name, modelIDs, p)
+			r.fetchProviderModels(name, p)
 		}(providerName, provider)
 	}
 	wg.Wait()
@@ -380,6 +355,39 @@ func (r *Router) RefreshModels(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+// fetchProviderModels fetches one provider's model list from its upstream API
+// and updates the model map atomically. It honours the provider's Fetching
+// flag so overlapping calls are no-ops, and disables the provider on failure.
+func (r *Router) fetchProviderModels(name string, p *Provider) {
+	if !p.Fetching.CompareAndSwap(false, true) {
+		r.logger.Debug("skipping provider fetch already in progress", "provider", name)
+		return
+	}
+	defer p.Fetching.Store(false)
+
+	r.logger.Debug("fetching models from provider", "provider", name)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	modelsResp, err := p.Client.GetModels(ctx)
+	if err != nil {
+		r.logger.WithError(err).Error("failed to fetch models from provider", "provider", name)
+		r.DisableProvider(name, fmt.Sprintf("model fetch failed: %v", err))
+		return
+	}
+	var modelIDs []string
+	if len(p.Models) > 0 {
+		modelIDs = p.Models
+		r.logger.Info("using static models from config", "provider", name, "count", len(modelIDs))
+	} else {
+		modelIDs = make([]string, 0, len(modelsResp.Data))
+		for _, model := range modelsResp.Data {
+			modelIDs = append(modelIDs, model.ID)
+		}
+		r.logger.Debug("fetched models from provider", "provider", name, "count", len(modelsResp.Data), "models", modelIDs)
+	}
+	r.addProviderModels(name, modelIDs, p)
 }
 
 func (r *Router) addProviderModels(providerName string, modelIDs []string, p *Provider) {

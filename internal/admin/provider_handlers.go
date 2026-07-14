@@ -47,9 +47,10 @@ func (a *Admin) HandleListProviders(w http.ResponseWriter, r *http.Request) {
 	staticNames := make(map[string]bool)
 	if a.getProviders != nil {
 		for _, p := range a.getProviders() {
-			if p.StaticProvider {
-				staticNames[p.Name] = true
+			if !p.StaticProvider {
+				continue
 			}
+			staticNames[p.Name] = true
 			result = append(result, ProviderDetail{
 				Name:           p.Name,
 				Provider:       p.Type,
@@ -57,7 +58,7 @@ func (a *Admin) HandleListProviders(w http.ResponseWriter, r *http.Request) {
 				Healthy:        p.Healthy,
 				Weight:         p.Weight,
 				ModelCount:     p.ModelCount,
-				StaticProvider: p.StaticProvider,
+				StaticProvider: true,
 			})
 		}
 	}

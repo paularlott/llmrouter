@@ -10,10 +10,10 @@ import (
 	"github.com/paularlott/llmrouter/internal/responses"
 	"github.com/paularlott/llmrouter/internal/storage"
 	"github.com/paularlott/llmrouter/internal/types"
+	"github.com/paularlott/lmchatkit"
 	"github.com/paularlott/logger"
 	"github.com/paularlott/mcp/ai"
 	"github.com/paularlott/mcp/ai/openai"
-	"github.com/paularlott/lmchatkit"
 )
 
 type Logger = logger.Logger
@@ -30,10 +30,11 @@ type Provider struct {
 	ModelAllowlist    []string
 	ModelDenylist     []string
 	Weight            float64
-	Tags              []string            // provider-level tags
-	ModelTags         map[string][]string // model_id -> tags
-	ModelAliases      map[string]string   // alias -> real model name
+	Tags              []string                   // provider-level tags
+	ModelTags         map[string][]string        // model_id -> tags
+	ModelAliases      map[string]string          // alias -> real model name
 	LastServed        atomic.Pointer[lastServed] // last model served + when (for tiebreaks)
+	configSig         string                     // stored providers: signature of the StoredProviderConfig that built this Provider
 }
 
 // lastServed records the most recent request a provider served: the model and
