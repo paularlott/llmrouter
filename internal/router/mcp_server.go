@@ -76,7 +76,7 @@ func NewMCPServer(config *types.Config, logger Logger) (*MCPServer, error) {
 func (m *MCPServer) createRemoteServerEntry(config types.MCPRemoteServerConfig, storageServer *storage.MCPServerConfig) (mcp.RemoteServerEntry, *remoteServerClient) {
 	// stdio server: a local executable launched as a subprocess. No URL/auth.
 	if config.Command != "" {
-		client, err := mcp.NewStdioClient(config.Command, config.Args, config.Namespace)
+		client, err := mcp.NewStdioClient(config.Command, config.Args, config.Namespace, mcp.WithClientExtraEnv(config.Env...))
 		if err != nil {
 			m.logger.Warn("failed to launch stdio MCP server", "namespace", config.Namespace, "command", config.Command, "error", err)
 			// Return an empty entry; ReloadAllServers skips nil clients via the
@@ -86,7 +86,7 @@ func (m *MCPServer) createRemoteServerEntry(config types.MCPRemoteServerConfig, 
 		// Unfiltered client for admin UI listing: a second stdio subprocess is
 		// wasteful, so reuse the same client (the filter only affects listing in
 		// the federated path; admin listing reads the full set directly).
-		unfilteredClient, _ := mcp.NewStdioClient(config.Command, config.Args, config.Namespace)
+		unfilteredClient, _ := mcp.NewStdioClient(config.Command, config.Args, config.Namespace, mcp.WithClientExtraEnv(config.Env...))
 
 		visibility := mcp.ToolVisibilityNative
 		if config.ToolVisibility == "ondemand" || config.ToolVisibility == "discoverable" {
@@ -210,6 +210,7 @@ func (m *MCPServer) ReloadAllServers(storageServers []*storage.MCPServerConfig) 
 			URL:               server.URL,
 			Command:           server.Command,
 			Args:              server.Args,
+			Env:               server.Env,
 			AuthType:          server.AuthType,
 			Token:             server.Token,
 			OAuthClientID:     server.OAuthClientID,

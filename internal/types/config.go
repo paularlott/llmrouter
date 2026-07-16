@@ -52,6 +52,7 @@ type MCPRemoteServerConfig struct {
 	URL               string   `json:"url" toml:"url"`
 	Command           string   `json:"command,omitempty" toml:"command"` // stdio: executable to launch (empty for HTTP)
 	Args              []string `json:"args,omitempty" toml:"args"`       // stdio: command-line arguments
+	Env               []string `json:"env,omitempty" toml:"env"`         // stdio: extra KEY=VALUE environment variables (merged on top of the parent environment)
 	AuthType          string   `json:"auth_type,omitempty" toml:"auth_type"`
 	Token             string   `json:"token,omitempty" toml:"token"`
 	OAuthClientID     string   `json:"oauth_client_id,omitempty" toml:"oauth_client_id"`

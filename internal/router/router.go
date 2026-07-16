@@ -1573,6 +1573,9 @@ func (r *Router) getMCPServers() []admin.MCPServerInfo {
 		servers = append(servers, admin.MCPServerInfo{
 			Namespace:      s.Namespace,
 			URL:            s.URL,
+			Command:        s.Command,
+			Args:           s.Args,
+			Env:            s.Env,
 			Enabled:        true,
 			ToolVisibility: s.ToolVisibility,
 			ToolAllowlist:  s.ToolAllowlist,
@@ -1590,6 +1593,9 @@ func (r *Router) getMCPServers() []admin.MCPServerInfo {
 				servers = append(servers, admin.MCPServerInfo{
 					Namespace:      s.Namespace,
 					URL:            s.URL,
+					Command:        s.Command,
+					Args:           s.Args,
+					Env:            s.Env,
 					AuthType:       s.AuthType,
 					Enabled:        s.Enabled,
 					ToolVisibility: s.ToolVisibility,

@@ -237,7 +237,7 @@
             </button>
             <button
               x-show="storageWritable"
-              @click="showAddModal = true"
+              @click="resetForm(); showAddModal = true"
               class="btn-add"
             >
               <svg
@@ -335,7 +335,7 @@
           </p>
           <button
             x-show="true"
-            @click="showAddModal = true"
+            @click="resetForm(); showAddModal = true"
             class="px-6 py-3 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-xl shadow-lg shadow-blue-500/25 hover:shadow-xl transition-all cursor-pointer"
           >
             Add Your First Server
@@ -621,7 +621,7 @@
                   type="text"
                   x-model="form.namespace"
                   required
-                  pattern="^[a-z0-9_-]+$"
+                  pattern="^[a-z0-9_\-]+$"
                   :disabled="!!editingServer"
                   class="input-field disabled:opacity-50 disabled:cursor-not-allowed"
                   placeholder="e.g., github"
@@ -772,6 +772,25 @@
                 />
                 <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">
                   Space-separated command-line arguments
+                </p>
+              </div>
+
+              <div x-show="form.transport === 'stdio'">
+                <label
+                  for="env"
+                  class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1"
+                  >Environment Variables</label
+                >
+                <textarea
+                  id="env"
+                  x-model="form.env"
+                  rows="3"
+                  class="input-field font-mono text-sm"
+                  placeholder="API_KEY=secret&#10;LOG_LEVEL=debug"
+                ></textarea>
+                <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                  One <code>KEY=value</code> per line. Added on top of the
+                  inherited environment.
                 </p>
               </div>
 

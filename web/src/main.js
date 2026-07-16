@@ -196,6 +196,7 @@ Alpine.data("mcpServers", () => ({
     url: "",
     command: "",
     args: "",
+    env: "",
     auth_type: "bearer",
     token: "",
     oauth_token_url: "",
@@ -275,6 +276,7 @@ Alpine.data("mcpServers", () => ({
       url: "",
       command: "",
       args: "",
+      env: "",
       auth_type: "bearer",
       token: "",
       oauth_token_url: "",
@@ -297,6 +299,7 @@ Alpine.data("mcpServers", () => ({
       url: server.url,
       command: server.command || "",
       args: (server.args || []).join(" "),
+      env: (server.env || []).join("\n"),
       auth_type: server.auth_type || "bearer",
       token: "",
       oauth_token_url: "",
@@ -381,9 +384,11 @@ Alpine.data("mcpServers", () => ({
         body.auth_type = 'bearer';
         body.token = '';
         body.args = (body.args || '').trim().split(/\s+/).filter(Boolean);
+        body.env = (body.env || '').split(/\n/).map((l) => l.trim()).filter(Boolean);
       } else {
         body.command = '';
         body.args = [];
+        body.env = [];
         delete body.args;
       }
       delete body.transport;

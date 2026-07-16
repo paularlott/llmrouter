@@ -104,6 +104,9 @@ func RunServer(ctx context.Context, cmd *cli.Command) error {
 				config.MCP.RemoteServers = append(config.MCP.RemoteServers, types.MCPRemoteServerConfig{
 					Namespace:      sc.GetString("namespace"),
 					URL:            strings.TrimSuffix(sc.GetString("url"), "/"),
+					Command:        sc.GetString("command"),
+					Args:           sc.GetStringSlice("args"),
+					Env:            sc.GetStringSlice("env"),
 					Token:          sc.GetString("token"),
 					ToolVisibility: sc.GetString("tool_visibility"),
 					ToolAllowlist:  sc.GetStringSlice("tool_allowlist"),

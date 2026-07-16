@@ -273,6 +273,9 @@ func (a *Admin) HandleGetMCPServer(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusOK, MCPServerInfo{
 				Namespace:      server.Namespace,
 				URL:            server.URL,
+				Command:        server.Command,
+				Args:           server.Args,
+				Env:            server.Env,
 				AuthType:       server.AuthType,
 				Enabled:        server.Enabled,
 				ToolVisibility: server.ToolVisibility,
@@ -310,6 +313,7 @@ func (a *Admin) HandleCreateMCPServer(w http.ResponseWriter, r *http.Request) {
 		URL               string   `json:"url"`
 		Command           string   `json:"command"`
 		Args              []string `json:"args"`
+		Env               []string `json:"env"`
 		AuthType          string   `json:"auth_type"`
 		Token             string   `json:"token"`
 		OAuthTokenURL     string   `json:"oauth_token_url"`
@@ -347,6 +351,7 @@ func (a *Admin) HandleCreateMCPServer(w http.ResponseWriter, r *http.Request) {
 		URL:               strings.TrimSuffix(req.URL, "/"),
 		Command:           req.Command,
 		Args:              req.Args,
+		Env:               req.Env,
 		AuthType:          req.AuthType,
 		Token:             req.Token,
 		OAuthTokenURL:     req.OAuthTokenURL,
@@ -372,6 +377,9 @@ func (a *Admin) HandleCreateMCPServer(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, MCPServerInfo{
 		Namespace:      server.Namespace,
 		URL:            server.URL,
+		Command:        server.Command,
+		Args:           server.Args,
+		Env:            server.Env,
 		AuthType:       server.AuthType,
 		Enabled:        server.Enabled,
 		ToolVisibility: server.ToolVisibility,
@@ -406,6 +414,7 @@ func (a *Admin) HandleUpdateMCPServer(w http.ResponseWriter, r *http.Request) {
 		URL               string   `json:"url"`
 		Command           string   `json:"command"`
 		Args              []string `json:"args"`
+		Env               []string `json:"env"`
 		AuthType          string   `json:"auth_type"`
 		Token             string   `json:"token"`
 		OAuthTokenURL     string   `json:"oauth_token_url"`
@@ -454,6 +463,7 @@ func (a *Admin) HandleUpdateMCPServer(w http.ResponseWriter, r *http.Request) {
 	server.RemoteSearch = req.RemoteSearch
 	server.Command = req.Command
 	server.Args = req.Args
+	server.Env = req.Env
 	server.Notifications = req.Notifications
 
 	if err := a.mcpStorage.Update(r.Context(), server); err != nil {
@@ -468,6 +478,9 @@ func (a *Admin) HandleUpdateMCPServer(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, MCPServerInfo{
 		Namespace:      server.Namespace,
 		URL:            server.URL,
+		Command:        server.Command,
+		Args:           server.Args,
+		Env:            server.Env,
 		AuthType:       server.AuthType,
 		Enabled:        server.Enabled,
 		ToolVisibility: server.ToolVisibility,
@@ -716,6 +729,9 @@ func (a *Admin) HandleToggleMCPServer(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, MCPServerInfo{
 		Namespace:      server.Namespace,
 		URL:            server.URL,
+		Command:        server.Command,
+		Args:           server.Args,
+		Env:            server.Env,
 		AuthType:       server.AuthType,
 		Enabled:        server.Enabled,
 		ToolVisibility: server.ToolVisibility,

@@ -16,6 +16,7 @@ type MCPServerConfig struct {
 	URL               string   `json:"url"`
 	Command           string   `json:"command,omitempty"`   // stdio: executable to launch (empty for HTTP)
 	Args              []string `json:"args,omitempty"`      // stdio: command-line arguments
+	Env               []string `json:"env,omitempty"`       // stdio: extra KEY=VALUE environment variables (merged on top of the parent environment)
 	AuthType          string   `json:"auth_type,omitempty"` // "bearer" (default) or "oauth2"
 	Token             string   `json:"token,omitempty"`
 	OAuthClientID     string   `json:"oauth_client_id,omitempty"`
@@ -150,6 +151,9 @@ func (s *SnapshotMCPStorage) saveServer(key string, server *MCPServerConfig) err
 	data := map[string]any{
 		"namespace":           server.Namespace,
 		"url":                 server.URL,
+		"command":             server.Command,
+		"args":                server.Args,
+		"env":                 server.Env,
 		"auth_type":           server.AuthType,
 		"token":               server.Token,
 		"oauth_client_id":     server.OAuthClientID,
@@ -162,6 +166,7 @@ func (s *SnapshotMCPStorage) saveServer(key string, server *MCPServerConfig) err
 		"tool_denylist":       server.ToolDenylist,
 		"disabled_tools":      server.DisabledTools,
 		"remote_search":       server.RemoteSearch,
+		"notifications":       server.Notifications,
 		"created_at":          server.CreatedAt,
 		"updated_at":          server.UpdatedAt,
 	}
@@ -345,6 +350,11 @@ func parseMCPServerConfig(data map[string]any) (*MCPServerConfig, error) {
 	if v, ok := data["url"].(string); ok {
 		server.URL = v
 	}
+	if v, ok := data["command"].(string); ok {
+		server.Command = v
+	}
+	server.Args = parseStringSlice(data["args"])
+	server.Env = parseStringSlice(data["env"])
 	if v, ok := data["auth_type"].(string); ok {
 		server.AuthType = v
 	}
@@ -376,6 +386,9 @@ func parseMCPServerConfig(data map[string]any) (*MCPServerConfig, error) {
 	server.DisabledTools = parseStringSlice(data["disabled_tools"])
 	if v, ok := data["remote_search"].(bool); ok {
 		server.RemoteSearch = v
+	}
+	if v, ok := data["notifications"].(bool); ok {
+		server.Notifications = v
 	}
 	if v, ok := data["created_at"].(int64); ok {
 		server.CreatedAt = v
@@ -423,6 +436,7 @@ func copyMCPServerConfig(server *MCPServerConfig) *MCPServerConfig {
 	result := &MCPServerConfig{
 		Namespace:         server.Namespace,
 		URL:               server.URL,
+		Command:           server.Command,
 		AuthType:          server.AuthType,
 		Token:             server.Token,
 		OAuthClientID:     server.OAuthClientID,
@@ -432,10 +446,19 @@ func copyMCPServerConfig(server *MCPServerConfig) *MCPServerConfig {
 		ToolVisibility:    server.ToolVisibility,
 		Enabled:           server.Enabled,
 		RemoteSearch:      server.RemoteSearch,
+		Notifications:     server.Notifications,
 		CreatedAt:         server.CreatedAt,
 		UpdatedAt:         server.UpdatedAt,
 	}
 
+	if server.Args != nil {
+		result.Args = make([]string, len(server.Args))
+		copy(result.Args, server.Args)
+	}
+	if server.Env != nil {
+		result.Env = make([]string, len(server.Env))
+		copy(result.Env, server.Env)
+	}
 	if server.ToolAllowlist != nil {
 		result.ToolAllowlist = make([]string, len(server.ToolAllowlist))
 		copy(result.ToolAllowlist, server.ToolAllowlist)
@@ -486,8 +509,10 @@ func (c *MCPServerConfig) ToJSON(includeToken bool) map[string]any {
 	result := map[string]any{
 		"namespace":       c.Namespace,
 		"url":             c.URL,
+		"command":         c.Command,
 		"auth_type":       c.AuthType,
 		"tool_visibility": c.ToolVisibility,
+		"notifications":   c.Notifications,
 		"created_at":      c.CreatedAt,
 		"updated_at":      c.UpdatedAt,
 	}
@@ -500,6 +525,12 @@ func (c *MCPServerConfig) ToJSON(includeToken bool) map[string]any {
 		result["oauth_refresh_token"] = c.OAuthRefreshToken
 	}
 
+	if len(c.Args) > 0 {
+		result["args"] = c.Args
+	}
+	if len(c.Env) > 0 {
+		result["env"] = c.Env
+	}
 	if len(c.ToolAllowlist) > 0 {
 		result["tool_allowlist"] = c.ToolAllowlist
 	}

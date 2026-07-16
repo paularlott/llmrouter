@@ -546,3 +546,92 @@ func TestSnapshotMCPStorage_Persistence(t *testing.T) {
 		t.Errorf("Expected 2 allowlist items, got %d", len(retrieved.ToolAllowlist))
 	}
 }
+
+// TestMCPStorage_StdioFieldsRoundTrip verifies that stdio-specific fields
+// (command, args, env, notifications) survive a Create -> Get -> Update -> Get
+// cycle across both storage backends. This guards against the field-enumeration
+// in saveServer/parseMCPServerConfig/copyMCPServerConfig silently dropping
+// fields that aren't explicitly listed.
+func TestMCPStorage_StdioFieldsRoundTrip(t *testing.T) {
+	ctx := context.Background()
+
+	stores := map[string]MCPStorage{
+		"snapshot": func() MCPStorage {
+			dir := tempDirMCP(t)
+			ttl := 24 * time.Hour
+			store, err := NewStore(dir, ttl)
+			if err != nil {
+				t.Fatalf("Failed to create store: %v", err)
+			}
+			t.Cleanup(func() { store.Close() })
+			return store.NewMCPStorage()
+		}(),
+		"memory": NewMemoryMCPStorage(),
+	}
+
+	for name, storage := range stores {
+		t.Run(name, func(t *testing.T) {
+			server := &MCPServerConfig{
+				Namespace:      "stdio-" + name,
+				Command:        "npx",
+				Args:           []string{"-y", "@modelcontextprotocol/server-filesystem", "/data"},
+				Env:            []string{"FS_ROOT=/data", "LOG_LEVEL=debug"},
+				Enabled:        true,
+				Notifications:  true,
+				RemoteSearch:   true,
+				ToolVisibility: "native",
+			}
+
+			if err := storage.Create(ctx, server); err != nil {
+				t.Fatalf("Create: %v", err)
+			}
+
+			got, err := storage.Get(ctx, server.Namespace)
+			if err != nil {
+				t.Fatalf("Get: %v", err)
+			}
+			if got.Command != "npx" {
+				t.Errorf("Command: got %q, want %q", got.Command, "npx")
+			}
+			if len(got.Args) != 3 || got.Args[0] != "-y" {
+				t.Errorf("Args: got %+v", got.Args)
+			}
+			if len(got.Env) != 2 || got.Env[0] != "FS_ROOT=/data" {
+				t.Errorf("Env: got %+v", got.Env)
+			}
+			if !got.Notifications {
+				t.Error("Notifications: got false, want true")
+			}
+			if !got.RemoteSearch {
+				t.Error("RemoteSearch: got false, want true")
+			}
+			if !got.Enabled {
+				t.Error("Enabled: got false, want true")
+			}
+
+			// Update must also preserve the stdio fields.
+			got.Env = []string{"FS_ROOT=/other", "DEBUG=1", "EXTRA=x"}
+			got.Notifications = false
+			if err := storage.Update(ctx, got); err != nil {
+				t.Fatalf("Update: %v", err)
+			}
+
+			updated, err := storage.Get(ctx, server.Namespace)
+			if err != nil {
+				t.Fatalf("Get after update: %v", err)
+			}
+			if updated.Command != "npx" {
+				t.Errorf("Command after update: got %q, want %q", updated.Command, "npx")
+			}
+			if len(updated.Args) != 3 {
+				t.Errorf("Args after update: got %+v", updated.Args)
+			}
+			if len(updated.Env) != 3 || updated.Env[2] != "EXTRA=x" {
+				t.Errorf("Env after update: got %+v", updated.Env)
+			}
+			if updated.Notifications {
+				t.Error("Notifications after update: got true, want false")
+			}
+		})
+	}
+}
