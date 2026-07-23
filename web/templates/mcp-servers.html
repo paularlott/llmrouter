@@ -1561,12 +1561,12 @@
                       <template
                         x-if="def.type !== 'boolean' && def.type !== 'integer' && def.type !== 'number' && def.type !== 'array' && def.type !== 'object'"
                       >
-                        <input
-                          type="text"
+                        <textarea
                           x-model="toolCallArgs[name]"
+                          rows="3"
                           class="input-field"
                           :placeholder="def.default !== undefined ? String(def.default) : ''"
-                        />
+                        ></textarea>
                       </template>
                     </div>
                   </template>
