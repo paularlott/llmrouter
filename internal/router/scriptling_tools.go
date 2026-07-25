@@ -528,7 +528,7 @@ func (stm *scriptlingToolManager) registerResources() (staticURIs, templates []s
 			templates = append(templates, e.URI)
 			stm.logger.Info("Registered scriptling MCP resource template", "uri", e.URI)
 		} else {
-			handler := mcpcli.BuildStaticResourceHandler(e.FilePath, e.URI, e.MimeType)
+			handler := mcpcli.BuildStaticResourceHandler(mcpcli.FileReader(e.FilePath), e.URI, e.MimeType)
 			stm.mainServer.RegisterResource(
 				mcp_lib.NewResource(e.URI, e.Name, e.Description, e.MimeType),
 				handler,
@@ -577,7 +577,7 @@ func (stm *scriptlingToolManager) registerPrompts() ([]string, error) {
 	for _, e := range entries {
 		var handler mcp_lib.PromptHandler
 		if e.Static {
-			handler = mcpcli.BuildStaticPromptHandler(e.FilePath)
+			handler = mcpcli.BuildStaticPromptHandler(mcpcli.FileReader(e.FilePath))
 		} else {
 			h, err := mcpcli.BuildPromptScriptHandler(e.FilePath, stm.handlerCfg)
 			if err != nil {
