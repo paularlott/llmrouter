@@ -213,6 +213,7 @@ KEY SYNTAX RULES:
 HTTP & JSON:
 - HTTP response is an object: response.status_code, response.body, response.headers
 - Use json.loads(str) and json.dumps(obj) for JSON
+- Use msgpack.packb(obj) and msgpack.unpackb(bytes) for MessagePack binary serialization
 - Use requests.get(url, options), requests.post(url, body, options) for HTTP
 - Default HTTP timeout is 5 seconds
 - HTTP options dict: {"timeout": 10, "headers": {"Authorization": "Bearer token"}}

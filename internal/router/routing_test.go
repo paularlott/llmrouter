@@ -463,6 +463,20 @@ if models:
 	}
 }
 
+func TestSmartRouting_MsgpackLibrary(t *testing.T) {
+	_, sr := newSmartTestRouter(t, `
+import msgpack
+import router
+payload = msgpack.packb({"model": "model-b"})
+data = msgpack.unpackb(payload)
+router.set_model(data["model"])
+`)
+	result := sr.Route(context.Background(), &ChatCompletionRequest{Model: "auto"})
+	if result.Model != "model-b" {
+		t.Fatalf("want model-b unpacked via msgpack, got %q", result.Model)
+	}
+}
+
 func TestSmartRouting_ProvidersForModel(t *testing.T) {
 	_, sr := newSmartTestRouter(t, `
 import router
