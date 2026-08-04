@@ -26,6 +26,8 @@ github.com/kr/text v0.2.0 h1:5Nx0Ya0ZqY2ygV366QzturHI13Jq95ApcVaJBhpS+AY=
 github.com/kr/text v0.2.0/go.mod h1:eLer722TekiGuMkidMxC/pM04lWEeraHUUmBw8l2grE=
 github.com/lufia/plan9stats v0.0.0-20260627054121-477a66015f15 h1:YkjVPl/YH5XlJ+/NiwzJtPYXXKRcyjmEUhsDci6YK3c=
 github.com/lufia/plan9stats v0.0.0-20260627054121-477a66015f15/go.mod h1:autxFIvghDt3jPTLoqZ9OZ7s9qTGNAWmYCjVFWPX/zg=
+github.com/lufia/plan9stats v0.0.0-20260802145828-341c2f0c90b5 h1:eveIIGn4BGM3qknO74omf6HYr30/exH+eVUTuAgwjZ0=
+github.com/lufia/plan9stats v0.0.0-20260802145828-341c2f0c90b5/go.mod h1:autxFIvghDt3jPTLoqZ9OZ7s9qTGNAWmYCjVFWPX/zg=
 github.com/paularlott/cli v0.8.5 h1:IENwmGHySmOhHRlu2it0hbweK8G+Dlfb/Y2OpM3i6AM=
 github.com/paularlott/cli v0.8.5/go.mod h1:sfRR24eVVblmv5gq9Enpk/9ZFfJWMovfo/7dNlqgDSM=
 github.com/paularlott/gossip v0.20.0 h1:sqd6rECkHI0ZuUI2R0fGdlbLjwWkEwCb8vYwxKaP8g4=
@@ -40,6 +42,8 @@ github.com/paularlott/mcp v0.23.0 h1:+cSJ0PlGWXikn/LDTId5CQaJBWkSM3HK0FbBOv4oLso
 github.com/paularlott/mcp v0.23.0/go.mod h1:J+Ix/SFnJKcZGu7DHLwnHS5F7IaIvRoyQFh0TQHZKvY=
 github.com/paularlott/scriptling v0.19.0 h1:aramqXFVxS8eHuodHhFOUC22BTzqe5sU7TOp4Awtd2k=
 github.com/paularlott/scriptling v0.19.0/go.mod h1:Hpzq6dmh7MpgKRB1eCKfWmDkb/YCeDr56JZO+0Y+VgA=
+github.com/paularlott/scriptling v0.20.0 h1:FClM2ZyVQi3dynQ8DVO2RqcF5GGzysdzoBM71GrhEwc=
+github.com/paularlott/scriptling v0.20.0/go.mod h1:+vCkvhxwq/gqyzP7twv2k60jL2+q6+cyTvkigcb4cWo=
 github.com/paularlott/snapshotkv v0.5.0 h1:PcEtzChCSK6jR98Im/nnHUVIW4+hSp+y9XfDCKe9Hgo=
 github.com/paularlott/snapshotkv v0.5.0/go.mod h1:TAiDx8gWhRS5cy1i8iKpxCQsWWpmQ0zA4IBEwLX58Ow=
 github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=
@@ -68,6 +72,8 @@ github.com/vmihailenco/tagparser/v2 v2.0.0 h1:y09buUbR+b5aycVFQs/g70pqKVZNBmxwAh
 github.com/vmihailenco/tagparser/v2 v2.0.0/go.mod h1:Wri+At7QHww0WTrCBeu4J6bNtoV6mEfg5OIWRZA9qds=
 github.com/yuin/goldmark v1.8.4 h1:oat/nd3U6NeQqFEL3xpEJq7d7c86NI+DbSNGAs4xnjA=
 github.com/yuin/goldmark v1.8.4/go.mod h1:ip/1k0VRfGynBgxOz0yCqHrbZXhcjxyuS66Brc7iBKg=
+github.com/yuin/goldmark v1.8.5 h1:r6N5afV5qj/5S4UTch8agZHJ8UxNCMwX7WjkkJam2NA=
+github.com/yuin/goldmark v1.8.5/go.mod h1:ip/1k0VRfGynBgxOz0yCqHrbZXhcjxyuS66Brc7iBKg=
 github.com/yusufpapurcu/wmi v1.2.4 h1:zFUKzehAFReQwLys1b/iSMl+JQGSCSjtVqQn9bBrPo0=
 github.com/yusufpapurcu/wmi v1.2.4/go.mod h1:SBZ9tNy3G9/m5Oi98Zks0QjeHVDvuK0qfxQmPyzfmi0=
 golang.org/x/net v0.57.0 h1:K5+3DljvIuDG9/Jv9rvyMywYNFCQ9RSUY6OOTTkT+tE=

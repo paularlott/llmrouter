@@ -21,8 +21,7 @@ A unified gateway that aggregates multiple LLM providers behind a single endpoin
 ### Homebrew (macOS & Linux)
 
 ```bash
-brew tap paularlott/tap
-brew install llmrouter
+brew install paularlott/tap/llmrouter
 ```
 
 ### Download from GitHub Releases

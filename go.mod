@@ -10,7 +10,7 @@ require (
 	github.com/paularlott/lmchatkit v0.8.0
 	github.com/paularlott/logger v0.3.0
 	github.com/paularlott/mcp v0.23.0
-	github.com/paularlott/scriptling v0.19.0
+	github.com/paularlott/scriptling v0.20.0
 	github.com/paularlott/snapshotkv v0.5.0
 )
 
@@ -18,7 +18,7 @@ require (
 	github.com/go-ole/go-ole v1.3.0 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/klauspost/compress v1.19.1 // indirect
-	github.com/lufia/plan9stats v0.0.0-20260627054121-477a66015f15 // indirect
+	github.com/lufia/plan9stats v0.0.0-20260802145828-341c2f0c90b5 // indirect
 	github.com/paularlott/gossip v0.20.0 // indirect
 	github.com/paularlott/jsonrpc v0.2.0 // indirect
 	github.com/power-devops/perfstat v0.0.0-20240221224432-82ca36839d55 // indirect
@@ -28,7 +28,7 @@ require (
 	github.com/stretchr/testify v1.11.1 // indirect
 	github.com/tklauser/go-sysconf v0.4.0 // indirect
 	github.com/tklauser/numcpus v0.12.0 // indirect
-	github.com/yuin/goldmark v1.8.4 // indirect
+	github.com/yuin/goldmark v1.8.5 // indirect
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
 	golang.org/x/net v0.57.0 // indirect
 	golang.org/x/oauth2 v0.36.0 // indirect
