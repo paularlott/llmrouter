@@ -26,13 +26,14 @@ import (
 
 func NewRouter(config *types.Config, logger Logger) (*Router, error) {
 	router := &Router{
-		Providers:    make(map[string]*Provider),
-		ModelMap:     make(map[string][]string),
-		ModelTags:    make(map[string][]string),
-		config:       config,
-		logger:       logger,
-		traceEnabled: strings.EqualFold(config.Logging.Level, "trace"),
-		shutdownChan: make(chan struct{}),
+		Providers:      make(map[string]*Provider),
+		ModelMap:       make(map[string][]string),
+		ModelTags:      make(map[string][]string),
+		config:         config,
+		logger:         logger,
+		traceEnabled:   strings.EqualFold(config.Logging.Level, "trace"),
+		shutdownChan:   make(chan struct{}),
+		requestWatcher: NewRequestWatcher(),
 	}
 
 	// Initialize providers
@@ -240,6 +241,7 @@ func NewRouter(config *types.Config, logger Logger) (*Router, error) {
 			defer cancel()
 			router.RefreshModels(ctx)
 		})
+		router.admin.SetRequestWatcher(router.watcherSubscribe, router.watcherUnsubscribe)
 		router.admin.RegisterRoutes(router.mux)
 		logger.Info("admin UI enabled at /admin")
 	}
@@ -301,6 +303,7 @@ func NewRouter(config *types.Config, logger Logger) (*Router, error) {
 		AuthMiddleware: router.admin.RequireAuthMiddleware(),
 		History:        historyStore,
 		Events:         eventBroadcaster,
+		FileUpload:     true,
 	})
 	if err != nil {
 		logger.Warn("failed to initialize chat UI", "error", err)
@@ -730,12 +733,27 @@ func (r *Router) CreateChatCompletion(ctx context.Context, req *ChatCompletionRe
 	r.logger.Debug("routing chat completion", "alias", req.Model, "model", dispatchReq.Model, "provider", providerName)
 	r.traceRequestPayload("chat completion", &dispatchReq)
 
+	// Watcher: emit request event.
+	var watchReqID string
+	if r.requestWatcher.Active() {
+		watchReqID = r.requestWatcher.NewRequestID()
+		r.requestWatcher.EmitRequest(watchReqID, "chat/completions", providerName, dispatchReq.Model, &dispatchReq)
+	}
+
 	resp, err := provider.Client.ChatCompletion(ctx, dispatchReq)
 	if err != nil {
+		if r.requestWatcher.Active() && watchReqID != "" {
+			r.requestWatcher.EmitError(watchReqID, "chat/completions", providerName, dispatchReq.Model, err)
+		}
 		if r.isConnectionError(err) {
 			r.DisableProvider(providerName, fmt.Sprintf("connection error: %v", err))
 		}
 		return nil, err
+	}
+
+	// Watcher: emit response event.
+	if r.requestWatcher.Active() && watchReqID != "" {
+		r.requestWatcher.EmitResponse(watchReqID, "chat/completions", providerName, dispatchReq.Model, resp)
 	}
 
 	return resp, nil
@@ -752,28 +770,51 @@ func (r *Router) CreateEmbedding(ctx context.Context, req *EmbeddingRequest) (*E
 
 	dispatchReq := *req
 	dispatchReq.Model = r.resolveAliasForProvider(req.Model, providerName)
+
+	// Watcher: emit request event.
+	var watchReqID string
+	if r.requestWatcher.Active() {
+		watchReqID = r.requestWatcher.NewRequestID()
+		r.requestWatcher.EmitRequest(watchReqID, "embeddings", providerName, dispatchReq.Model, &dispatchReq)
+	}
+
 	resp, err := provider.Client.CreateEmbedding(ctx, dispatchReq)
 	if err != nil {
+		if watchReqID != "" && r.requestWatcher.Active() {
+			r.requestWatcher.EmitError(watchReqID, "embeddings", providerName, dispatchReq.Model, err)
+		}
 		if r.isConnectionError(err) {
 			r.DisableProvider(providerName, fmt.Sprintf("connection error: %v", err))
 		}
 		return nil, err
 	}
 
+	if watchReqID != "" && r.requestWatcher.Active() {
+		r.requestWatcher.EmitResponse(watchReqID, "embeddings", providerName, dispatchReq.Model, resp)
+	}
+
 	return resp, nil
 }
 
-func (r *Router) streamChatCompletion(ctx context.Context, providerName string, req *ChatCompletionRequest) *openai.ChatStream {
+func (r *Router) streamChatCompletion(ctx context.Context, providerName string, req *ChatCompletionRequest) (*openai.ChatStream, string) {
 	provider := r.Providers[providerName]
 	r.incrementActiveCompletions(providerName)
 	r.recordModelUse(providerName, req.Model)
 	dispatchReq := *req
 	dispatchReq.Model = r.resolveAliasForProvider(req.Model, providerName)
 	r.traceRequestPayload("streaming chat completion", &dispatchReq)
-	return provider.Client.StreamChatCompletion(ctx, dispatchReq)
+
+	// Watcher: emit request event and return the ID for chunk correlation.
+	var watchReqID string
+	if r.requestWatcher.Active() {
+		watchReqID = r.requestWatcher.NewRequestID()
+		r.requestWatcher.EmitRequest(watchReqID, "chat/completions", providerName, dispatchReq.Model, &dispatchReq)
+	}
+
+	return provider.Client.StreamChatCompletion(ctx, dispatchReq), watchReqID
 }
 
-func (r *Router) writeStream(w http.ResponseWriter, stream *openai.ChatStream, model, providerName string) {
+func (r *Router) writeStream(w http.ResponseWriter, stream *openai.ChatStream, model, providerName, watchReqID string) {
 	flusher, ok := w.(http.Flusher)
 	if !ok {
 		// Drain the stream so the upstream goroutine can finish cleanly.
@@ -816,11 +857,11 @@ func (r *Router) writeStream(w http.ResponseWriter, stream *openai.ChatStream, m
 	w.WriteHeader(http.StatusOK)
 
 	// Write the peeked first chunk.
-	writeStreamChunk(w, flusher, stream.Current())
+	r.writeStreamChunkWatched(w, flusher, stream.Current(), providerName, model, watchReqID)
 
 	// Continue streaming the rest.
 	for stream.Next() {
-		writeStreamChunk(w, flusher, stream.Current())
+		r.writeStreamChunkWatched(w, flusher, stream.Current(), providerName, model, watchReqID)
 	}
 
 	// If the stream errored mid-way (after headers are committed), send an
@@ -835,10 +876,16 @@ func (r *Router) writeStream(w http.ResponseWriter, stream *openai.ChatStream, m
 		})
 		fmt.Fprintf(w, "data: %s\n\n", errData)
 		flusher.Flush()
+		if watchReqID != "" && r.requestWatcher.Active() {
+			r.requestWatcher.EmitError(watchReqID, "chat/completions", providerName, model, err)
+		}
 	}
 
 	fmt.Fprint(w, "data: [DONE]\n\n")
 	flusher.Flush()
+	if watchReqID != "" && r.requestWatcher.Active() {
+		r.requestWatcher.EmitStreamDone(watchReqID, "chat/completions", providerName, model)
+	}
 	r.logger.Debug("streaming response completed", "model", model, "provider", providerName)
 }
 
@@ -850,6 +897,19 @@ func writeStreamChunk(w http.ResponseWriter, flusher http.Flusher, resp openai.C
 	}
 	fmt.Fprintf(w, "data: %s\n\n", data)
 	flusher.Flush()
+}
+
+// writeStreamChunkWatched writes a chunk AND emits it to the watcher.
+func (r *Router) writeStreamChunkWatched(w http.ResponseWriter, flusher http.Flusher, resp openai.ChatCompletionResponse, provider, model, watchReqID string) {
+	data, err := json.Marshal(resp)
+	if err != nil {
+		return
+	}
+	fmt.Fprintf(w, "data: %s\n\n", data)
+	flusher.Flush()
+	if watchReqID != "" && r.requestWatcher.Active() {
+		r.requestWatcher.EmitStreamChunk(watchReqID, "chat/completions", provider, model, resp)
+	}
 }
 
 // upstreamErrorPayload extracts a structured error payload from an upstream
@@ -1122,9 +1182,9 @@ func (r *Router) handleStreamingChatCompletion(w http.ResponseWriter, req *http.
 			}
 			return
 		}
-		stream := r.streamChatCompletion(ctx, providerName, completionReq)
+		stream, watchID := r.streamChatCompletion(ctx, providerName, completionReq)
 		defer r.decrementActiveCompletions(providerName)
-		r.writeStream(w, stream, completionReq.Model, providerName)
+		r.writeStream(w, stream, completionReq.Model, providerName, watchID)
 		return
 	}
 
@@ -1139,9 +1199,9 @@ func (r *Router) handleStreamingChatCompletion(w http.ResponseWriter, req *http.
 		return
 	}
 
-	stream := r.streamChatCompletion(ctx, providerName, completionReq)
+	stream, watchID := r.streamChatCompletion(ctx, providerName, completionReq)
 	defer r.decrementActiveCompletions(providerName)
-	r.writeStream(w, stream, completionReq.Model, providerName)
+	r.writeStream(w, stream, completionReq.Model, providerName, watchID)
 }
 
 func (r *Router) HandleMessages(w http.ResponseWriter, req *http.Request) {
@@ -1175,7 +1235,7 @@ func (r *Router) HandleMessages(w http.ResponseWriter, req *http.Request) {
 		w.Header().Set("Content-Type", "text/event-stream")
 		w.Header().Set("Cache-Control", "no-cache")
 		w.Header().Set("Connection", "keep-alive")
-		stream := r.streamChatCompletion(ctx, providerName, &openaiReq)
+		stream, _ := r.streamChatCompletion(ctx, providerName, &openaiReq)
 		defer r.decrementActiveCompletions(providerName)
 
 		// Track whether the response writer has had data written to it.

@@ -22,13 +22,13 @@ type Session struct {
 
 // Admin handles admin UI requests
 type Admin struct {
-	password     string
-	sessions     map[string]*Session
-	sessionsMu   sync.RWMutex
-	templates    *TemplateRenderer
-	getStats     func() *Stats
-	getProviders func() []ProviderInfo
-	getModels    func() []ModelInfo
+	password      string
+	sessions      map[string]*Session
+	sessionsMu    sync.RWMutex
+	templates     *TemplateRenderer
+	getStats      func() *Stats
+	getProviders  func() []ProviderInfo
+	getModels     func() []ModelInfo
 	refreshModels func() // Called to force a rescan of models from all providers
 
 	// MCP callbacks (for read-only display of config-based servers)
@@ -54,14 +54,18 @@ type Admin struct {
 	personaStorageWritable bool
 	onPersonaChange        func()
 	getPersonas            func() []PersonaInfo
+
+	// Request watcher (for live LLM data flow viewer on providers page)
+	watcherSubscribe   func() chan []byte // returns a channel of JSON-encoded events
+	watcherUnsubscribe func(chan []byte)  // closes and removes the channel
 }
 
 // Stats represents dashboard statistics
 type Stats struct {
-	Providers       int `json:"providers"`
-	Models          int `json:"models"`
-	MCPServers      int `json:"mcp_servers"`
-	ActiveRequests  int `json:"active_requests"`
+	Providers      int `json:"providers"`
+	Models         int `json:"models"`
+	MCPServers     int `json:"mcp_servers"`
+	ActiveRequests int `json:"active_requests"`
 }
 
 // ProviderInfo represents provider information for the UI
@@ -76,18 +80,18 @@ type ProviderInfo struct {
 
 // MCPServerInfo represents MCP server information for the UI
 type MCPServerInfo struct {
-	Namespace         string   `json:"namespace"`
-	URL               string   `json:"url"`
-	Command           string   `json:"command,omitempty"`
-	Args              []string `json:"args,omitempty"`
-	Env               []string `json:"env,omitempty"`
-	AuthType          string   `json:"auth_type,omitempty"`
-	Enabled           bool     `json:"enabled"`
-	ToolVisibility    string   `json:"tool_visibility"`
-	ToolAllowlist     []string `json:"tool_allowlist,omitempty"`
-	ToolDenylist      []string `json:"tool_denylist,omitempty"`
-	StaticServer      bool     `json:"static_server"`
-	RemoteSearch      bool     `json:"remote_search"`
+	Namespace      string   `json:"namespace"`
+	URL            string   `json:"url"`
+	Command        string   `json:"command,omitempty"`
+	Args           []string `json:"args,omitempty"`
+	Env            []string `json:"env,omitempty"`
+	AuthType       string   `json:"auth_type,omitempty"`
+	Enabled        bool     `json:"enabled"`
+	ToolVisibility string   `json:"tool_visibility"`
+	ToolAllowlist  []string `json:"tool_allowlist,omitempty"`
+	ToolDenylist   []string `json:"tool_denylist,omitempty"`
+	StaticServer   bool     `json:"static_server"`
+	RemoteSearch   bool     `json:"remote_search"`
 }
 
 // ModelInfo represents a model and its providers for the UI
@@ -135,9 +139,9 @@ type ResourceInfo struct {
 // PromptInfo represents a prompt exposed by an MCP server. Arguments is the
 // (possibly empty) list of named arguments the prompt accepts.
 type PromptInfo struct {
-	Name        string            `json:"name"`
-	Description string            `json:"description"`
-	Arguments   []PromptArgument  `json:"arguments,omitempty"`
+	Name        string           `json:"name"`
+	Description string           `json:"description"`
+	Arguments   []PromptArgument `json:"arguments,omitempty"`
 }
 
 // PromptArgument describes one argument a prompt accepts.
@@ -216,6 +220,14 @@ func (a *Admin) SetMCPToolCaller(fn func(namespace, toolName string, args map[st
 // returns 500 (refresh not available).
 func (a *Admin) SetRefreshModels(fn func()) {
 	a.refreshModels = fn
+}
+
+// SetRequestWatcher wires the live LLM data flow viewer. subscribe returns a
+// channel that delivers JSON-encoded WatchEvent payloads. unsubscribe closes
+// and removes the channel. When both are nil, the watch endpoint returns 503.
+func (a *Admin) SetRequestWatcher(subscribe func() chan []byte, unsubscribe func(chan []byte)) {
+	a.watcherSubscribe = subscribe
+	a.watcherUnsubscribe = unsubscribe
 }
 
 // ChatPageHandler returns the HTTP handler for /chat. Uses requirePageAuth

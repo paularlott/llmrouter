@@ -90,6 +90,7 @@ type Router struct {
 	personaStorage       storage.PersonaStorage
 	personaSource        *mergedPersonaSource
 	eventBroadcaster     *lmchatkit.EventBroadcaster
+	requestWatcher       *RequestWatcher
 }
 
 type (

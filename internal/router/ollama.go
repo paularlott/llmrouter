@@ -320,7 +320,7 @@ func (r *Router) handleOllamaChatStream(w http.ResponseWriter, req *http.Request
 		r.writeOllamaError(w, err)
 		return
 	}
-	stream := r.streamChatCompletion(req.Context(), providerName, openaiReq)
+	stream, _ := r.streamChatCompletion(req.Context(), providerName, openaiReq)
 	defer r.decrementActiveCompletions(providerName)
 
 	w.Header().Set("Content-Type", "application/x-ndjson")
@@ -362,7 +362,7 @@ func (r *Router) handleOllamaGenerateStream(w http.ResponseWriter, req *http.Req
 		r.writeOllamaError(w, err)
 		return
 	}
-	stream := r.streamChatCompletion(req.Context(), providerName, openaiReq)
+	stream, _ := r.streamChatCompletion(req.Context(), providerName, openaiReq)
 	defer r.decrementActiveCompletions(providerName)
 
 	w.Header().Set("Content-Type", "application/x-ndjson")

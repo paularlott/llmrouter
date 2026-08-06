@@ -72,6 +72,9 @@ func (a *Admin) RegisterRoutes(mux *http.ServeMux) {
 	// OAuth2 PKCE flow for MCP servers
 	mux.HandleFunc("POST /admin/api/mcp-servers/oauth/start", a.requireAuth(a.HandleOAuthStart))
 	mux.HandleFunc("GET /admin/oauth/callback", a.HandleOAuthCallback)
+
+	// Live LLM data flow watcher (SSE)
+	mux.HandleFunc("GET /admin/api/watch", a.requireAuth(a.HandleWatch))
 }
 
 // HandleLoginPage renders the login page
@@ -639,6 +642,7 @@ func (a *Admin) HandleCallMCPServerTool(w http.ResponseWriter, r *http.Request) 
 
 	writeJSON(w, http.StatusOK, result)
 }
+
 // server. Resources are read-only in the UI — there is no storage-level toggle
 // the way there is for tools.
 func (a *Admin) HandleGetMCPServerResources(w http.ResponseWriter, r *http.Request) {
