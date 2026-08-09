@@ -13,20 +13,22 @@ import (
 // StoredProviderConfig represents a provider stored in KV storage.
 // Mirrors types.ProviderConfig but adds timestamps for storage metadata.
 type StoredProviderConfig struct {
-	Name           string              `json:"name"`
-	Provider       string              `json:"provider"`
-	BaseURL        string              `json:"base_url,omitempty"`
-	Token          string              `json:"token,omitempty"`
-	Enabled        bool                `json:"enabled"`
-	Weight         float64             `json:"weight,omitempty"`
-	Models         []string            `json:"models,omitempty"`
-	ModelAllowlist []string            `json:"model_allowlist,omitempty"`
-	Tags           []string            `json:"tags,omitempty"`
-	ModelTags      map[string][]string `json:"model_tags,omitempty"`
-	ModelDenylist  []string            `json:"model_denylist,omitempty"`
-	ModelAliases   map[string]string   `json:"model_aliases,omitempty"`
-	CreatedAt      int64               `json:"created_at"`
-	UpdatedAt      int64               `json:"updated_at"`
+	Name               string              `json:"name"`
+	Provider           string              `json:"provider"`
+	BaseURL            string              `json:"base_url,omitempty"`
+	Token              string              `json:"token,omitempty"`
+	Enabled            bool                `json:"enabled"`
+	Weight             float64             `json:"weight,omitempty"`
+	Models             []string            `json:"models,omitempty"`
+	ModelAllowlist     []string            `json:"model_allowlist,omitempty"`
+	Tags               []string            `json:"tags,omitempty"`
+	ModelTags          map[string][]string `json:"model_tags,omitempty"`
+	ModelDenylist      []string            `json:"model_denylist,omitempty"`
+	ModelAliases       map[string]string   `json:"model_aliases,omitempty"`
+	DefaultContextSize int                 `json:"default_context_size,omitempty"`
+	ModelContext       map[string]int      `json:"model_context,omitempty"`
+	CreatedAt          int64               `json:"created_at"`
+	UpdatedAt          int64               `json:"updated_at"`
 }
 
 // ProviderStorage defines the interface for provider storage.
@@ -155,20 +157,22 @@ func (s *SnapshotProviderStorage) Delete(ctx context.Context, name string) error
 
 func (s *SnapshotProviderStorage) saveProvider(key string, provider *StoredProviderConfig) error {
 	data := map[string]any{
-		"name":            provider.Name,
-		"provider":        provider.Provider,
-		"base_url":        provider.BaseURL,
-		"token":           provider.Token,
-		"enabled":         provider.Enabled,
-		"weight":          provider.Weight,
-		"models":          provider.Models,
-		"model_allowlist": provider.ModelAllowlist,
-		"tags":            provider.Tags,
-		"model_tags":      provider.ModelTags,
-		"model_denylist":  provider.ModelDenylist,
-		"model_aliases":   provider.ModelAliases,
-		"created_at":      provider.CreatedAt,
-		"updated_at":      provider.UpdatedAt,
+		"name":                provider.Name,
+		"provider":            provider.Provider,
+		"base_url":            provider.BaseURL,
+		"token":               provider.Token,
+		"enabled":             provider.Enabled,
+		"weight":              provider.Weight,
+		"models":              provider.Models,
+		"model_allowlist":     provider.ModelAllowlist,
+		"tags":                provider.Tags,
+		"model_tags":          provider.ModelTags,
+		"model_denylist":      provider.ModelDenylist,
+		"model_aliases":       provider.ModelAliases,
+		"default_context_size": provider.DefaultContextSize,
+		"model_context":       provider.ModelContext,
+		"created_at":          provider.CreatedAt,
+		"updated_at":          provider.UpdatedAt,
 	}
 	return s.db.Set(key, data)
 }
@@ -197,6 +201,10 @@ func parseProviderConfig(m map[string]any) (*StoredProviderConfig, error) {
 	p.ModelAllowlist = toStringSlice(m["model_allowlist"])
 	p.Tags = toStringSlice(m["tags"])
 	p.ModelDenylist = toStringSlice(m["model_denylist"])
+	if v, ok := m["default_context_size"].(float64); ok {
+		p.DefaultContextSize = int(v)
+	}
+	p.ModelContext = toIntMap(m["model_context"])
 	if v, ok := m["created_at"].(float64); ok {
 		p.CreatedAt = int64(v)
 	}
@@ -219,6 +227,36 @@ func toStringSlice(v any) []string {
 		if str, ok := item.(string); ok {
 			out = append(out, str)
 		}
+	}
+	return out
+}
+
+// toIntMap recovers a map[string]int from snapshotkv storage, where TOML/JSON
+// round-tripping surfaces values as map[string]any with float64 entries (JSON)
+// or int64 entries (TOML).
+func toIntMap(v any) map[string]int {
+	if v == nil {
+		return nil
+	}
+	m, ok := v.(map[string]any)
+	if !ok {
+		return nil
+	}
+	out := make(map[string]int, len(m))
+	for k, raw := range m {
+		switch n := raw.(type) {
+		case float64:
+			out[k] = int(n)
+		case float32:
+			out[k] = int(n)
+		case int64:
+			out[k] = int(n)
+		case int:
+			out[k] = n
+		}
+	}
+	if len(out) == 0 {
+		return nil
 	}
 	return out
 }

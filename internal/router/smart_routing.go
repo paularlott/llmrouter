@@ -433,6 +433,7 @@ func (m *SmartRouterManager) reconcileCollisions(modelMap map[string][]string) {
 type desiredRouter struct {
 	defaultModel string
 	vars         map[string]string
+	contextSize  int // advertised context window for the virtual model (0 = use fallback)
 	scriptPath   string // empty when no <name>.py exists (alias-only router)
 	sig          string
 }
@@ -478,6 +479,7 @@ func (m *SmartRouterManager) scan(forceRebuild bool) error {
 		desired[stem] = desiredRouter{
 			defaultModel: cfg.DefaultModel,
 			vars:         cfg.Vars,
+			contextSize:  cfg.ContextSize,
 			scriptPath:   scriptPath,
 			sig:          signatureFor(tomlPath, scriptPath),
 		}
@@ -492,6 +494,9 @@ func (m *SmartRouterManager) scan(forceRebuild bool) error {
 			m.logger.Info("removed smart router", "router", name)
 			sr.Stop()
 			delete(m.routers, name)
+			m.router.ModelMapMu.Lock()
+			delete(m.router.ModelContext, name)
+			m.router.ModelMapMu.Unlock()
 		}
 	}
 
@@ -507,6 +512,16 @@ func (m *SmartRouterManager) scan(forceRebuild bool) error {
 
 	// add or update
 	for name, d := range desired {
+		// Advertise the router's declared context window (if any). Lock per-name
+		// outside the hot reconcile path; this is a small map write.
+		m.router.ModelMapMu.Lock()
+		if d.contextSize > 0 {
+			m.router.ModelContext[name] = d.contextSize
+		} else {
+			delete(m.router.ModelContext, name)
+		}
+		m.router.ModelMapMu.Unlock()
+
 		if sr, ok := m.routers[name]; ok {
 			if sr.sig != d.sig {
 				m.logger.Info("reloading smart router", "router", name)

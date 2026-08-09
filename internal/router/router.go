@@ -29,6 +29,7 @@ func NewRouter(config *types.Config, logger Logger) (*Router, error) {
 		Providers:      make(map[string]*Provider),
 		ModelMap:       make(map[string][]string),
 		ModelTags:      make(map[string][]string),
+		ModelContext:   make(map[string]int),
 		config:         config,
 		logger:         logger,
 		traceEnabled:   strings.EqualFold(config.Logging.Level, "trace"),
@@ -58,17 +59,21 @@ func NewRouter(config *types.Config, logger Logger) (*Router, error) {
 			providerType = "openai"
 		}
 		provider := &Provider{
-			Name:           providerConfig.Name,
-			ProviderType:   providerType,
-			Enabled:        providerConfig.Enabled,
-			Client:         client,
-			Models:         providerConfig.Models,
-			ModelAllowlist: providerConfig.ModelAllowlist,
-			ModelDenylist:  providerConfig.ModelDenylist,
-			Weight:         weight,
-			Tags:           providerConfig.Tags,
-			ModelTags:      providerConfig.ModelTags,
-			ModelAliases:   providerConfig.ModelAliases,
+			Name:               providerConfig.Name,
+			ProviderType:       providerType,
+			Enabled:            providerConfig.Enabled,
+			Client:             client,
+			Models:             providerConfig.Models,
+			ModelAllowlist:     providerConfig.ModelAllowlist,
+			ModelDenylist:      providerConfig.ModelDenylist,
+			Weight:             weight,
+			Tags:               providerConfig.Tags,
+			ModelTags:          providerConfig.ModelTags,
+			ModelAliases:       providerConfig.ModelAliases,
+			BaseURL:            providerConfig.BaseURL,
+			Token:              providerConfig.Token,
+			DefaultContextSize: providerConfig.DefaultContextSize,
+			ModelContext:       providerConfig.ModelContext,
 		}
 		provider.Healthy.Store(true)
 
@@ -136,6 +141,25 @@ func NewRouter(config *types.Config, logger Logger) (*Router, error) {
 	router.mux.HandleFunc("POST /ollama/api/copy", auth(router.HandleUnsupported))
 	router.mux.HandleFunc("POST /ollama/api/pull", auth(router.HandleUnsupported))
 	router.mux.HandleFunc("POST /ollama/api/push", auth(router.HandleUnsupported))
+
+	// Native Ollama API is also served at /api/* directly (no /ollama prefix)
+	// so Ollama clients pointed at http://host:port work out of the box. These
+	// mirror the /ollama/api/* routes above one-to-one. /api/* does not collide
+	// with the OpenAI API (/v1/*) or the admin API (/admin/api/*).
+	router.mux.HandleFunc("GET /api/version", auth(router.HandleOllamaVersion))
+	router.mux.HandleFunc("GET /api/tags", auth(router.HandleOllamaTags))
+	router.mux.HandleFunc("GET /api/ps", auth(router.HandleOllamaRunningModels))
+	router.mux.HandleFunc("POST /api/chat", auth(router.HandleOllamaChat))
+	router.mux.HandleFunc("POST /api/generate", auth(router.HandleOllamaGenerate))
+	router.mux.HandleFunc("POST /api/embed", auth(router.HandleOllamaEmbed))
+	router.mux.HandleFunc("POST /api/embeddings", auth(router.HandleOllamaEmbeddings))
+	router.mux.HandleFunc("POST /api/show", auth(router.HandleOllamaShow))
+	router.mux.HandleFunc("POST /api/create", auth(router.HandleUnsupported))
+	router.mux.HandleFunc("DELETE /api/delete", auth(router.HandleUnsupported))
+	router.mux.HandleFunc("POST /api/copy", auth(router.HandleUnsupported))
+	router.mux.HandleFunc("POST /api/pull", auth(router.HandleUnsupported))
+	router.mux.HandleFunc("POST /api/push", auth(router.HandleUnsupported))
+
 	router.mux.HandleFunc("GET /health", router.HandleHealth) // Health endpoint is not protected
 
 	// Add responses endpoints if service is available
@@ -371,7 +395,7 @@ func (r *Router) fetchProviderModels(name string, p *Provider) {
 	defer p.Fetching.Store(false)
 
 	r.logger.Debug("fetching models from provider", "provider", name)
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	modelsResp, err := p.Client.GetModels(ctx)
 	if err != nil {
@@ -379,6 +403,20 @@ func (r *Router) fetchProviderModels(name string, p *Provider) {
 		r.DisableProvider(name, fmt.Sprintf("model fetch failed: %v", err))
 		return
 	}
+
+	// discovered carries per-model context windows learned from the upstream
+	// API itself (Ollama /api/show, Gemini inputTokenLimit). It is always
+	// populated from GetModels — even when the provider uses a static model
+	// list — so context lookup works regardless of which model list wins.
+	discovered := make(map[string]int)
+	if modelsResp != nil {
+		for _, model := range modelsResp.Data {
+			if model.ContextWindow > 0 {
+				discovered[model.ID] = model.ContextWindow
+			}
+		}
+	}
+
 	var modelIDs []string
 	if len(p.Models) > 0 {
 		modelIDs = p.Models
@@ -390,12 +428,19 @@ func (r *Router) fetchProviderModels(name string, p *Provider) {
 		}
 		r.logger.Debug("fetched models from provider", "provider", name, "count", len(modelsResp.Data), "models", modelIDs)
 	}
-	r.addProviderModels(name, modelIDs, p)
+
+	r.addProviderModels(name, modelIDs, p, discovered)
 }
 
-func (r *Router) addProviderModels(providerName string, modelIDs []string, p *Provider) {
+func (r *Router) addProviderModels(providerName string, modelIDs []string, p *Provider, discovered map[string]int) {
 	r.ModelMapMu.Lock()
 	defer r.ModelMapMu.Unlock()
+
+	// Tests and early start-up can reach this with a zero-value Router; make
+	// the maps safe to write so the context-window bookkeeping never panics.
+	if r.ModelContext == nil {
+		r.ModelContext = make(map[string]int)
+	}
 
 	// Remove this provider from all existing model entries
 	for modelID, providers := range r.ModelMap {
@@ -407,6 +452,9 @@ func (r *Router) addProviderModels(providerName string, modelIDs []string, p *Pr
 		}
 		if len(newProviders) == 0 {
 			delete(r.ModelMap, modelID)
+			// A model served by no-one has no resolvable context from this
+			// provider anymore; drop it so a later re-add can recompute it.
+			delete(r.ModelContext, modelID)
 		} else {
 			r.ModelMap[modelID] = newProviders
 		}
@@ -423,6 +471,13 @@ func (r *Router) addProviderModels(providerName string, modelIDs []string, p *Pr
 			continue
 		}
 		r.ModelMap[modelID] = append(r.ModelMap[modelID], providerName)
+
+		// Resolve and store the context window. When several providers serve
+		// the same model, keep the largest (the model's true capability).
+		resolved := r.resolveModelContext(p, modelID, discovered[modelID])
+		if prev, ok := r.ModelContext[modelID]; !ok || resolved > prev {
+			r.ModelContext[modelID] = resolved
+		}
 	}
 
 	// Register aliases in ModelMap so they appear in /v1/models and participate
@@ -463,6 +518,7 @@ func (r *Router) removeProviderModels(providerName string) {
 		}
 		if len(newProviders) == 0 {
 			delete(r.ModelMap, modelID)
+			delete(r.ModelContext, modelID)
 		} else {
 			r.ModelMap[modelID] = newProviders
 		}
@@ -506,6 +562,7 @@ func (r *Router) DisableProvider(providerName, reason string) {
 	// Remove models that have no providers left
 	for _, modelID := range modelsToRemove {
 		delete(r.ModelMap, modelID)
+		delete(r.ModelContext, modelID)
 	}
 
 	r.logger.Info("removed models from disabled provider",
@@ -641,20 +698,22 @@ func (r *Router) ListModels() ModelsResponse {
 	models := make([]Model, 0, len(r.ModelMap)+1)
 	for modelID := range r.ModelMap {
 		models = append(models, Model{
-			ID:      modelID,
-			Object:  "model",
-			Created: time.Now().Unix(),
-			OwnedBy: "router",
+			ID:            modelID,
+			Object:        "model",
+			Created:       time.Now().Unix(),
+			OwnedBy:       "router",
+			ContextWindow: r.resolvedContextLocked(modelID),
 		})
 	}
 
 	// Inject smart-router trigger models
 	for _, name := range r.smartRouterNames() {
 		models = append(models, Model{
-			ID:      name,
-			Object:  "model",
-			Created: time.Now().Unix(),
-			OwnedBy: "router",
+			ID:            name,
+			Object:        "model",
+			Created:       time.Now().Unix(),
+			OwnedBy:       "router",
+			ContextWindow: r.resolvedContextLocked(name),
 		})
 	}
 
@@ -1776,6 +1835,7 @@ func (r *Router) getModels() []admin.ModelInfo {
 		models = append(models, admin.ModelInfo{
 			ID:        modelID,
 			Providers: providersCopy,
+			Context:   r.resolvedContextLocked(modelID),
 		})
 	}
 	// Inject smart-router trigger models (virtual models backed by a routing script)
@@ -1783,6 +1843,7 @@ func (r *Router) getModels() []admin.ModelInfo {
 		models = append(models, admin.ModelInfo{
 			ID:        name,
 			Providers: []string{"router"},
+			Context:   r.resolvedContextLocked(name),
 		})
 	}
 	sort.Slice(models, func(i, j int) bool { return models[i].ID < models[j].ID })

@@ -4,6 +4,7 @@
 
 enabled = true
 default_model = "mistralai/ministral-3-3b"
+context_size = 32000
 
 [vars]
 # Optional key-value pairs exposed to the script as the `vars` library:

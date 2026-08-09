@@ -337,7 +337,7 @@ func TestAddProviderModels_ConcurrentRefresh(t *testing.T) {
 		wg.Add(1)
 		go func(n string, m []string) {
 			defer wg.Done()
-			r.addProviderModels(n, m, r.Providers[n])
+			r.addProviderModels(n, m, r.Providers[n], nil)
 		}(name, models)
 	}
 	wg.Wait()

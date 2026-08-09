@@ -518,6 +518,56 @@
                 class="input-field"
               />
             </div>
+            <!-- Context-size fields: only for providers whose context isn't
+                 auto-discovered. Ollama (/api/show) and Gemini (inputTokenLimit)
+                 resolve context per model themselves, so configuring it here is
+                 meaningless and is hidden. -->
+            <div
+              x-show="!['ollama','gemini'].includes(form.provider)"
+              class="space-y-4"
+            >
+              <div>
+                <label
+                  class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1"
+                  >Default Context Size
+                  <span class="text-slate-400 font-normal"
+                    >(tokens; fallback for models with no explicit size or API
+                    discovery)</span
+                  ></label
+                >
+                <input
+                  type="number"
+                  step="1"
+                  min="0"
+                  x-model.number="form.default_context_size"
+                  placeholder="e.g. 128000"
+                  class="input-field"
+                />
+              </div>
+              <div>
+                <label
+                  class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1"
+                  >Model Context Sizes
+                  <span class="text-slate-400 font-normal"
+                    >(one per line: model = tokens; overrides discovery)</span
+                  ></label
+                >
+                <textarea
+                  x-model="form.model_context_str"
+                  rows="3"
+                  placeholder="gpt-4o = 128000&#10;gpt-3.5-turbo = 16385"
+                  class="input-field font-mono text-sm"
+                ></textarea>
+              </div>
+            </div>
+            <div
+              x-show="['ollama','gemini'].includes(form.provider)"
+              x-cloak
+              class="text-sm text-slate-500 dark:text-slate-400 italic"
+            >
+              Context sizes are auto-discovered per model for
+              <span x-text="form.provider"></span> providers.
+            </div>
             <div class="flex items-center gap-3">
               <label class="flex items-center cursor-pointer">
                 <input
@@ -774,6 +824,28 @@
     <!-- /providersPage -->
 
     <script>
+      // model_context_str <-> map helpers. The textarea is free-form text
+      // ("model = tokens" per line); the API speaks a map[string]int.
+      function modelContextToText(mc) {
+        if (!mc) return "";
+        return Object.entries(mc)
+          .map(([k, v]) => `${k} = ${v}`)
+          .join("\n");
+      }
+      function modelContextFromText(text) {
+        if (!text) return {};
+        const out = {};
+        for (const line of text.split(/\r?\n/)) {
+          const raw = line.trim();
+          if (!raw) continue;
+          const sep = raw.lastIndexOf("=");
+          if (sep === -1) continue;
+          const name = raw.slice(0, sep).trim();
+          const val = parseInt(raw.slice(sep + 1).trim(), 10);
+          if (name && Number.isFinite(val) && val > 0) out[name] = val;
+        }
+        return out;
+      }
       function providersPage() {
         return {
           providers: [],
@@ -867,6 +939,8 @@
               token: "",
               weight: 1.0,
               models_str: "",
+              default_context_size: null,
+              model_context_str: "",
               enabled: true,
             };
             this.showModal = true;
@@ -887,6 +961,8 @@
                   token: "",
                   weight: data.weight || 1.0,
                   models_str: (data.models || []).join(", "),
+                  default_context_size: data.default_context_size || null,
+                  model_context_str: modelContextToText(data.model_context),
                   enabled: data.enabled,
                 };
                 this.showModal = true;
@@ -907,6 +983,8 @@
                     .map((s) => s.trim())
                     .filter(Boolean)
                 : [],
+              default_context_size: this.form.default_context_size || 0,
+              model_context: modelContextFromText(this.form.model_context_str),
               enabled: this.form.enabled,
             };
             try {

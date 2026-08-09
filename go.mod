@@ -9,19 +9,19 @@ require (
 	github.com/paularlott/cli v0.8.5
 	github.com/paularlott/lmchatkit v0.9.0
 	github.com/paularlott/logger v0.3.0
-	github.com/paularlott/mcp v0.23.0
-	github.com/paularlott/scriptling v0.20.0
+	github.com/paularlott/mcp v0.24.0
+	github.com/paularlott/scriptling v0.20.1
 	github.com/paularlott/snapshotkv v0.5.0
 )
 
 require (
 	github.com/go-ole/go-ole v1.3.0 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
-	github.com/klauspost/compress v1.19.1 // indirect
+	github.com/klauspost/compress v1.19.2 // indirect
 	github.com/lufia/plan9stats v0.0.0-20260802145828-341c2f0c90b5 // indirect
 	github.com/paularlott/gossip v0.20.0 // indirect
 	github.com/paularlott/jsonrpc v0.2.0 // indirect
-	github.com/power-devops/perfstat v0.0.0-20240221224432-82ca36839d55 // indirect
+	github.com/power-devops/perfstat v0.0.0-20260805114148-88456608a4f6 // indirect
 	github.com/shamaton/msgpack/v3 v3.2.0 // indirect
 	github.com/shirou/gopsutil/v3 v3.24.5 // indirect
 	github.com/shoenig/go-m1cpu v0.2.2 // indirect

@@ -811,7 +811,7 @@ func newRouterWithModels(models []string, allowlist []string, denylist []string)
 	}
 	p.Healthy.Store(true)
 	r.Providers["p1"] = p
-	r.addProviderModels("p1", models, p)
+	r.addProviderModels("p1", models, p, nil)
 	return r
 }
 
@@ -1085,7 +1085,7 @@ func newRouterWithAliases(models []string, aliases map[string]string) *Router {
 	}
 	p.Healthy.Store(true)
 	r.Providers["p1"] = p
-	r.addProviderModels("p1", models, p)
+	r.addProviderModels("p1", models, p, nil)
 	return r
 }
 
@@ -1149,7 +1149,7 @@ func TestAlias_RoundRobin(t *testing.T) {
 		}
 		p.Healthy.Store(true)
 		r.Providers[name] = p
-		r.addProviderModels(name, []string{realModel}, p)
+		r.addProviderModels(name, []string{realModel}, p, nil)
 	}
 
 	counts := map[string]int{}

@@ -109,9 +109,11 @@ func (r *Router) HandleOllamaTags(w http.ResponseWriter, req *http.Request) {
 	r.RefreshModels(req.Context())
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	modelsResp := r.ListModels()
+	r.ModelMapMu.RLock()
 	models := make([]map[string]any, 0, len(modelsResp.Data))
 	for _, model := range modelsResp.Data {
-		models = append(models, map[string]any{
+		ctxLen := r.resolvedContextLocked(model.ID)
+		entry := map[string]any{
 			"name":         model.ID,
 			"model":        model.ID,
 			"modified_at":  now,
@@ -125,8 +127,18 @@ func (r *Router) HandleOllamaTags(w http.ResponseWriter, req *http.Request) {
 				"parameter_size":     "",
 				"quantization_level": "",
 			},
-		})
+		}
+		// Expose the resolved context window. Ollama's own /api/tags doesn't
+		// carry this, but every client tolerates extra fields, and the context
+		// window is the whole point of routing through llmrouter.
+		if ctxLen > 0 {
+			entry["model_info"] = map[string]any{
+				"context_length": ctxLen,
+			}
+		}
+		models = append(models, entry)
 	}
+	r.ModelMapMu.RUnlock()
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := writeJSON(w, map[string]any{"models": models}); err != nil {
@@ -155,18 +167,27 @@ func (r *Router) HandleOllamaShow(w http.ResponseWriter, req *http.Request) {
 	}
 	r.ModelMapMu.RLock()
 	_, ok := r.ModelMap[showReq.Model]
+	ctxLen := r.resolvedContextLocked(showReq.Model)
 	r.ModelMapMu.RUnlock()
 	if !ok && r.smartRouterFor(showReq.Model) == nil {
 		http.Error(w, fmt.Sprintf("model %s not found", showReq.Model), http.StatusNotFound)
 		return
 	}
+
+	modelInfo := map[string]any{}
+	parameters := ""
+	if ctxLen > 0 {
+		modelInfo["context_length"] = ctxLen
+		parameters = fmt.Sprintf("# context size set by router\nnum_ctx %d\n", ctxLen)
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	if err := writeJSON(w, map[string]any{
 		"modelfile":    "FROM " + showReq.Model,
-		"parameters":   "",
+		"parameters":   parameters,
 		"template":     "",
 		"details":      map[string]any{"family": "router", "families": []string{"router"}, "format": "router"},
-		"model_info":   map[string]any{},
+		"model_info":   modelInfo,
 		"capabilities": ollamaCapabilities(),
 	}); err != nil {
 		r.logger.WithError(err).Error("failed to write ollama show response")

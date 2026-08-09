@@ -98,6 +98,7 @@ type MCPServerInfo struct {
 type ModelInfo struct {
 	ID        string   `json:"id"`
 	Providers []string `json:"providers"`
+	Context   int      `json:"context,omitempty"` // resolved context window in tokens (0 = unknown)
 }
 
 // ToolInfo represents tool information for the UI

@@ -21,10 +21,11 @@ import (
 func RunServer(ctx context.Context, cmd *cli.Command) error {
 	config := &types.Config{
 		Server: types.ServerConfig{
-			Host:          cmd.GetString("host"),
-			Port:          cmd.GetInt("port"),
-			Token:         cmd.GetString("token"),
-			AdminPassword: cmd.GetString("admin-password"),
+			Host:               cmd.GetString("host"),
+			Port:               cmd.GetInt("port"),
+			Token:              cmd.GetString("token"),
+			AdminPassword:      cmd.GetString("admin-password"),
+			DefaultContextSize: cmd.GetInt("default-context-size"),
 		},
 		Logging: types.LoggingConfig{
 			Level:  cmd.GetString("log-level"),
@@ -74,16 +75,17 @@ func RunServer(ctx context.Context, cmd *cli.Command) error {
 		typedConfig := cli.NewTypedConfigFile(cmd.ConfigFile)
 		for _, pc := range typedConfig.GetObjectSlice("providers") {
 			providerCfg := types.ProviderConfig{
-				Name:          pc.GetString("name"),
-				Provider:      pc.GetString("provider"),
-				BaseURL:       strings.TrimSuffix(pc.GetString("base_url"), "/"),
-				Token:         pc.GetString("token"),
-				Enabled:       pc.GetBool("enabled"),
-				Weight:        pc.GetFloat64("weight"),
-				Models:         pc.GetStringSlice("models"),
-				ModelAllowlist: pc.GetStringSlice("model_allowlist"),
-				ModelDenylist:  pc.GetStringSlice("model_denylist"),
-				Tags:          pc.GetStringSlice("tags"),
+				Name:               pc.GetString("name"),
+				Provider:           pc.GetString("provider"),
+				BaseURL:            strings.TrimSuffix(pc.GetString("base_url"), "/"),
+				Token:              pc.GetString("token"),
+				Enabled:            pc.GetBool("enabled"),
+				Weight:             pc.GetFloat64("weight"),
+				Models:             pc.GetStringSlice("models"),
+				ModelAllowlist:     pc.GetStringSlice("model_allowlist"),
+				ModelDenylist:      pc.GetStringSlice("model_denylist"),
+				Tags:               pc.GetStringSlice("tags"),
+				DefaultContextSize: pc.GetInt("default_context_size"),
 			}
 			if mtObj := pc.GetObject("model_tags"); mtObj != nil {
 				providerCfg.ModelTags = make(map[string][]string)
@@ -95,6 +97,14 @@ func RunServer(ctx context.Context, cmd *cli.Command) error {
 				providerCfg.ModelAliases = make(map[string]string)
 				for _, k := range maObj.GetKeys("") {
 					providerCfg.ModelAliases[k] = maObj.GetString(k)
+				}
+			}
+			if mcObj := pc.GetObject("model_context"); mcObj != nil {
+				providerCfg.ModelContext = make(map[string]int)
+				for _, k := range mcObj.GetKeys("") {
+					if v := mcObj.GetInt(k); v > 0 {
+						providerCfg.ModelContext[k] = v
+					}
 				}
 			}
 			config.Providers = append(config.Providers, providerCfg)

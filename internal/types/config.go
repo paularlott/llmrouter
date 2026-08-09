@@ -16,10 +16,11 @@ type Config struct {
 }
 
 type ServerConfig struct {
-	Host          string `json:"host" toml:"host"`
-	Port          int    `json:"port" toml:"port"`
-	Token         string `json:"token,omitempty" toml:"token"`
-	AdminPassword string `json:"admin_password,omitempty" toml:"admin_password"` // If set, enables admin UI + chat
+	Host               string `json:"host" toml:"host"`
+	Port               int    `json:"port" toml:"port"`
+	Token              string `json:"token,omitempty" toml:"token"`
+	AdminPassword      string `json:"admin_password,omitempty" toml:"admin_password"` // If set, enables admin UI + chat
+	DefaultContextSize int    `json:"default_context_size,omitempty" toml:"default_context_size"` // Fallback context window (tokens) when neither the model nor its provider exposes one. 0 = use built-in 4096 floor.
 }
 
 type LoggingConfig struct {
@@ -28,18 +29,20 @@ type LoggingConfig struct {
 }
 
 type ProviderConfig struct {
-	Name           string              `json:"name" toml:"name"`
-	Provider       string              `json:"provider" toml:"provider"`           // openai | claude | gemini | ollama | mistral | zai
-	BaseURL        string              `json:"base_url,omitempty" toml:"base_url"` // optional override
-	Token          string              `json:"token" toml:"token"`
-	Enabled        bool                `json:"enabled" toml:"enabled"`
-	Weight         float64             `json:"weight,omitempty" toml:"weight"`                   // 0.0-2.0, default 1.0; higher = preferred
-	Models         []string            `json:"models,omitempty" toml:"models"`                   // if set, use these models instead of querying the provider
-	ModelAllowlist []string            `json:"model_allowlist,omitempty" toml:"model_allowlist"` // if set, only these models are used from auto-discovery
-	Tags           []string            `json:"tags,omitempty" toml:"tags"`                       // arbitrary tags for routing scripts
-	ModelTags      map[string][]string `json:"model_tags,omitempty" toml:"model_tags"`           // model_id -> tags
-	ModelDenylist  []string            `json:"model_denylist,omitempty" toml:"model_denylist"`   // models to exclude from auto-discovery
-	ModelAliases   map[string]string   `json:"model_aliases,omitempty" toml:"model_aliases"`     // alias -> real model name
+	Name               string              `json:"name" toml:"name"`
+	Provider           string              `json:"provider" toml:"provider"`           // openai | claude | gemini | ollama | mistral | zai
+	BaseURL            string              `json:"base_url,omitempty" toml:"base_url"` // optional override
+	Token              string              `json:"token" toml:"token"`
+	Enabled            bool                `json:"enabled" toml:"enabled"`
+	Weight             float64             `json:"weight,omitempty" toml:"weight"`                   // 0.0-2.0, default 1.0; higher = preferred
+	Models             []string            `json:"models,omitempty" toml:"models"`                   // if set, use these models instead of querying the provider
+	ModelAllowlist     []string            `json:"model_allowlist,omitempty" toml:"model_allowlist"` // if set, only these models are used from auto-discovery
+	Tags               []string            `json:"tags,omitempty" toml:"tags"`                       // arbitrary tags for routing scripts
+	ModelTags          map[string][]string `json:"model_tags,omitempty" toml:"model_tags"`           // model_id -> tags
+	ModelDenylist      []string            `json:"model_denylist,omitempty" toml:"model_denylist"`   // models to exclude from auto-discovery
+	ModelAliases       map[string]string   `json:"model_aliases,omitempty" toml:"model_aliases"`     // alias -> real model name
+	DefaultContextSize int                 `json:"default_context_size,omitempty" toml:"default_context_size"` // Per-provider fallback context window (tokens); used when a model has no explicit size and no API discovery
+	ModelContext       map[string]int      `json:"model_context,omitempty" toml:"model_context"`                 // model_id -> explicit context window (tokens); overrides discovery
 }
 
 type MCPConfig struct {
@@ -85,6 +88,7 @@ type ConversationsConfig struct {
 type RouterFileConfig struct {
 	DefaultModel string            `json:"default_model,omitempty" toml:"default_model"` // fallback model when the script returns nothing
 	Enabled      bool              `json:"enabled" toml:"enabled"`                       // defaults handled by loader (absent = enabled)
+	ContextSize  int               `json:"context_size,omitempty" toml:"context_size"`   // context window (tokens) advertised for this virtual model; falls back to global default / 4096
 	Vars         map[string]string `json:"vars,omitempty" toml:"vars"`                   // exposed to the script as the vars library
 }
 

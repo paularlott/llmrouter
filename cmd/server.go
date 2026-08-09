@@ -43,6 +43,11 @@ var ServerCmd = &cli.Command{
 			ConfigPath: []string{"server.storage_path"},
 		},
 		&cli.IntFlag{
+			Name:       "default-context-size",
+			Usage:      "Fallback context window in tokens, used when a model and its provider expose none (default 4096)",
+			ConfigPath: []string{"server.default_context_size"},
+		},
+		&cli.IntFlag{
 			Name:         "responses-ttl",
 			Usage:        "Maximum age of a response in days",
 			ConfigPath:   []string{"responses.ttl_days"},

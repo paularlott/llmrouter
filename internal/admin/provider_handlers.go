@@ -12,20 +12,22 @@ import (
 // For static (config-file) providers, only the display fields are populated.
 // For stored providers, all editable fields are included.
 type ProviderDetail struct {
-	Name           string              `json:"name"`
-	Provider       string              `json:"provider"`
-	BaseURL        string              `json:"base_url,omitempty"`
-	Enabled        bool                `json:"enabled"`
-	Healthy        bool                `json:"healthy"`
-	Weight         float64             `json:"weight"`
-	ModelCount     int                 `json:"model_count"`
-	Models         []string            `json:"models,omitempty"`
-	ModelAllowlist []string            `json:"model_allowlist,omitempty"`
-	Tags           []string            `json:"tags,omitempty"`
-	ModelDenylist  []string            `json:"model_denylist,omitempty"`
-	ModelAliases   map[string]string   `json:"model_aliases,omitempty"`
-	ModelTags      map[string][]string `json:"model_tags,omitempty"`
-	StaticProvider bool                `json:"static_provider"`
+	Name               string              `json:"name"`
+	Provider           string              `json:"provider"`
+	BaseURL            string              `json:"base_url,omitempty"`
+	Enabled            bool                `json:"enabled"`
+	Healthy            bool                `json:"healthy"`
+	Weight             float64             `json:"weight"`
+	ModelCount         int                 `json:"model_count"`
+	Models             []string            `json:"models,omitempty"`
+	ModelAllowlist     []string            `json:"model_allowlist,omitempty"`
+	Tags               []string            `json:"tags,omitempty"`
+	ModelDenylist      []string            `json:"model_denylist,omitempty"`
+	ModelAliases       map[string]string   `json:"model_aliases,omitempty"`
+	ModelTags          map[string][]string `json:"model_tags,omitempty"`
+	DefaultContextSize int                 `json:"default_context_size,omitempty"`
+	ModelContext       map[string]int      `json:"model_context,omitempty"`
+	StaticProvider     bool                `json:"static_provider"`
 }
 
 // HandleProvidersPage renders the providers management page.
@@ -75,20 +77,22 @@ func (a *Admin) HandleListProviders(w http.ResponseWriter, r *http.Request) {
 				if weight <= 0 {
 					weight = 1.0
 				}
-				detail := ProviderDetail{
-					Name:           sp.Name,
-					Provider:       sp.Provider,
-					BaseURL:        sp.BaseURL,
-					Enabled:        sp.Enabled,
-					Weight:         weight,
-					Models:         sp.Models,
-					ModelAllowlist: sp.ModelAllowlist,
-					Tags:           sp.Tags,
-					ModelDenylist:  sp.ModelDenylist,
-					ModelAliases:   sp.ModelAliases,
-					ModelTags:      sp.ModelTags,
-					StaticProvider: false,
-				}
+			detail := ProviderDetail{
+				Name:               sp.Name,
+				Provider:           sp.Provider,
+				BaseURL:            sp.BaseURL,
+				Enabled:            sp.Enabled,
+				Weight:             weight,
+				Models:             sp.Models,
+				ModelAllowlist:     sp.ModelAllowlist,
+				Tags:               sp.Tags,
+				ModelDenylist:      sp.ModelDenylist,
+				ModelAliases:       sp.ModelAliases,
+				ModelTags:          sp.ModelTags,
+				DefaultContextSize: sp.DefaultContextSize,
+				ModelContext:       sp.ModelContext,
+				StaticProvider:     false,
+			}
 				// Enrich with runtime health/model count if available
 				if a.getProviders != nil {
 					for _, rp := range a.getProviders() {
@@ -125,18 +129,20 @@ func (a *Admin) HandleGetProvider(w http.ResponseWriter, r *http.Request) {
 				weight = 1.0
 			}
 			writeJSON(w, http.StatusOK, ProviderDetail{
-				Name:           sp.Name,
-				Provider:       sp.Provider,
-				BaseURL:        sp.BaseURL,
-				Enabled:        sp.Enabled,
-				Weight:         weight,
-				Models:         sp.Models,
-				ModelAllowlist: sp.ModelAllowlist,
-				Tags:           sp.Tags,
-				ModelDenylist:  sp.ModelDenylist,
-				ModelAliases:   sp.ModelAliases,
-				ModelTags:      sp.ModelTags,
-				StaticProvider: false,
+				Name:               sp.Name,
+				Provider:           sp.Provider,
+				BaseURL:            sp.BaseURL,
+				Enabled:            sp.Enabled,
+				Weight:             weight,
+				Models:             sp.Models,
+				ModelAllowlist:     sp.ModelAllowlist,
+				Tags:               sp.Tags,
+				ModelDenylist:      sp.ModelDenylist,
+				ModelAliases:       sp.ModelAliases,
+				ModelTags:          sp.ModelTags,
+				DefaultContextSize: sp.DefaultContextSize,
+				ModelContext:       sp.ModelContext,
+				StaticProvider:     false,
 			})
 			return
 		}
@@ -171,18 +177,20 @@ func (a *Admin) HandleCreateProvider(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		Name           string              `json:"name"`
-		Provider       string              `json:"provider"`
-		BaseURL        string              `json:"base_url"`
-		Token          string              `json:"token"`
-		Enabled        bool                `json:"enabled"`
-		Weight         float64             `json:"weight"`
-		Models         []string            `json:"models"`
-		ModelAllowlist []string            `json:"model_allowlist"`
-		Tags           []string            `json:"tags"`
-		ModelDenylist  []string            `json:"model_denylist"`
-		ModelAliases   map[string]string   `json:"model_aliases"`
-		ModelTags      map[string][]string `json:"model_tags"`
+		Name               string              `json:"name"`
+		Provider           string              `json:"provider"`
+		BaseURL            string              `json:"base_url"`
+		Token              string              `json:"token"`
+		Enabled            bool                `json:"enabled"`
+		Weight             float64             `json:"weight"`
+		Models             []string            `json:"models"`
+		ModelAllowlist     []string            `json:"model_allowlist"`
+		Tags               []string            `json:"tags"`
+		ModelDenylist      []string            `json:"model_denylist"`
+		ModelAliases       map[string]string   `json:"model_aliases"`
+		ModelTags          map[string][]string `json:"model_tags"`
+		DefaultContextSize int                 `json:"default_context_size"`
+		ModelContext       map[string]int      `json:"model_context"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -202,18 +210,20 @@ func (a *Admin) HandleCreateProvider(w http.ResponseWriter, r *http.Request) {
 	}
 
 	provider := &storage.StoredProviderConfig{
-		Name:           req.Name,
-		Provider:       req.Provider,
-		BaseURL:        strings.TrimSuffix(req.BaseURL, "/"),
-		Token:          req.Token,
-		Enabled:        req.Enabled,
-		Weight:         req.Weight,
-		Models:         req.Models,
-		ModelAllowlist: req.ModelAllowlist,
-		Tags:           req.Tags,
-		ModelDenylist:  req.ModelDenylist,
-		ModelAliases:   req.ModelAliases,
-		ModelTags:      req.ModelTags,
+		Name:               req.Name,
+		Provider:           req.Provider,
+		BaseURL:            strings.TrimSuffix(req.BaseURL, "/"),
+		Token:              req.Token,
+		Enabled:            req.Enabled,
+		Weight:             req.Weight,
+		Models:             req.Models,
+		ModelAllowlist:     req.ModelAllowlist,
+		Tags:               req.Tags,
+		ModelDenylist:      req.ModelDenylist,
+		ModelAliases:       req.ModelAliases,
+		ModelTags:          req.ModelTags,
+		DefaultContextSize: req.DefaultContextSize,
+		ModelContext:       req.ModelContext,
 	}
 
 	if err := a.providerStorage.Create(r.Context(), provider); err != nil {
@@ -255,18 +265,20 @@ func (a *Admin) HandleUpdateProvider(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		Name           string              `json:"name"`
-		Provider       string              `json:"provider"`
-		BaseURL        string              `json:"base_url"`
-		Token          string              `json:"token"`
-		Enabled        bool                `json:"enabled"`
-		Weight         float64             `json:"weight"`
-		Models         []string            `json:"models"`
-		ModelAllowlist []string            `json:"model_allowlist"`
-		Tags           []string            `json:"tags"`
-		ModelDenylist  []string            `json:"model_denylist"`
-		ModelAliases   map[string]string   `json:"model_aliases"`
-		ModelTags      map[string][]string `json:"model_tags"`
+		Name               string              `json:"name"`
+		Provider           string              `json:"provider"`
+		BaseURL            string              `json:"base_url"`
+		Token              string              `json:"token"`
+		Enabled            bool                `json:"enabled"`
+		Weight             float64             `json:"weight"`
+		Models             []string            `json:"models"`
+		ModelAllowlist     []string            `json:"model_allowlist"`
+		Tags               []string            `json:"tags"`
+		ModelDenylist      []string            `json:"model_denylist"`
+		ModelAliases       map[string]string   `json:"model_aliases"`
+		ModelTags          map[string][]string `json:"model_tags"`
+		DefaultContextSize *int                `json:"default_context_size"`
+		ModelContext       map[string]int      `json:"model_context"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -319,6 +331,22 @@ func (a *Admin) HandleUpdateProvider(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.ModelTags != nil {
 		provider.ModelTags = req.ModelTags
+	}
+	// default_context_size uses a pointer so 0 ("no per-provider default") is a
+	// distinct, sendable value rather than being indistinguishable from omitted.
+	if req.DefaultContextSize != nil {
+		provider.DefaultContextSize = *req.DefaultContextSize
+	}
+	// model_context: a nil body field means "leave untouched"; an empty map
+	// (or one with zero-valued entries) clears it.
+	if req.ModelContext != nil {
+		mc := make(map[string]int, len(req.ModelContext))
+		for k, v := range req.ModelContext {
+			if v > 0 {
+				mc[k] = v
+			}
+		}
+		provider.ModelContext = mc
 	}
 
 	if err := a.providerStorage.Update(r.Context(), provider); err != nil {

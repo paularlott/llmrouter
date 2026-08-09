@@ -5,7 +5,8 @@ A unified gateway that aggregates multiple LLM providers behind a single endpoin
 ## Features
 
 - **Multi-Provider**: OpenAI, Claude, Gemini, Ollama, Mistral, ZAi — configure once, route by model name
-- **Protocol Translation**: Clients speak OpenAI or Anthropic Messages; the gateway translates as needed, and also exposes a full Ollama-compatible API under `/ollama`
+- **Protocol Translation**: Clients speak OpenAI, Anthropic Messages, or Ollama; the gateway translates as needed in both directions — an Ollama request can be served by an OpenAI/Claude/Gemini/Ollama backend, and vice versa
+- **Context-Window Aware**: Each model's context size is auto-discovered from Ollama (`/api/show`) and Gemini, or set per-model / per-provider / globally; surfaced through `/ollama/api/show`, `/ollama/api/tags`, and `/v1/models`
 - **Weight-Based Load Balancing**: Distribute load across providers with configurable weights
 - **Smart Routing**: Request the `auto` model and a [Scriptling](https://scriptling.dev/) script picks the best provider/model based on tags, load, and request content
 - **MCP Aggregator**: Combine tools, resources, and prompts from multiple remote MCP servers with namespace isolation, OAuth support, and per-tool visibility / allow / deny filtering
@@ -58,6 +59,7 @@ port = 12345
 token = "your-secret-token"   # Optional bearer token
 admin_password = "admin123"   # Optional: enables admin UI at /admin
 storage_path = "./data"  # Omit for memory-only storage (under [server])
+default_context_size = 4096   # Optional: fallback context window (tokens) for models that don't expose one
 
 [logging]
 level = "info"    # trace | debug | info | warn | error
@@ -113,6 +115,21 @@ name = "local"
 provider = "ollama"
 base_url = "http://localhost:11434/v1"
 enabled = true
+# Context window is auto-discovered from Ollama's /api/show per model, so no
+# default_context_size / model_context is needed for ollama providers. Use them
+# only to override what Ollama reports.
+
+[[providers]]
+name = "openai-fast"
+provider = "openai"
+token = "sk-..."
+enabled = true
+default_context_size = 128000   # Fallback for any model without an explicit size
+
+[providers.model_context]       # Explicit per-model overrides (tokens)
+"gpt-4o"             = 128000
+"gpt-4o-mini"        = 128000
+"gpt-3.5-turbo"      = 16385
 
 routes_dir = "./routers"  # Optional: directory of smart-router <model>.toml/.py pairs
 
@@ -128,16 +145,53 @@ tool_denylist = ["delete"]           # Optional: these tools are disabled
 
 ### Provider Types
 
-| Provider  | Default Base URL                              | Embeddings | Model Discovery  |
-| --------- | --------------------------------------------- | ---------- | ---------------- |
-| `openai`  | https://api.openai.com/v1                     | Yes        | Auto             |
-| `claude`  | https://api.anthropic.com/v1                  | No         | **Must specify** |
-| `gemini`  | https://generativelanguage.googleapis.com/... | Yes        | Auto             |
-| `ollama`  | https://ollama.com/v1/                        | Yes        | Auto             |
-| `mistral` | https://api.mistral.ai/v1                     | Yes        | Auto             |
-| `zai`     | https://api.z.ai/api/paas/v4/                 | Yes        | Auto             |
+| Provider  | Default Base URL                              | Embeddings | Model Discovery  | Context Size                              |
+| --------- | --------------------------------------------- | ---------- | ---------------- | ----------------------------------------- |
+| `openai`  | https://api.openai.com/v1                     | Yes        | Auto             | Configure (`model_context` / `default_context_size`) |
+| `claude`  | https://api.anthropic.com/v1                  | No         | **Must specify** | Configure (`model_context` / `default_context_size`) |
+| `gemini`  | https://generativelanguage.googleapis.com/... | Yes        | Auto             | Auto (from `inputTokenLimit`)             |
+| `ollama`  | https://ollama.com/                          | Yes        | Auto             | Auto (from `/api/show`)                    |
+| `mistral` | https://api.mistral.ai/v1                     | Yes        | Auto             | Configure (`model_context` / `default_context_size`) |
+| `zai`     | https://api.z.ai/api/paas/v4/                 | Yes        | Auto             | Configure (`model_context` / `default_context_size`) |
 
 `base_url` is optional — each provider has a built-in default. Set it to override (e.g. local LM Studio).
+
+### Context Window
+
+Each model carries a context window (in tokens), resolved per the following precedence (first hit wins):
+
+1. **Per-model override** — `[providers.model_context]` on the serving provider
+2. **Discovered from the API** — Ollama `/api/show` (`model_info.context_length`) or Gemini (`inputTokenLimit`)
+3. **Per-provider default** — `default_context_size` on the serving provider
+4. **Global default** — `server.default_context_size`
+5. **4096** floor
+
+When several providers serve the same model, the largest resolved context is kept. Ollama and Gemini providers need no configuration — they introspect the value per model. OpenAI, Claude, Mistral, and ZAi do not expose context size through their APIs, so set `model_context` (most accurate — it's a property of the model, not the provider) and/or `default_context_size` for them. Both are editable in the admin UI under each provider (hidden for ollama/gemini, which auto-discover).
+
+Smart-router virtual models (e.g. `auto`) have no provider to discover from, so they fall back to the global default, then the 4096 floor. Declare an explicit value in the router's `.toml` to override:
+
+```toml
+# routers/auto.toml
+default_model = "mistralai/ministral-3-3b"
+context_size = 128000   # tokens advertised for the "auto" virtual model
+```
+
+```toml
+[[providers]]
+name = "openai"
+provider = "openai"
+token = "sk-..."
+default_context_size = 128000   # used when a model has no explicit entry below
+
+[providers.model_context]       # explicit per-model overrides (tokens)
+"gpt-4o"          = 128000
+"gpt-4o-mini"     = 128000
+"gpt-3.5-turbo"   = 16385
+```
+
+The resolved size is surfaced back to clients in three places: `/api/show` and `/ollama/api/show` (`model_info.context_length` + a `num_ctx` parameter), `/api/tags` and `/ollama/api/tags` (a per-model `model_info.context_length`), and `/v1/models` (`context_window` per model). The admin Models page shows a Context column.
+
+For Ollama providers, discovery is done by the native Ollama client in `mcp/ai/ollama` — it queries `/api/tags` and `/api/show` directly. A `base_url` configured for the OpenAI shim (ending in `/v1`) works, since the client strips the `/v1` to reach the native API; the default is `https://ollama.com`.
 
 `model_allowlist` restricts the provider to only the listed models. For Claude this is required (no discovery API). For other providers it is optional.
 
@@ -161,6 +215,7 @@ For example, `./routers/auto.toml` + `./routers/auto.py` make clients that reque
 # routers/auto.toml — the stem ("auto") is the model name clients send
 enabled = true
 default_model = "mistralai/ministral-3-3b"   # used when the script returns nothing or fails
+context_size = 128000                          # optional: tokens advertised for this virtual model
 
 [vars]              # optional key-value pairs exposed to the script as the `vars` library
 openai_key = "sk-..."
@@ -429,18 +484,22 @@ OpenAI chat completion requests preserve provider-specific top-level fields when
 
 ### Ollama Compatible
 
-The `/ollama/` base path provides full Ollama API compatibility, allowing tools like VS Code (Copilot), LM Studio, and other Ollama clients to connect directly. Set the Ollama base URL to `http://host:port/ollama`.
+The native Ollama API is served at `/api/*` directly on the gateway's ports, so Ollama clients (VS Code Copilot, LM Studio, etc.) can point at `http://host:port` and work out of the box. The same endpoints are also mirrored under `/ollama/api/*` (and the OpenAI-compatible surface under `/ollama/v1/*`).
 
 ```bash
-GET  /ollama/api/version           # API version info
-GET  /ollama/api/tags              # List models
-GET  /ollama/api/ps                # List running models
-POST /ollama/api/chat              # Chat with messages (supports images)
-POST /ollama/api/generate          # Generate from prompt (supports images)
-POST /ollama/api/embed             # Embeddings (batch)
-POST /ollama/api/embeddings        # Embeddings (single)
-POST /ollama/api/show              # Model details
+GET  /api/version           # API version info
+GET  /api/tags              # List models (each carries model_info.context_length)
+GET  /api/ps                # List running models
+POST /api/chat              # Chat with messages (supports images)
+POST /api/generate          # Generate from prompt (supports images)
+POST /api/embed             # Embeddings (batch)
+POST /api/embeddings        # Embeddings (single)
+POST /api/show              # Model details (model_info.context_length + num_ctx)
 ```
+
+`/api/*` does not collide with the OpenAI API (`/v1/*`) or the admin API (`/admin/api/*`). Every endpoint above is also available with an `/ollama` prefix (e.g. `/ollama/api/chat`).
+
+`/api/show` and `/api/tags` return each model's resolved context window (see [Context Window](#context-window)), which is the main reason to route Ollama clients through the gateway — a single source of truth for context size across mixed providers. Inbound Ollama requests are translated to whatever the serving provider speaks: an `/api/chat` request for a model backed by OpenAI, Claude, Gemini, or another Ollama is forwarded upstream in that provider's native wire format and the reply is translated back to Ollama format.
 
 Images sent via Ollama's `images` field are automatically converted with the correct media type (JPEG, PNG, GIF, WebP) based on file signature detection.
 
@@ -498,6 +557,7 @@ Authorization: Bearer your-secret-token
 ./llmrouter -config custom.toml server      # Custom config
 ./llmrouter server -port 8080               # Override port
 ./llmrouter server -token secret123         # Set bearer token
+./llmrouter server --default-context-size 8192  # Fallback context window (tokens)
 ./llmrouter server --tools-dir ./tools      # Load scriptling MCP tools
 ./llmrouter server --plugin-dir ./plugins   # Load scriptling plugins
 ./llmrouter server --libpath ./libs         # Add library directories

@@ -19,22 +19,26 @@ import (
 type Logger = logger.Logger
 
 type Provider struct {
-	Name              string
-	ProviderType      string // openai | claude | gemini | ollama | mistral | zai
-	Client            ai.Client
-	Enabled           bool
-	Healthy           atomic.Bool
-	ActiveCompletions atomic.Int64
-	Fetching          atomic.Bool
-	Models            []string // static model list; if set, overrides provider API discovery
-	ModelAllowlist    []string
-	ModelDenylist     []string
-	Weight            float64
-	Tags              []string                   // provider-level tags
-	ModelTags         map[string][]string        // model_id -> tags
-	ModelAliases      map[string]string          // alias -> real model name
-	LastServed        atomic.Pointer[lastServed] // last model served + when (for tiebreaks)
-	configSig         string                     // stored providers: signature of the StoredProviderConfig that built this Provider
+	Name               string
+	ProviderType       string // openai | claude | gemini | ollama | mistral | zai
+	Client             ai.Client
+	Enabled            bool
+	Healthy            atomic.Bool
+	ActiveCompletions  atomic.Int64
+	Fetching           atomic.Bool
+	Models             []string // static model list; if set, overrides provider API discovery
+	ModelAllowlist     []string
+	ModelDenylist      []string
+	Weight             float64
+	Tags               []string                   // provider-level tags
+	ModelTags          map[string][]string        // model_id -> tags
+	ModelAliases       map[string]string          // alias -> real model name
+	BaseURL            string                     // raw upstream base URL (for native Ollama discovery)
+	Token              string                     // raw upstream token (for native Ollama discovery)
+	DefaultContextSize int                        // per-provider fallback context window (tokens)
+	ModelContext       map[string]int             // model_id -> explicit context window (tokens); overrides discovery
+	LastServed         atomic.Pointer[lastServed] // last model served + when (for tiebreaks)
+	configSig          string                     // stored providers: signature of the StoredProviderConfig that built this Provider
 }
 
 // lastServed records the most recent request a provider served: the model and
@@ -70,6 +74,7 @@ type Router struct {
 	ModelMap             map[string][]string
 	ModelMapMu           sync.RWMutex
 	ModelTags            map[string][]string // model_id -> merged tags across all providers
+	ModelContext         map[string]int      // model_id -> resolved context window (tokens); max across providers
 	config               *types.Config
 	logger               Logger
 	traceEnabled         bool
