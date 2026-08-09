@@ -77,6 +77,22 @@
     @apply text-slate-500 dark:text-slate-300;
   }
 
+  /* Native <select> chrome — Safari in particular — ignores .input-field's
+     border/padding/sizing and suppresses the focus ring, so selects render
+     shorter than text inputs and look borderless when focused. Force
+     appearance-none and paint our own chevron so a select matches its
+     sibling inputs in every browser. Applies to every select.input-field. */
+  select.input-field {
+    @apply appearance-none pr-9;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%2364748b' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3E%3C/svg%3E");
+    background-position: right 0.5rem center;
+    background-repeat: no-repeat;
+    background-size: 1.25rem 1.25rem;
+  }
+  .dark select.input-field {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%23cbd5e1' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3E%3C/svg%3E");
+  }
+
   /* Dark hierarchy:
      page bg:    slate-950
      sidebar:    slate-900

@@ -35,6 +35,7 @@ type ProviderStorage interface {
 	Get(ctx context.Context, name string) (*StoredProviderConfig, error)
 	List(ctx context.Context) ([]*StoredProviderConfig, error)
 	Update(ctx context.Context, provider *StoredProviderConfig) error
+	Rename(ctx context.Context, oldName, newName string) error
 	Delete(ctx context.Context, name string) error
 }
 
@@ -114,6 +115,36 @@ func (s *SnapshotProviderStorage) Update(ctx context.Context, provider *StoredPr
 
 	provider.UpdatedAt = time.Now().Unix()
 	return s.saveProvider(key, provider)
+}
+
+// Rename changes a provider's key from oldName to newName, preserving the
+// stored config (including CreatedAt) and updating the embedded Name field.
+func (s *SnapshotProviderStorage) Rename(ctx context.Context, oldName, newName string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	oldKey := s.providerKey(oldName)
+	newKey := s.providerKey(newName)
+
+	data, err := s.db.Get(oldKey)
+	if err != nil {
+		return fmt.Errorf("provider not found")
+	}
+	if _, err := s.db.Get(newKey); err == nil {
+		return fmt.Errorf("provider with name %q already exists", newName)
+	}
+
+	m, ok := data.(map[string]any)
+	if !ok {
+		return fmt.Errorf("invalid data type for provider config")
+	}
+	m["name"] = newName
+	m["updated_at"] = time.Now().Unix()
+
+	if err := s.db.Set(newKey, m); err != nil {
+		return err
+	}
+	return s.db.Delete(oldKey)
 }
 
 func (s *SnapshotProviderStorage) Delete(ctx context.Context, name string) error {
@@ -244,6 +275,27 @@ func (s *MemoryProviderStorage) Update(ctx context.Context, provider *StoredProv
 	}
 	provider.UpdatedAt = time.Now().Unix()
 	s.providers[provider.Name] = provider
+	return nil
+}
+
+// Rename changes a provider's key from oldName to newName, preserving the
+// stored config (including CreatedAt) and updating the embedded Name field.
+func (s *MemoryProviderStorage) Rename(ctx context.Context, oldName, newName string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	p, ok := s.providers[oldName]
+	if !ok {
+		return fmt.Errorf("provider not found")
+	}
+	if _, exists := s.providers[newName]; exists {
+		return fmt.Errorf("provider with name %q already exists", newName)
+	}
+
+	delete(s.providers, oldName)
+	p.Name = newName
+	p.UpdatedAt = time.Now().Unix()
+	s.providers[newName] = p
 	return nil
 }
 

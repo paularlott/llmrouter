@@ -442,8 +442,7 @@
               <input
                 type="text"
                 x-model="form.name"
-                :disabled="editing"
-                class="input-field disabled:opacity-60"
+                class="input-field"
               />
             </div>
             <div>
@@ -782,6 +781,7 @@
           storageWritable: false,
           showModal: false,
           editing: false,
+          editingName: "",
           saving: false,
           form: {},
           showDeleteModal: false,
@@ -859,6 +859,7 @@
           },
           openAdd() {
             this.editing = false;
+            this.editingName = "";
             this.form = {
               name: "",
               provider: "openai",
@@ -872,6 +873,7 @@
           },
           async openEdit(p) {
             this.editing = true;
+            this.editingName = p.name;
             try {
               const r = await fetch(
                 "/admin/api/providers/" + encodeURIComponent(p.name),
@@ -909,7 +911,8 @@
             };
             try {
               const url = this.editing
-                ? "/admin/api/providers/" + encodeURIComponent(this.form.name)
+                ? "/admin/api/providers/" +
+                  encodeURIComponent(this.editingName)
                 : "/admin/api/providers";
               const method = this.editing ? "PUT" : "POST";
               const r = await fetch(url, {

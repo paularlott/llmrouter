@@ -255,6 +255,7 @@ func (a *Admin) HandleUpdateProvider(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
+		Name           string              `json:"name"`
 		Provider       string              `json:"provider"`
 		BaseURL        string              `json:"base_url"`
 		Token          string              `json:"token"`
@@ -271,6 +272,17 @@ func (a *Admin) HandleUpdateProvider(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
+	}
+
+	// Handle a rename: if a new name is supplied and differs from the current
+	// one, move the stored entry to the new key before applying field updates.
+	if req.Name != "" && req.Name != name {
+		if err := a.providerStorage.Rename(r.Context(), name, req.Name); err != nil {
+			writeError(w, http.StatusConflict, err.Error())
+			return
+		}
+		name = req.Name
+		provider.Name = name
 	}
 
 	if req.Provider != "" {
