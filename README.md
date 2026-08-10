@@ -166,7 +166,7 @@ Each model carries a context window (in tokens), resolved per the following prec
 4. **Global default** — `server.default_context_size`
 5. **4096** floor
 
-When several providers serve the same model, the largest resolved context is kept. Ollama and Gemini providers need no configuration — they introspect the value per model. OpenAI, Claude, Mistral, and ZAi do not expose context size through their APIs, so set `model_context` (most accurate — it's a property of the model, not the provider) and/or `default_context_size` for them. Both are editable in the admin UI under each provider (hidden for ollama/gemini, which auto-discover).
+When several providers serve the same model, the largest resolved context is kept. Ollama and Gemini providers need no configuration — they introspect the value per model. (For Ollama note that `/api/show` reports the model's trained max context, not the currently loaded `num_ctx` — set `model_context` to override.) OpenAI, Claude, Mistral, and ZAi do not expose context size through their APIs, so set `model_context` (most accurate — it's a property of the model, not the provider) and/or `default_context_size` for them. Both are editable in the admin UI under each provider (hidden only for Gemini, which auto-discovers an authoritative per-model value).
 
 Smart-router virtual models (e.g. `auto`) have no provider to discover from, so they fall back to the global default, then the 4096 floor. Declare an explicit value in the router's `.toml` to override:
 

@@ -518,12 +518,14 @@
                 class="input-field"
               />
             </div>
-            <!-- Context-size fields: only for providers whose context isn't
-                 auto-discovered. Ollama (/api/show) and Gemini (inputTokenLimit)
-                 resolve context per model themselves, so configuring it here is
-                 meaningless and is hidden. -->
+            <!-- Context-size fields: hidden only for providers whose context
+                 is authoritatively auto-discovered. Gemini's inputTokenLimit
+                 is the API's true per-model hard cap, so overrides are
+                 meaningless there. Ollama's /api/show returns the model's
+                 trained max context — not the loaded num_ctx — so an explicit
+                 override here is meaningful and is allowed. -->
             <div
-              x-show="!['ollama','gemini'].includes(form.provider)"
+              x-show="form.provider !== 'gemini'"
               class="space-y-4"
             >
               <div>
@@ -561,12 +563,11 @@
               </div>
             </div>
             <div
-              x-show="['ollama','gemini'].includes(form.provider)"
+              x-show="form.provider === 'gemini'"
               x-cloak
               class="text-sm text-slate-500 dark:text-slate-400 italic"
             >
-              Context sizes are auto-discovered per model for
-              <span x-text="form.provider"></span> providers.
+              Context sizes are auto-discovered per model for Gemini providers.
             </div>
             <div class="flex items-center gap-3">
               <label class="flex items-center cursor-pointer">
