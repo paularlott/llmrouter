@@ -84,7 +84,7 @@ macOS downloads contain an `.app` bundle (drag to `/Applications`). Linux/Window
 
 ### Build from Source
 
-Requires [Go 1.26+](https://go.dev/dl/), Node.js (for the web UI build), and [Task](https://taskfile.dev/installation/) (or `make`).
+Requires [Go 1.26+](https://go.dev/dl/), Node.js (for the web UI build), and [Task](https://taskfile.dev/installation/).
 
 ```bash
 git clone https://github.com/paularlott/llmrouter.git
@@ -627,7 +627,7 @@ All `server` flags are also accepted by the root command in desktop mode, so `./
 
 ### Building
 
-[Task](https://taskfile.dev/) is the canonical build system (a `Makefile` mirrors the common targets). Both produce identical output — single binary, `CGO_ENABLED=0`, cross-compiles from any host.
+[Task](https://taskfile.dev/) is the canonical build system.
 
 ```bash
 task              # Build for current platform

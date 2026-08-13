@@ -20,6 +20,8 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"runtime"
+	"strings"
 	"strconv"
 	"time"
 
@@ -68,6 +70,18 @@ func Run(ctx context.Context, cmd *cli.Command) error {
 	}
 	url := fmt.Sprintf("http://%s/", net.JoinHostPort(host, strconv.Itoa(addr.Port)))
 	logger.Info("desktop mode: server listening", "host", config.Server.Host, "port", addr.Port, "url", url)
+
+	// macOS requires NSApplication apps to run inside a .app bundle context.
+	// A bare binary crashes with SIGTRAP (unrecoverable Objective-C exception).
+	// Detect this before calling glaze and show a helpful message.
+	if runtime.GOOS == "darwin" {
+		exe, _ := os.Executable()
+		if !strings.Contains(exe, ".app/Contents/MacOS/") {
+			fmt.Fprintln(os.Stderr, "\nDesktop mode on macOS requires running from inside a .app bundle.")
+			fmt.Fprintln(os.Stderr, "Run 'llmrouter server' for headless mode, or double-click the .app from a release.")
+			return nil
+		}
+	}
 
 	// Open the webview window.
 	w, err := glaze.New(false)

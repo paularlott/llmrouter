@@ -186,7 +186,7 @@ tasks:
     deps: [assets]
     cmds:
       - >-
-        go run . server
+        CGO_ENABLED=0 go run . server
         --personas-dir ./examples/personas
         --commands-dir ./examples/commands
         --resources-dir ./examples/resources
@@ -197,13 +197,26 @@ tasks:
     desc: Run the desktop app in development mode
     deps: [assets]
     cmds:
-      - >-
-        go run .
-        --personas-dir ./examples/personas
-        --commands-dir ./examples/commands
-        --resources-dir ./examples/resources
-        --prompts-dir ./examples/prompts
-        --routes-dir ./examples/routers
+      # macOS requires the binary inside a .app bundle for NSApplication to
+      # work. Build into a temp .app and open it. On Linux/Windows, go run
+      # works directly.
+      - CGO_ENABLED=0 go build -o /tmp/llmrouter-dev .
+      - |
+        if [ "{{OS}}" = "darwin" ]; then
+          APP="/tmp/LLM Router Dev.app"
+          mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
+          cp /tmp/llmrouter-dev "$APP/Contents/MacOS/llmrouter"
+          cp build/darwin/Info.plist "$APP/Contents/"
+          cp build/darwin/icon.icns "$APP/Contents/Resources/" 2>/dev/null || true
+          open "$APP"
+        else
+          /tmp/llmrouter-dev \
+            --personas-dir ./examples/personas \
+            --commands-dir ./examples/commands \
+            --resources-dir ./examples/resources \
+            --prompts-dir ./examples/prompts \
+            --routes-dir ./examples/routers
+        fi
 
   watch:
     desc: Watch for changes and rebuild
