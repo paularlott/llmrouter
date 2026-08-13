@@ -1,9 +1,10 @@
 module github.com/paularlott/llmrouter
 
-go 1.26.1
+go 1.26.5
 
 require (
 	github.com/BurntSushi/toml v1.6.0
+	github.com/crgimenes/glaze v0.0.47
 	github.com/fsnotify/fsnotify v1.10.1
 	github.com/google/uuid v1.6.0
 	github.com/paularlott/cli v0.9.0
@@ -15,6 +16,7 @@ require (
 )
 
 require (
+	github.com/ebitengine/purego v0.10.2 // indirect
 	github.com/go-ole/go-ole v1.3.0 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/klauspost/compress v1.19.2 // indirect

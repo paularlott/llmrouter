@@ -1,10 +1,23 @@
 /llmrouter
+/homebrew-formula
 /.codegraph/
 /config.toml
 /router.py
 /.claude/
 /dist/
+/bin/
+/.task/
 /node_modules/
-/web/dist/assets/
-/web/dist/.vite/
+/web/dist/
 /data/
+
+# Go test/profiling output
+coverage.out
+coverage.txt
+*.prof
+*.test
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/

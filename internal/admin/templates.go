@@ -5,7 +5,7 @@ import (
 	"io"
 	"io/fs"
 	"net/http"
-	"path/filepath"
+	"path"
 	"strings"
 
 	"github.com/paularlott/llmrouter/web"
@@ -55,26 +55,40 @@ func (r *TemplateRenderer) Render(w io.Writer, name string, data *TemplateData) 
 	return r.templates.ExecuteTemplate(w, name, data)
 }
 
-// ServeStatic serves static files from the embedded assets
+// ServeStatic serves static files from the embedded assets. Checks dist/assets/
+// first (compiled CSS/JS), then dist/ root (static files from Vite publicDir).
 func ServeStatic(w http.ResponseWriter, r *http.Request) {
 	// Remove the /admin/assets/ prefix
-	path := strings.TrimPrefix(r.URL.Path, "/admin/assets/")
-	path = filepath.Join("dist/assets", path)
+	assetPath := strings.TrimPrefix(r.URL.Path, "/admin/assets/")
 
-	// Read the file from embedded FS
-	content, err := web.Assets.ReadFile(path)
-	if err != nil {
+	// Try dist/assets/ first (CSS/JS), then dist/ root (favicon, etc. from publicDir)
+	// Use path.Join (not filepath.Join) because embed.FS always uses forward
+	// slashes regardless of OS — filepath.Join produces backslashes on Windows.
+	var content []byte
+	for _, prefix := range []string{"dist/assets", "dist"} {
+		if c, err := web.Assets.ReadFile(path.Join(prefix, assetPath)); err == nil {
+			content = c
+			break
+		}
+	}
+	if content == nil {
 		http.NotFound(w, r)
 		return
 	}
 
 	// Set content type based on extension
-	ext := filepath.Ext(path)
+	ext := path.Ext(assetPath)
 	switch ext {
 	case ".js":
 		w.Header().Set("Content-Type", "application/javascript")
 	case ".css":
 		w.Header().Set("Content-Type", "text/css")
+	case ".svg":
+		w.Header().Set("Content-Type", "image/svg+xml")
+	case ".png":
+		w.Header().Set("Content-Type", "image/png")
+	case ".ico":
+		w.Header().Set("Content-Type", "image/x-icon")
 	default:
 		w.Header().Set("Content-Type", "application/octet-stream")
 	}

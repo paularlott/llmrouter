@@ -1,100 +1,79 @@
-# LLM Router Makefile
+# LLM Router Makefile — mirrors the Taskfile for users who prefer make.
+# The Taskfile has additional features (macOS .app packaging, icon generation).
 
 BINARY_NAME := llmrouter
 VERSION := $(shell go run ./tools/getversion)
 BUILD_DATE := $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 LDFLAGS := -ldflags="-s -w -X github.com/paularlott/llmrouter/build.BuildDate=$(BUILD_DATE)"
+WINDOWS_LDFLAGS := -ldflags="-s -w -H windowsgui -X github.com/paularlott/llmrouter/build.BuildDate=$(BUILD_DATE)"
 
-# Container build settings
 REGISTRY ?= paularlott
 HUB ?= registry-1.docker.io/
 PLATFORM_ARG := --platform linux/amd64,linux/arm64
 
-# Detect container runtime (docker preferred over podman)
-ifeq ($(BUILD_WITH),)
-	ifneq ($(shell command -v docker 2>/dev/null),)
-		BUILD_WITH := docker
-	else ifneq ($(shell command -v podman 2>/dev/null),)
-		BUILD_WITH := podman
-	else
-		BUILD_WITH := none
-	endif
-endif
+.PHONY: all build clean test lint assets \
+	build-linux-amd64 build-linux-arm64 build-darwin-amd64 build-darwin-arm64 \
+	build-windows-amd64 build-windows-arm64 build-all create-zips release \
+	homebrew-formula run-server run-desktop container container-local tag help
 
-.PHONY: all clean test lint assets build build-platforms build-all create-zips release homebrew-formula run-server help container container-local tag
+all: build
 
-# Build frontend assets
 assets:
 	cd web && npm run build
 
-# Default target
-all: build
-
-# Build for the current platform
 build: assets
 	go build $(LDFLAGS) -o $(BINARY_NAME) .
 
-# Clean build artifacts
 clean:
-	rm -rf dist/
-	rm -f $(BINARY_NAME)
-	rm -rf web/dist/
+	rm -rf dist/ $(BINARY_NAME) web/dist/
 
-# Run tests
 test:
 	go test -v ./...
 
-# Run linter
 lint:
 	golangci-lint run
 
-# Individual platform builds (assets already built by build-all)
-build-linux-amd64:
-	GOOS=linux GOARCH=amd64 go build $(LDFLAGS) -o dist/$(BINARY_NAME)-linux-amd64 .
+# ── Platform builds (CGO_ENABLED=0, cross-compile from any host) ──
 
-build-linux-arm64:
-	GOOS=linux GOARCH=arm64 go build $(LDFLAGS) -o dist/$(BINARY_NAME)-linux-arm64 .
+build-linux-amd64: assets
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build $(LDFLAGS) -o dist/$(BINARY_NAME)-linux-amd64 .
 
-build-darwin-amd64:
-	GOOS=darwin GOARCH=amd64 go build $(LDFLAGS) -o dist/$(BINARY_NAME)-darwin-amd64 .
+build-linux-arm64: assets
+	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build $(LDFLAGS) -o dist/$(BINARY_NAME)-linux-arm64 .
 
-build-darwin-arm64:
-	GOOS=darwin GOARCH=arm64 go build $(LDFLAGS) -o dist/$(BINARY_NAME)-darwin-arm64 .
+build-darwin-amd64: assets
+	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build $(LDFLAGS) -o dist/$(BINARY_NAME)-darwin-amd64 .
 
-build-windows-amd64:
-	GOOS=windows GOARCH=amd64 go build $(LDFLAGS) -o dist/$(BINARY_NAME)-windows-amd64.exe .
+build-darwin-arm64: assets
+	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build $(LDFLAGS) -o dist/$(BINARY_NAME)-darwin-arm64 .
 
-build-windows-arm64:
-	GOOS=windows GOARCH=arm64 go build $(LDFLAGS) -o dist/$(BINARY_NAME)-windows-arm64.exe .
+build-windows-amd64: assets
+	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build $(WINDOWS_LDFLAGS) -o dist/$(BINARY_NAME)-windows-amd64.exe .
 
-# Build all platforms (sequential, use Taskfile for parallel)
-build-platforms: assets
-	@mkdir -p dist
+build-windows-arm64: assets
+	CGO_ENABLED=0 GOOS=windows GOARCH=arm64 go build $(WINDOWS_LDFLAGS) -o dist/$(BINARY_NAME)-windows-arm64.exe .
+
+build-all: clean
+	mkdir -p dist
 	$(MAKE) build-linux-amd64
 	$(MAKE) build-linux-arm64
 	$(MAKE) build-darwin-amd64
 	$(MAKE) build-darwin-arm64
 	$(MAKE) build-windows-amd64
 	$(MAKE) build-windows-arm64
-
-# Build all platforms with ZIP archives
-build-all: clean
-	$(MAKE) build-platforms
 	$(MAKE) create-zips
 
-# Create ZIP files for all platforms
 create-zips:
-	cd dist && cp llmrouter-darwin-amd64 llmrouter && zip llmrouter-darwin-amd64.zip llmrouter && rm llmrouter
-	cd dist && cp llmrouter-darwin-arm64 llmrouter && zip llmrouter-darwin-arm64.zip llmrouter && rm llmrouter
-	cd dist && cp llmrouter-linux-amd64 llmrouter && zip llmrouter-linux-amd64.zip llmrouter && rm llmrouter
-	cd dist && cp llmrouter-linux-arm64 llmrouter && zip llmrouter-linux-arm64.zip llmrouter && rm llmrouter
-	cd dist && cp llmrouter-windows-amd64.exe llmrouter.exe && zip llmrouter-windows-amd64.zip llmrouter.exe && rm llmrouter.exe
-	cd dist && cp llmrouter-windows-arm64.exe llmrouter.exe && zip llmrouter-windows-arm64.zip llmrouter.exe && rm llmrouter.exe
+	cd dist && cp $(BINARY_NAME)-linux-amd64 $(BINARY_NAME) && zip $(BINARY_NAME)-linux-amd64.zip $(BINARY_NAME) && rm $(BINARY_NAME)
+	cd dist && cp $(BINARY_NAME)-linux-arm64 $(BINARY_NAME) && zip $(BINARY_NAME)-linux-arm64.zip $(BINARY_NAME) && rm $(BINARY_NAME)
+	cd dist && cp $(BINARY_NAME)-darwin-amd64 $(BINARY_NAME) && zip $(BINARY_NAME)-darwin-amd64.zip $(BINARY_NAME) && rm $(BINARY_NAME)
+	cd dist && cp $(BINARY_NAME)-darwin-arm64 $(BINARY_NAME) && zip $(BINARY_NAME)-darwin-arm64.zip $(BINARY_NAME) && rm $(BINARY_NAME)
+	cd dist && cp $(BINARY_NAME)-windows-amd64.exe $(BINARY_NAME).exe && zip $(BINARY_NAME)-windows-amd64.zip $(BINARY_NAME).exe && rm $(BINARY_NAME).exe
+	cd dist && cp $(BINARY_NAME)-windows-arm64.exe $(BINARY_NAME).exe && zip $(BINARY_NAME)-windows-arm64.zip $(BINARY_NAME).exe && rm $(BINARY_NAME).exe
 
-# Tag version and create GitHub release with all platform binaries
 release: build-all
 	@if git tag -l v$(VERSION) | grep -q v$(VERSION); then \
-		echo "Tag v$(VERSION) already exists, skipping tag creation"; \
+		echo "Tag v$(VERSION) already exists"; \
 	else \
 		echo "Creating tag v$(VERSION)"; \
 		git tag -a v$(VERSION) -m "Release $(VERSION)"; \
@@ -103,77 +82,38 @@ release: build-all
 	gh release create v$(VERSION) -t "Release $(VERSION)" -n "LLM Router $(VERSION)" dist/*.zip
 	$(MAKE) homebrew-formula
 
-# Generate the Homebrew formula
 homebrew-formula:
-	go run ./scripts/homebrew-formula/ > ../homebrew-tap/Formula/llmrouter.rb
+	go run ./scripts/homebrew-formula/ -out ../homebrew-tap
 
-# Run the server in development mode
 run-server: assets
-	go run . server
+	go run . server --personas-dir ./examples/personas --commands-dir ./examples/commands --resources-dir ./examples/resources --prompts-dir ./examples/prompts --routes-dir ./examples/routers
 
-# Display help
+run-desktop: assets
+	go run . --personas-dir ./examples/personas --commands-dir ./examples/commands --resources-dir ./examples/resources --prompts-dir ./examples/prompts --routes-dir ./examples/routers
+
+container:
+	@echo "Building for platforms: $(PLATFORM_ARG)"
+	docker buildx build $(PLATFORM_ARG) --tag $(REGISTRY)/llmrouter:$(VERSION) --tag $(REGISTRY)/llmrouter:latest --build-arg VERSION=$(VERSION) --build-arg DOCKER_HUB=$(HUB) --push .
+
+container-local:
+	docker build --tag $(REGISTRY)/llmrouter:$(VERSION) --tag $(REGISTRY)/llmrouter:latest --build-arg VERSION=$(VERSION) --build-arg DOCKER_HUB=$(HUB) .
+
+tag:
+	@git tag -l v$(VERSION) | grep -q v$(VERSION) && echo "Tag v$(VERSION) exists" || \
+		(git tag -a v$(VERSION) -m "Release $(VERSION)" && git push origin v$(VERSION))
+
 help:
 	@echo "LLM Router Build Targets:"
 	@echo "  make              - Build for current platform"
-	@echo "  make build        - Build for current platform"
+	@echo "  make build-all    - Build all platforms with ZIP archives"
+	@echo "  make release      - Build, create GitHub release, update Homebrew"
+	@echo "  make run-server   - Run server in development mode"
+	@echo "  make run-desktop  - Run desktop app in development mode"
 	@echo "  make clean        - Remove build artifacts"
 	@echo "  make test         - Run tests"
-	@echo "  make lint         - Run linter"
-	@echo "  make build-all    - Build all platforms with ZIP archives"
-	@echo "  make release      - Build, create GitHub release, and update Homebrew formula"
-	@echo "  make run-server   - Run server in development mode"
 	@echo "  make container    - Build and push multi-arch container image"
-	@echo "  make container-local - Build container image locally (no push)"
-	@echo "  make tag          - Tag version and push to GitHub"
-	@echo ""
-	@echo "Container settings (override with environment variables):"
-	@echo "  REGISTRY=$(REGISTRY)"
-	@echo "  BUILD_WITH=$(BUILD_WITH)"
 	@echo ""
 	@echo "Individual platform builds:"
-	@echo "  make build-linux-amd64"
-	@echo "  make build-linux-arm64"
-	@echo "  make build-darwin-amd64"
-	@echo "  make build-darwin-arm64"
-	@echo "  make build-windows-amd64"
-	@echo "  make build-windows-arm64"
-
-# Build and push multi-arch container image
-container:
-	@echo "Detected container runtime: $(BUILD_WITH)"
-	@echo "Building for platforms: $(PLATFORM_ARG)"
-	@if [ "$(BUILD_WITH)" = "podman" ]; then \
-		podman manifest create $(REGISTRY)/llmrouter:$(VERSION); \
-		podman build $(PLATFORM_ARG) --manifest $(REGISTRY)/llmrouter:$(VERSION) --build-arg VERSION=$(VERSION) --build-arg DOCKER_HUB=$(HUB) .; \
-		podman tag $(REGISTRY)/llmrouter:$(VERSION) $(REGISTRY)/llmrouter:latest; \
-		podman manifest push $(REGISTRY)/llmrouter:$(VERSION); \
-		podman manifest push $(REGISTRY)/llmrouter:latest; \
-	elif [ "$(BUILD_WITH)" = "docker" ]; then \
-		docker buildx build $(PLATFORM_ARG) --tag $(REGISTRY)/llmrouter:$(VERSION) --tag $(REGISTRY)/llmrouter:latest --build-arg VERSION=$(VERSION) --build-arg DOCKER_HUB=$(HUB) --push .; \
-	else \
-		echo "Error: No container runtime detected. Install docker or podman."; \
-		exit 1; \
-	fi
-
-# Build container image locally (no push, current platform only)
-container-local:
-	@echo "Detected container runtime: $(BUILD_WITH)"
-	@echo "Building for local platform only"
-	@if [ "$(BUILD_WITH)" = "podman" ]; then \
-		podman build --tag $(REGISTRY)/llmrouter:$(VERSION) --tag $(REGISTRY)/llmrouter:latest --build-arg VERSION=$(VERSION) --build-arg DOCKER_HUB=$(HUB) .; \
-	elif [ "$(BUILD_WITH)" = "docker" ]; then \
-		docker build --tag $(REGISTRY)/llmrouter:$(VERSION) --tag $(REGISTRY)/llmrouter:latest --build-arg VERSION=$(VERSION) --build-arg DOCKER_HUB=$(HUB) .; \
-	else \
-		echo "Error: No container runtime detected. Install docker or podman."; \
-		exit 1; \
-	fi
-
-# Tag the current code with version and push to GitHub
-tag:
-	@if git tag -l v$(VERSION) | grep -q v$(VERSION); then \
-		echo "Tag v$(VERSION) already exists"; \
-	else \
-		echo "Creating tag v$(VERSION)"; \
-		git tag -a v$(VERSION) -m "Release $(VERSION)"; \
-		git push origin v$(VERSION); \
-	fi
+	@echo "  make build-linux-amd64    make build-linux-arm64"
+	@echo "  make build-darwin-amd64   make build-darwin-arm64"
+	@echo "  make build-windows-amd64  make build-windows-arm64"

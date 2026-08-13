@@ -62,10 +62,11 @@ type Admin struct {
 
 // Stats represents dashboard statistics
 type Stats struct {
-	Providers      int `json:"providers"`
-	Models         int `json:"models"`
-	MCPServers     int `json:"mcp_servers"`
-	ActiveRequests int `json:"active_requests"`
+	Providers        int  `json:"providers"`
+	Models           int  `json:"models"`
+	MCPServers       int  `json:"mcp_servers"`
+	ActiveRequests   int  `json:"active_requests"`
+	PasswordRequired bool `json:"password_required"`
 }
 
 // ProviderInfo represents provider information for the UI
@@ -165,9 +166,15 @@ type PersonaInfo struct {
 	Static       bool                   `json:"static"`
 }
 
-// New creates a new Admin handler
+// New creates a new Admin handler. Returns nil when the admin UI should be
+// completely disabled: no password AND bound to a non-loopback address
+// (i.e. network-accessible without auth = security risk).
+//
+// When bound to localhost (127.0.0.1 / ::1) with no password, the admin UI
+// is enabled with open access — safe for desktop mode and local-only dev.
+// Set --admin-password to require login.
 func New(config *types.Config, getStats func() *Stats, getProviders func() []ProviderInfo, getMCPServers func() []MCPServerInfo, getMCPTools func(string) ([]ToolInfo, error), getMCPResources func(string) ([]ResourceInfo, error), getMCPPrompts func(string) ([]PromptInfo, error), getModels func() []ModelInfo, mcpStorage storage.MCPStorage, mcpStorageWritable bool, onMCPServerChange func(), onMCPCacheRefresh func()) *Admin {
-	if config.Server.AdminPassword == "" {
+	if config.Server.AdminPassword == "" && !isLoopback(config.Server.Host) {
 		return nil
 	}
 
@@ -187,6 +194,11 @@ func New(config *types.Config, getStats func() *Stats, getProviders func() []Pro
 		onMCPServerChange:  onMCPServerChange,
 		onMCPCacheRefresh:  onMCPCacheRefresh,
 	}
+}
+
+// isLoopback returns true for localhost bind addresses.
+func isLoopback(host string) bool {
+	return host == "127.0.0.1" || host == "localhost" || host == "::1"
 }
 
 // SetProviderStorage wires dynamic provider management. Called after New
@@ -371,6 +383,10 @@ func (a *Admin) RequireAuthMiddleware() func(http.Handler) http.Handler {
 // requireAuth is middleware that checks for a valid session (API endpoints).
 func (a *Admin) requireAuth(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if a.password == "" {
+			next(w, r)
+			return
+		}
 		token := a.getSessionFromRequest(r)
 		if token == "" {
 			token = a.getSessionFromCookie(r)
@@ -384,9 +400,14 @@ func (a *Admin) requireAuth(next http.HandlerFunc) http.HandlerFunc {
 }
 
 // requirePageAuth is middleware that checks for a valid session (page requests).
-// Redirects to login if unauthenticated.
+// Redirects to login if unauthenticated. When no password is set, allows open
+// access (desktop mode / local-only deployments).
 func (a *Admin) requirePageAuth(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if a.password == "" {
+			next(w, r)
+			return
+		}
 		token := a.getSessionFromCookie(r)
 		if !a.validateSession(token) {
 			http.Redirect(w, r, "/admin/login?return="+r.URL.Path, http.StatusFound)

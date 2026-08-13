@@ -9,11 +9,11 @@ import (
 	"github.com/paularlott/llmrouter/internal/storage"
 )
 
-// RegisterRoutes registers admin routes on the given mux
+// RegisterRoutes registers admin routes on the given mux.
+// Routes are always registered. When no admin password is set, the auth
+// middleware allows open access — intended for desktop mode and local-only
+// deployments. Set --admin-password to require authentication.
 func (a *Admin) RegisterRoutes(mux *http.ServeMux) {
-	if !a.Enabled() {
-		return
-	}
 
 	// Static assets
 	mux.HandleFunc("/admin/assets/", ServeStatic)
@@ -77,8 +77,15 @@ func (a *Admin) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /admin/api/watch", a.requireAuth(a.HandleWatch))
 }
 
-// HandleLoginPage renders the login page
+// HandleLoginPage renders the login page.
+// If no password is set, redirects straight to the dashboard (no auth needed).
 func (a *Admin) HandleLoginPage(w http.ResponseWriter, r *http.Request) {
+	// No password = open access, skip login
+	if a.password == "" {
+		http.Redirect(w, r, "/admin/", http.StatusFound)
+		return
+	}
+
 	// If already logged in via cookie, redirect to dashboard or return URL
 	token := a.getSessionFromCookie(r)
 	if a.validateSession(token) {
@@ -195,12 +202,15 @@ func (a *Admin) HandleLogout(w http.ResponseWriter, r *http.Request) {
 }
 
 // HandleStats returns dashboard statistics
+// HandleStats returns dashboard statistics
 func (a *Admin) HandleStats(w http.ResponseWriter, r *http.Request) {
 	if a.getStats == nil {
-		writeJSON(w, http.StatusOK, &Stats{})
+		writeJSON(w, http.StatusOK, &Stats{PasswordRequired: a.password != ""})
 		return
 	}
-	writeJSON(w, http.StatusOK, a.getStats())
+	s := a.getStats()
+	s.PasswordRequired = a.password != ""
+	writeJSON(w, http.StatusOK, s)
 }
 
 // HandleProviders returns provider information
