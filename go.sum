@@ -38,6 +38,8 @@ github.com/paularlott/jsonrpc v0.2.0 h1:iR584f/oi5L7LbfH8oskAMalNoikNxzlW/ABEZUJ
 github.com/paularlott/jsonrpc v0.2.0/go.mod h1:mXoOPTPQf87HF3wR064n23dmsAQs3/EICA3Cbha3Sk4=
 github.com/paularlott/lmchatkit v0.9.0 h1:6diM7hFPAdVZYdhk7ocqB3aXk9fZoB7lJQJ6cFWVofE=
 github.com/paularlott/lmchatkit v0.9.0/go.mod h1:UG+lpOKE5RodE9v2i2sftV3w5cFZlkvBwu8pZivLt64=
+github.com/paularlott/lmchatkit v0.9.1 h1:U03kR33ndPtRq10Hy9Aq0TySjes6LMBjcq1j1G//Gwo=
+github.com/paularlott/lmchatkit v0.9.1/go.mod h1:UG+lpOKE5RodE9v2i2sftV3w5cFZlkvBwu8pZivLt64=
 github.com/paularlott/logger v0.3.0 h1:QwVUoxmlEFkfHI25y5dn56OJvK4Bpe3OvoJu4GZM7ng=
 github.com/paularlott/logger v0.3.0/go.mod h1:vjAOY1vUvYigmJxxQ0eMclryIjDS6VWNK6FprtTMce0=
 github.com/paularlott/mcp v0.24.0 h1:L80bCsmJP5lSwiAkVUHoH5nnzK6sn5HTydF4nB+Mtws=
@@ -76,6 +78,8 @@ github.com/yusufpapurcu/wmi v1.2.4 h1:zFUKzehAFReQwLys1b/iSMl+JQGSCSjtVqQn9bBrPo
 github.com/yusufpapurcu/wmi v1.2.4/go.mod h1:SBZ9tNy3G9/m5Oi98Zks0QjeHVDvuK0qfxQmPyzfmi0=
 golang.org/x/net v0.57.0 h1:K5+3DljvIuDG9/Jv9rvyMywYNFCQ9RSUY6OOTTkT+tE=
 golang.org/x/net v0.57.0/go.mod h1:KpXc8iv+r3XplLAG/f7Jsf9RPszJzdR0f58q9vGOuEU=
+golang.org/x/net v0.58.0 h1:ynWG7rqYi4ccpTEuPZ2QGWHktVEM9DMCj9yzDE0Q7To=
+golang.org/x/net v0.58.0/go.mod h1:YwCddHnFlT7eLQqVprV19OnhLGtc5xOKgE0RyqgfWAU=
 golang.org/x/oauth2 v0.36.0 h1:peZ/1z27fi9hUOFCAZaHyrpWG5lwe0RJEEEeH0ThlIs=
 golang.org/x/oauth2 v0.36.0/go.mod h1:YDBUJMTkDnJS+A4BP4eZBjCqtokkg1hODuPjwiGPO7Q=
 golang.org/x/sys v0.0.0-20190916202348-b4ddaad3f8a3/go.mod h1:h1NjWce9XRLGQEsW7wpKNCjG9DtNlClVuFLEZdDNbEs=
