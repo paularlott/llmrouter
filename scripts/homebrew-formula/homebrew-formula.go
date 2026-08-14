@@ -48,8 +48,17 @@ const formulaTemplate = `class Llmrouter < Formula
 
 	def install
 		if OS.mac?
-			# macOS zip contains "LLM Router.app" — install to libexec, symlink binary
-			libexec.install Dir["LLM Router.app"]
+			# The cask also links the llmrouter CLI into bin; refuse to fight
+			# over the symlink. Homebrew has no formula<->cask conflicts_with DSL.
+			if (HOMEBREW_PREFIX/"Caskroom/llmrouter").directory?
+				odie "llmrouter cask is installed, which also provides the llmrouter CLI. Uninstall it first:\n  brew uninstall --cask paularlott/tap/llmrouter"
+			end
+
+			# macOS zip contains "LLM Router.app" — install to libexec, symlink
+			# binary. Homebrew stages single-root archives from inside the root,
+			# so the working directory is LLM Router.app itself and "Contents"
+			# is at its root.
+			(libexec/"LLM Router.app").install "Contents"
 			bin.install_symlink libexec/"LLM Router.app/Contents/MacOS/llmrouter"
 		else
 			bin.install "llmrouter"
@@ -85,18 +94,28 @@ const macCaskTemplate = `cask "llmrouter" do
 	name "LLM Router"
 	desc "{{ .Desc }}"
 	homepage "{{ .Homepage }}"
-	license "MIT"
 
 	app "LLM Router.app"
 
 	# Also make the binary available on PATH so the llmrouter command works
 	# from the terminal without separately installing the formula.
 	postflight do
-		ln_sf("/Applications/LLM Router.app/Contents/MacOS/llmrouter", "#{HOMEBREW_PREFIX}/bin/llmrouter")
+		# The formula also links the llmrouter CLI; refuse to fight over the symlink.
+		if File.directory?("#{HOMEBREW_PREFIX}/Cellar/llmrouter")
+			raise "llmrouter formula is installed, which also provides the llmrouter CLI. Uninstall it first:\n  brew uninstall llmrouter"
+		end
+
+		# The app is ad-hoc signed (not notarized) and brew quarantines cask
+		# downloads, which makes Gatekeeper kill the binary on first exec.
+		# Strip the flag so the app and the CLI link work immediately.
+		# Non-bang system_command: xattr -d fails if the attribute is absent.
+		system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "/Applications/LLM Router.app"]
+
+		FileUtils.ln_sf("/Applications/LLM Router.app/Contents/MacOS/llmrouter", "#{HOMEBREW_PREFIX}/bin/llmrouter")
 	end
 
 	uninstall_postflight do
-		rm_f "#{HOMEBREW_PREFIX}/bin/llmrouter"
+		FileUtils.rm_f "#{HOMEBREW_PREFIX}/bin/llmrouter"
 	end
 
 	zap trash: [
