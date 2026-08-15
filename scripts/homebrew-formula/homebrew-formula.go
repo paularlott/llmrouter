@@ -24,7 +24,7 @@ const formulaTemplate = `class Llmrouter < Formula
 	license "MIT"
 	version "{{ .Version }}"
 
-	on_mac do
+	on_macos do
 		on_arm do
 			url "{{ .Repo }}/releases/download/v#{version}/llmrouter-darwin-arm64.zip"
 			sha256 "{{ .Checksum.DarwinArm64 }}"
