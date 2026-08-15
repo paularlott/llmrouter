@@ -4,6 +4,7 @@ FROM --platform=${BUILDPLATFORM} ${DOCKER_HUB}library/golang:1.26.5-alpine AS bu
 
 # Set build arguments
 ARG TARGETPLATFORM
+ARG TARGETARCH
 
 RUN apk update \
   && apk add --no-cache bash nodejs npm \
