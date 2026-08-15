@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -18,7 +19,23 @@ import (
 	"github.com/paularlott/mcp/pool"
 )
 
-func RunServer(ctx context.Context, cmd *cli.Command) error {
+// BuildServer constructs the router/handler chain from the command flags and
+// config file. It does NOT start a listener — callers (RunServer, the desktop
+// entry point) are responsible for serving HTTP and for invoking
+// r.StartBackgroundTasks() / r.Shutdown().
+func BuildServer(cmd *cli.Command) (*router.Router, *types.Config, error) {
+	return buildServer(cmd, false)
+}
+
+// BuildServerForDesktop is like BuildServer but applies safe desktop defaults
+// when no config file is loaded: host → 127.0.0.1 (localhost only, no network
+// exposure), storage → ~/.llmrouter/data (persistent across restarts).
+// When a config file IS present, its values take precedence (no overrides).
+func BuildServerForDesktop(cmd *cli.Command) (*router.Router, *types.Config, error) {
+	return buildServer(cmd, true)
+}
+
+func buildServer(cmd *cli.Command, desktopMode bool) (*router.Router, *types.Config, error) {
 	config := &types.Config{
 		Server: types.ServerConfig{
 			Host:               cmd.GetString("host"),
@@ -144,11 +161,34 @@ func RunServer(ctx context.Context, cmd *cli.Command) error {
 
 	logger.Info("loaded providers from config", "count", len(config.Providers))
 
+	// Desktop defaults: persistent storage at ~/.llmrouter/data so state
+	// survives restarts. Host is already 127.0.0.1 by default (the --host
+	// flag default is localhost for both server and desktop modes). If the
+	// user explicitly binds to a network address, admin.New() will return
+	// nil unless they also set --admin-password (security).
+	if desktopMode && config.Storage.Path == "" {
+		if home, err := os.UserHomeDir(); err == nil {
+			config.Storage.Path = filepath.Join(home, ".llmrouter", "data")
+		}
+	}
+	logger.Info("server config", "host", config.Server.Host, "port", config.Server.Port, "desktop", desktopMode, "storage", config.Storage.Path)
+
 	r, err := router.NewRouter(config, logger)
 	if err != nil {
 		logger.Error("failed to create router", "error", err)
+		return nil, nil, err
+	}
+
+	return r, config, nil
+}
+
+func RunServer(ctx context.Context, cmd *cli.Command) error {
+	r, config, err := BuildServer(cmd)
+	if err != nil {
 		return err
 	}
+
+	logger := log.GetLogger()
 
 	r.StartBackgroundTasks()
 	defer r.StopBackgroundTasks()

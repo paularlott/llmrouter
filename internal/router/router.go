@@ -256,7 +256,12 @@ func NewRouter(config *types.Config, logger Logger) (*Router, error) {
 	router.loadStoredProviders(config, logger)
 
 	router.admin = admin.New(config, router.getStats, router.getProviders, router.getMCPServers, router.getMCPTools, router.getMCPResources, router.getMCPPrompts, router.getModels, mcpStorage, mcpStorageWritable, router.reloadMCPServers, router.reloadMCPServers)
-	if router.admin.Enabled() {
+
+	// Configure and register admin UI. admin.New() returns nil when the UI
+	// should be completely disabled: no password AND bound to a non-loopback
+	// address (security: prevents open admin on the network). When non-nil,
+	// routes are always registered — password controls auth, not existence.
+	if router.admin != nil {
 		router.admin.SetProviderStorage(providerStorage, providerStorageWritable, router.reloadProviders)
 		router.admin.SetPersonaStorage(personaStorage, personaStorageWritable, router.reloadPersonas, router.getPersonas)
 		router.admin.SetMCPToolCaller(router.callMCPTool)
@@ -267,7 +272,13 @@ func NewRouter(config *types.Config, logger Logger) (*Router, error) {
 		})
 		router.admin.SetRequestWatcher(router.watcherSubscribe, router.watcherUnsubscribe)
 		router.admin.RegisterRoutes(router.mux)
-		logger.Info("admin UI enabled at /admin")
+		if router.admin.Enabled() {
+			logger.Info("admin UI enabled at /admin (password protected)")
+		} else {
+			logger.Info("admin UI enabled at /admin (open — no password set)")
+		}
+	} else {
+		logger.Info("admin UI disabled (no password and bound to non-localhost)")
 	}
 
 	// Mount chat UI. The StandardHost wires lmchatkit to llmrouter's own
@@ -2152,7 +2163,7 @@ func (r *Router) HandleCatchAll(w http.ResponseWriter, req *http.Request) {
 	r.logger.Warn("unhandled request", "method", req.Method, "path", req.URL.Path, "query", req.URL.RawQuery, "user_agent", req.Header.Get("User-Agent"))
 
 	// Serve styled 404 page if admin is enabled
-	if r.admin != nil && r.admin.Enabled() {
+	if r.admin != nil {
 		r.admin.Serve404(w, req)
 		return
 	}

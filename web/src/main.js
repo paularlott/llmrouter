@@ -1,6 +1,19 @@
 import Alpine from "alpinejs";
 import "./main.css";
 
+// Hide the logout button when no admin password is set (open access mode).
+// The password_required flag is included in the /admin/api/stats response.
+fetch("/admin/api/stats")
+  .then((r) => r.json())
+  .then((data) => {
+    if (data.password_required === false) {
+      document.querySelectorAll('[aria-label="Logout"]').forEach((el) => {
+        el.style.display = "none";
+      });
+    }
+  })
+  .catch(() => {}); // Silently ignore — non-admin pages don't have the endpoint
+
 // Dark mode store - persisted to localStorage
 const _darkMode = localStorage.getItem("darkMode") === "true";
 document.documentElement.classList.toggle("dark", _darkMode);

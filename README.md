@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="icon.svg" width="128" height="128" alt="LLM Router">
+</p>
+
 # LLM Router
 
 A unified gateway that aggregates multiple LLM providers behind a single endpoint. Clients use their preferred protocol (OpenAI or Anthropic Messages) and the gateway handles routing, protocol translation, and load balancing.
@@ -17,13 +21,51 @@ A unified gateway that aggregates multiple LLM providers behind a single endpoin
 - **Conversations API**: n8n-compatible conversation management
 - **Optional Auth**: Bearer token protection for all endpoints
 
+## Usage Modes
+
+LLM Router ships as a **single binary** that works in two modes:
+
+### Desktop (GUI)
+
+- `llmrouter` with no subcommand opens a native window pointing at the in-process server (glaze/webview — WKWebView on macOS, WebView2 on Windows, WebKitGTK on Linux)
+- The HTTP API still binds to the configured port, so external tools (editors, scripts, other MCP clients) work identically
+- Desktop mode defaults to localhost binding (`127.0.0.1`) and persistent storage at `~/.llmrouter/data/`
+- **Linux runtime dependency:** `sudo apt install libwebkit2gtk-4.1-0` (Ubuntu/Debian) or `sudo dnf install webkit2gtk4.1` (Fedora). The binary auto-detects the available WebKitGTK version at runtime (6.0 preferred, falls back to 4.1). macOS and Windows have no extra dependencies.
+
+### Server (headless)
+
+- `llmrouter server` runs the HTTP API without any GUI
+- For Docker, systemd, CI, or any headless environment
+- The Docker image is built with `-tags server` to exclude the webview code entirely — the container binary has zero GUI dependencies
+
+### Which to choose?
+
+| Use case | Command |
+| -------- | ------- |
+| Daily driver on your laptop/desktop | `llmrouter` (opens window) |
+| Docker / container deployment | `llmrouter server` |
+| systemd / VPS / remote server | `llmrouter server` |
+| Headless script / CI | `llmrouter server` |
+
 ## Installation
 
 ### Homebrew (macOS & Linux)
 
+**App + CLI (macOS — installs `LLM Router.app` to /Applications and `llmrouter` to PATH):**
+
+```bash
+brew install --cask paularlott/tap/llmrouter
+```
+
+This is the recommended install for macOS desktop users. The cask installs the `.app` for the GUI experience and symlinks the binary into your PATH so `llmrouter server` and other CLI subcommands work from the terminal. Uninstalling removes both.
+
+**CLI only (macOS or Linux — no GUI, just the binary in PATH):**
+
 ```bash
 brew install paularlott/tap/llmrouter
 ```
+
+For headless servers, Linux desktops without WebKitGTK, or anyone who only needs the CLI.
 
 ### Download from GitHub Releases
 
@@ -31,34 +73,45 @@ Download the latest release for your platform from [github.com/paularlott/llmrou
 
 | Platform | Architecture          | Download                      |
 | -------- | --------------------- | ----------------------------- |
-| macOS    | Intel (AMD64)         | `llmrouter-darwin-amd64.zip`  |
 | macOS    | Apple Silicon (ARM64) | `llmrouter-darwin-arm64.zip`  |
+| macOS    | Intel (AMD64)         | `llmrouter-darwin-amd64.zip`  |
 | Linux    | AMD64                 | `llmrouter-linux-amd64.zip`   |
 | Linux    | ARM64                 | `llmrouter-linux-arm64.zip`   |
 | Windows  | AMD64                 | `llmrouter-windows-amd64.zip` |
 | Windows  | ARM64                 | `llmrouter-windows-arm64.zip` |
 
-Extract the archive and place the binary in your PATH.
+macOS downloads contain an `.app` bundle (drag to `/Applications`). Linux/Windows downloads contain a bare binary (extract and place in your PATH).
 
 ### Build from Source
+
+Requires [Go 1.26+](https://go.dev/dl/), Node.js (for the web UI build), and [Task](https://taskfile.dev/installation/).
 
 ```bash
 git clone https://github.com/paularlott/llmrouter.git
 cd llmrouter
-go build -o llmrouter .
-./llmrouter server
-./llmrouter -config /path/to/config.toml server
+task            # or: make
+./llmrouter     # desktop mode (opens window)
+./llmrouter server  # headless server mode
 ```
 
 ## Configuration
 
+LLM Router searches for `config.toml` in the following locations (first match wins):
+
+1. `./config.toml` (current directory)
+2. `~/.llmrouter/config.toml`
+3. `~/.config/llmrouter/config.toml`
+4. `~/.config/config.toml`
+
+In desktop mode (no subcommand), persistent data defaults to `~/.llmrouter/data/`. In server mode, storage is memory-only unless `storage_path` is set.
+
 ```toml
 [server]
-host = "0.0.0.0"
+host = "127.0.0.1"            # Default: localhost only. Use 0.0.0.0 for all interfaces
 port = 12345
 token = "your-secret-token"   # Optional bearer token
 admin_password = "admin123"   # Optional: enables admin UI at /admin
-storage_path = "./data"  # Omit for memory-only storage (under [server])
+storage_path = "./data"       # Omit for memory-only (desktop defaults to ~/.llmrouter/data)
 default_context_size = 4096   # Optional: fallback context window (tokens) for models that don't expose one
 
 [logging]
@@ -553,31 +606,38 @@ Authorization: Bearer your-secret-token
 ## CLI
 
 ```bash
-./llmrouter server                          # Start server
-./llmrouter -config custom.toml server      # Custom config
-./llmrouter server -port 8080               # Override port
-./llmrouter server -token secret123         # Set bearer token
+./llmrouter                                   # Desktop build: open GUI window
+                                              # Server build:  equivalent to `server`
+./llmrouter server                            # Start headless server
+./llmrouter -config custom.toml server        # Custom config
+./llmrouter server -port 8080                 # Override port
+./llmrouter server -token secret123           # Set bearer token
 ./llmrouter server --default-context-size 8192  # Fallback context window (tokens)
-./llmrouter server --tools-dir ./tools      # Load scriptling MCP tools
-./llmrouter server --plugin-dir ./plugins   # Load scriptling plugins
-./llmrouter server --libpath ./libs         # Add library directories
-./llmrouter models                          # List available models
-./llmrouter ask gpt-4o "What is 2+2?"       # Ask a model a question
+./llmrouter server --tools-dir ./tools        # Load scriptling MCP tools
+./llmrouter server --plugin-dir ./plugins     # Load scriptling plugins
+./llmrouter server --libpath ./libs           # Add library directories
+./llmrouter models                            # List available models
+./llmrouter ask gpt-4o "What is 2+2?"         # Ask a model a question
 ./llmrouter tool calculator '{"op":"add","a":1,"b":2}'  # Execute MCP tool
 ```
+
+All `server` flags are also accepted by the root command in desktop mode, so `./llmrouter -p 8080` tunes the API port for the desktop session without typing `server`.
 
 ## Development
 
 ### Building
 
+[Task](https://taskfile.dev/) is the canonical build system.
+
 ```bash
 task              # Build for current platform
-task build-all    # Build all platforms with ZIP archives
-task release      # Build, create GitHub release, and update Homebrew formula
-make              # Alternative via Makefile
+task build-all    # Build all platforms + ZIP archives
+task release      # Build, tag, publish GitHub release + brew formulas
 ```
 
-Supported platforms: Linux, macOS, Windows × AMD64/ARM64.
+The Docker image is built with `-tags server` internally (excludes the webview/glaze code), so the published container is a minimal headless-only binary.
+
+Supported platforms: macOS, Linux, Windows × AMD64/ARM64.
 
 ## Architecture
 

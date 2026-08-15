@@ -1,0 +1,135 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <defs>
+    <linearGradient id="bg-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="100%" stop-color="#1e1b4b"/>
+    </linearGradient>
+
+    <!-- Source / chat prompt -->
+    <linearGradient id="source-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f43f5e"/>
+      <stop offset="100%" stop-color="#be123c"/>
+    </linearGradient>
+
+    <!-- Router core -->
+    <linearGradient id="core-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#06b6d4"/>
+      <stop offset="100%" stop-color="#3b82f6"/>
+    </linearGradient>
+
+    <!-- Destination gradients -->
+    <linearGradient id="dest-fast" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#10b981"/>
+      <stop offset="100%" stop-color="#047857"/>
+    </linearGradient>
+    <linearGradient id="dest-smart" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#a855f7"/>
+      <stop offset="100%" stop-color="#6d28d9"/>
+    </linearGradient>
+    <linearGradient id="dest-code" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f59e0b"/>
+      <stop offset="100%" stop-color="#b45309"/>
+    </linearGradient>
+    <linearGradient id="dest-local" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#14b8a6"/>
+      <stop offset="100%" stop-color="#0f766e"/>
+    </linearGradient>
+    <linearGradient id="dest-mcp" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#818cf8"/>
+      <stop offset="100%" stop-color="#4338ca"/>
+    </linearGradient>
+
+    <filter id="glow" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+    </filter>
+  </defs>
+
+  <!-- Card background -->
+  <rect width="256" height="256" rx="48" fill="url(#bg-grad)"/>
+
+  <!-- Subtle outer ring -->
+  <circle cx="128" cy="128" r="102" fill="none" stroke="#ffffff" stroke-opacity="0.05" stroke-width="3"/>
+
+  <!-- Source -> Hub connector -->
+  <path d="M 60 128 L 98 128" stroke="#f43f5e" stroke-width="4" stroke-dasharray="6 5" opacity="0.8"/>
+
+  <!-- Hub -> Destination connectors -->
+  <path d="M 128 128 C 150 128, 150 72, 167 60.5" fill="none" stroke="#10b981" stroke-width="3.5" stroke-linecap="round" opacity="0.9"/>
+  <path d="M 128 128 C 155 128, 168 100, 195.5 89" fill="none" stroke="#a855f7" stroke-width="3.5" stroke-linecap="round" opacity="0.9"/>
+  <path d="M 128 128 L 206 128" fill="none" stroke="#f59e0b" stroke-width="3.5" stroke-linecap="round" opacity="0.9"/>
+  <path d="M 128 128 C 155 128, 168 156, 195.5 167" fill="none" stroke="#14b8a6" stroke-width="3.5" stroke-linecap="round" opacity="0.9"/>
+  <path d="M 128 128 C 150 128, 150 184, 167 195.5" fill="none" stroke="#818cf8" stroke-width="3.5" stroke-linecap="round" opacity="0.9"/>
+
+  <!-- Animated data pulses on a couple of routes -->
+  <path d="M 128 128 C 150 128, 150 72, 167 60.5" fill="none" stroke="#5eead4" stroke-width="5" stroke-linecap="round" stroke-dasharray="14 70" opacity="0.85" filter="url(#glow)"/>
+  <path d="M 128 128 L 206 128" fill="none" stroke="#fcd34d" stroke-width="5" stroke-linecap="round" stroke-dasharray="18 60" opacity="0.85" filter="url(#glow)"/>
+
+  <!-- Source node: chat bubble -->
+  <g transform="translate(40,128)">
+    <circle r="20" fill="url(#source-grad)" filter="url(#glow)"/>
+    <circle r="20" fill="none" stroke="#ffffff" stroke-width="1.5" stroke-opacity="0.3"/>
+    <path d="M -7 -6 C -7 -9.5, -3.5 -11.5, 0 -11.5 C 3.5 -11.5, 7 -9.5, 7 -6 C 7 -2.5, 3.5 -0.5, 0 -0.5 C -1.3 -0.5, -2.6 -0.7, -4 -1 L -7 1.3 L -6.3 -2 C -7 -3.2, -7 -4.6, -7 -6 Z"
+          fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" transform="scale(1.15) translate(0,3)"/>
+  </g>
+
+  <!-- Router core -->
+  <g transform="translate(128,128)">
+    <circle r="30" fill="url(#core-grad)" filter="url(#glow)"/>
+    <circle r="30" fill="none" stroke="#ffffff" stroke-width="2" stroke-opacity="0.5"/>
+    <circle r="37" fill="none" stroke="#06b6d4" stroke-width="1.5" stroke-dasharray="10 22" opacity="0.6"/>
+    <g fill="#ffffff">
+      <circle cx="0" cy="0" r="5"/>
+      <path d="M -10 -10 L -4.5 -4.5 M 10 -10 L 4.5 -4.5 M -10 10 L -4.5 4.5 M 10 10 L 4.5 4.5" stroke="#ffffff" stroke-width="2" stroke-linecap="round"/>
+      <circle cx="-10" cy="-10" r="2"/>
+      <circle cx="10" cy="-10" r="2"/>
+      <circle cx="-10" cy="10" r="2"/>
+      <circle cx="10" cy="10" r="2"/>
+    </g>
+  </g>
+
+  <!-- Destination: Fast model (top) -->
+  <g transform="translate(167,60.5)">
+    <circle r="15" fill="url(#dest-fast)"/>
+    <circle r="15" fill="none" stroke="#ffffff" stroke-width="1.5" stroke-opacity="0.3"/>
+    <path d="M -1 -6 L -5 1 L 0 1 L -1 6 L 5 -1 L 0 -1 Z" fill="#ffffff"/>
+  </g>
+
+  <!-- Destination: Smart model (upper right) -->
+  <g transform="translate(195.5,89)">
+    <circle r="16" fill="url(#dest-smart)" filter="url(#glow)"/>
+    <circle r="16" fill="none" stroke="#ffffff" stroke-width="1.5" stroke-opacity="0.4"/>
+    <path d="M 0 -7 L 1.7 -1.7 L 7 0 L 1.7 1.7 L 0 7 L -1.7 1.7 L -7 0 L -1.7 -1.7 Z" fill="#ffffff"/>
+    <circle cx="6" cy="-6" r="1.2" fill="#ffffff" opacity="0.8"/>
+  </g>
+
+  <!-- Destination: Code model (middle right) -->
+  <g transform="translate(206,128)">
+    <circle r="15" fill="url(#dest-code)"/>
+    <circle r="15" fill="none" stroke="#ffffff" stroke-width="1.5" stroke-opacity="0.3"/>
+    <path d="M -3 -4 L -6 0 L -3 4 M 3 -4 L 6 0 L 3 4" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+
+  <!-- Destination: Local/embedded model (lower right) -->
+  <g transform="translate(195.5,167)">
+    <circle r="15" fill="url(#dest-local)"/>
+    <circle r="15" fill="none" stroke="#ffffff" stroke-width="1.5" stroke-opacity="0.3"/>
+    <g fill="#ffffff">
+      <rect x="-6" y="-1" width="3" height="6" rx="1"/>
+      <rect x="-1.5" y="-5" width="3" height="10" rx="1"/>
+      <rect x="3" y="-3" width="3" height="8" rx="1"/>
+    </g>
+  </g>
+
+  <!-- Destination: MCP servers (bottom) -->
+  <g transform="translate(167,195.5)">
+    <circle r="15" fill="url(#dest-mcp)"/>
+    <circle r="15" fill="none" stroke="#ffffff" stroke-width="1.5" stroke-opacity="0.3"/>
+    <g fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="-4" y="-2" width="8" height="6" rx="1.5" fill="#ffffff" stroke="none"/>
+      <line x1="-2.5" y1="-5" x2="-2.5" y2="-2"/>
+      <line x1="2.5" y1="-5" x2="2.5" y2="-2"/>
+      <line x1="0" y1="4" x2="0" y2="7"/>
+    </g>
+  </g>
+</svg>

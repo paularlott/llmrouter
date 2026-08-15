@@ -10,6 +10,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Chat - LLM Router</title>
+    <link rel="icon" type="image/svg+xml" href="/admin/assets/favicon.svg" />
     <link rel="stylesheet" href="{{.CSSFile}}" />
     <!-- Order matters: chat.js bundles the markdown processor +
          Alpine component and registers an alpine:init listener that
@@ -312,23 +313,7 @@
               </button>
               <!-- Logo -->
               <a href="/admin/" class="flex items-center gap-3">
-                <div
-                  class="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow shadow-blue-500/25"
-                >
-                  <svg
-                    class="w-4 h-4 text-white"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"
-                    />
-                  </svg>
-                </div>
+                <img src="/admin/assets/favicon.svg" alt="LLM Router" class="w-8 h-8" />
                 <span class="font-bold text-slate-900 dark:text-white"
                   >LLM Router</span
                 >
@@ -1605,7 +1590,7 @@
               <div class="flex items-end gap-2">
                 <!-- File upload button (visible only when file upload is enabled) -->
                 <button
-                  x-show="fileUploadEnabled && !streaming"
+                  x-show="fileUploadEnabled"
                   @click="pickFiles()"
                   class="w-11 h-11 shrink-0 rounded-full border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 flex items-center justify-center cursor-pointer transition-colors"
                   aria-label="Attach files"

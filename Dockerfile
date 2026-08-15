@@ -1,6 +1,6 @@
 ARG DOCKER_HUB
 
-FROM --platform=${BUILDPLATFORM} ${DOCKER_HUB}library/golang:1.26.1-alpine AS builder
+FROM --platform=${BUILDPLATFORM} ${DOCKER_HUB}library/golang:1.26.5-alpine AS builder
 
 # Set build arguments
 ARG TARGETPLATFORM
@@ -29,13 +29,11 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 	# Download all dependencies. Dependencies will be cached if the go.mod and go.sum files are not changed
 	go mod download
 
-# Build the application for the target architecture
-RUN echo "Building for target platform: ${TARGETPLATFORM}" \
-  && case ${TARGETPLATFORM} in \
-    'linux/amd64') task build-linux-amd64 ;; \
-    'linux/arm64'*) task build-linux-arm64 ;; \
-    *) echo "Unsupported target platform: ${TARGETPLATFORM}" && exit 1 ;; \
-  esac
+# Build the server-only binary (excludes glaze/webview via -tags server).
+# The release binary includes glaze; the Docker binary doesn't need it.
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH:-amd64} \
+    go build -tags=server -ldflags="-s -w -X github.com/paularlott/llmrouter/build.BuildDate=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    -o /usr/local/bin/llmrouter .
 
 FROM ${DOCKER_HUB}library/alpine:3.22
 
@@ -46,8 +44,8 @@ RUN apk update \
   && apk upgrade \
   && apk add bash
 
-# Copy the main executable
-COPY --from=builder /app/dist/llmrouter-linux-* /usr/local/bin/llmrouter
+# Binary is built directly into /usr/local/bin in the builder stage
+COPY --from=builder /usr/local/bin/llmrouter /usr/local/bin/llmrouter
 
 # Add a user to run the process
 RUN addgroup -S llmrouter \
@@ -64,7 +62,7 @@ VOLUME [ "/data" ]
 EXPOSE 12345/tcp
 
 # Set the entrypoint
-CMD ["/usr/local/bin/llmrouter", "server"]
+CMD ["/usr/local/bin/llmrouter", "server", "--host", "0.0.0.0"]
 
 LABEL org.opencontainers.image.version=v${VERSION}
 LABEL org.opencontainers.image.title=LLMRouter

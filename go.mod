@@ -1,13 +1,14 @@
 module github.com/paularlott/llmrouter
 
-go 1.26.1
+go 1.26.5
 
 require (
 	github.com/BurntSushi/toml v1.6.0
+	github.com/crgimenes/glaze v0.0.47
 	github.com/fsnotify/fsnotify v1.10.1
 	github.com/google/uuid v1.6.0
 	github.com/paularlott/cli v0.9.0
-	github.com/paularlott/lmchatkit v0.9.0
+	github.com/paularlott/lmchatkit v0.9.1
 	github.com/paularlott/logger v0.3.0
 	github.com/paularlott/mcp v0.24.0
 	github.com/paularlott/scriptling v0.20.1
@@ -15,6 +16,7 @@ require (
 )
 
 require (
+	github.com/ebitengine/purego v0.10.2 // indirect
 	github.com/go-ole/go-ole v1.3.0 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/klauspost/compress v1.19.2 // indirect
@@ -30,7 +32,7 @@ require (
 	github.com/tklauser/numcpus v0.12.0 // indirect
 	github.com/yuin/goldmark v1.8.5 // indirect
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
-	golang.org/x/net v0.57.0 // indirect
+	golang.org/x/net v0.58.0 // indirect
 	golang.org/x/oauth2 v0.36.0 // indirect
 	golang.org/x/sys v0.47.0 // indirect
 	golang.org/x/term v0.45.0 // indirect

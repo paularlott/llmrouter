@@ -4,21 +4,17 @@ vars:
   BINARY_NAME: llmrouter
   VERSION:
     sh: go run ./tools/getversion
+  LDFLAGS: -ldflags="-s -w -X github.com/paularlott/llmrouter/build.BuildDate=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  WINDOWS_LDFLAGS: -ldflags="-s -w -H windowsgui -X github.com/paularlott/llmrouter/build.BuildDate=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   REGISTRY: '{{.REGISTRY | default "paularlott"}}'
   HUB: '{{.HUB | default "registry-1.docker.io/"}}'
   BUILD_WITH:
     sh: |
-      if [ -n "${BUILD_WITH}" ]; then
-        echo "${BUILD_WITH}"
-      elif command -v docker >/dev/null 2>&1; then
-        echo "docker"
-      elif command -v podman >/dev/null 2>&1; then
-        echo "podman"
-      else
-        echo "none"
-      fi
+      if [ -n "${BUILD_WITH}" ]; then echo "${BUILD_WITH}"
+      elif command -v docker >/dev/null 2>&1; then echo "docker"
+      elif command -v podman >/dev/null 2>&1; then echo "podman"
+      else echo "none"; fi
   PLATFORM_ARG: "--platform linux/amd64,linux/arm64"
-  LDFLAGS: -ldflags="-s -w -X github.com/paularlott/llmrouter/build.BuildDate=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
 tasks:
   assets:
@@ -26,6 +22,23 @@ tasks:
     dir: web
     cmds:
       - npm run build
+
+  generate:icon:
+    desc: Regenerate macOS .icns from icon.svg
+    preconditions:
+      - sh: command -v rsvg-convert >/dev/null 2>&1
+        msg: "rsvg-convert not found. Install with: brew install librsvg"
+    cmds:
+      - |
+        mkdir -p /tmp/icon.iconset
+        for spec in "16:16" "16:32" "32:32" "32:64" "128:128" "128:256" "256:256" "256:512" "512:512" "512:1024"; do
+          size="${spec%%:*}"; out="${spec##*:}"
+          rsvg-convert -w $size -h $size icon.svg -o /tmp/icon.iconset/icon_${out/x/x}.png 2>/dev/null || \
+          rsvg-convert -w $size -h $size icon.svg -o /tmp/icon.iconset/icon_${out%@*}@${out#@*}.png
+        done
+        iconutil -c icns /tmp/icon.iconset -o build/darwin/icon.icns
+        rm -rf /tmp/icon.iconset
+        echo "✓ build/darwin/icon.icns"
 
   default:
     desc: Build for the current platform
@@ -50,78 +63,106 @@ tasks:
     cmds:
       - golangci-lint run
 
-  # Individual platform builds
+  # ──────────────────────────────────────────────────────────────────────────
+  # Platform builds — single binary, CGO_ENABLED=0, cross-compile from any host.
+  # macOS builds include .app bundle packaging.
+  # ──────────────────────────────────────────────────────────────────────────
   build-linux-amd64:
     desc: Build for Linux AMD64
     deps: [assets]
     cmds:
-      - GOOS=linux GOARCH=amd64 go build {{.LDFLAGS}} -o dist/{{.BINARY_NAME}}-linux-amd64 .
+      - CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build {{.LDFLAGS}} -o dist/{{.BINARY_NAME}}-linux-amd64 .
 
   build-linux-arm64:
     desc: Build for Linux ARM64
     deps: [assets]
     cmds:
-      - GOOS=linux GOARCH=arm64 go build {{.LDFLAGS}} -o dist/{{.BINARY_NAME}}-linux-arm64 .
-
-  build-darwin-amd64:
-    desc: Build for macOS AMD64
-    deps: [assets]
-    cmds:
-      - GOOS=darwin GOARCH=amd64 go build {{.LDFLAGS}} -o dist/{{.BINARY_NAME}}-darwin-amd64 .
+      - CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build {{.LDFLAGS}} -o dist/{{.BINARY_NAME}}-linux-arm64 .
 
   build-darwin-arm64:
-    desc: Build for macOS ARM64
+    desc: Build for macOS ARM64 (+ .app bundle)
     deps: [assets]
     cmds:
-      - GOOS=darwin GOARCH=arm64 go build {{.LDFLAGS}} -o dist/{{.BINARY_NAME}}-darwin-arm64 .
+      - CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build {{.LDFLAGS}} -o dist/{{.BINARY_NAME}}-darwin-arm64 .
+      - task: package-darwin-arch
+        vars: { DARWIN_ARCH: arm64 }
+
+  build-darwin-amd64:
+    desc: Build for macOS AMD64 (+ .app bundle)
+    deps: [assets]
+    cmds:
+      - CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build {{.LDFLAGS}} -o dist/{{.BINARY_NAME}}-darwin-amd64 .
+      - task: package-darwin-arch
+        vars: { DARWIN_ARCH: amd64 }
 
   build-windows-amd64:
     desc: Build for Windows AMD64
     deps: [assets]
     cmds:
-      - GOOS=windows GOARCH=amd64 go build {{.LDFLAGS}} -o dist/{{.BINARY_NAME}}-windows-amd64.exe .
+      - CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build {{.WINDOWS_LDFLAGS}} -o dist/{{.BINARY_NAME}}-windows-amd64.exe .
 
   build-windows-arm64:
     desc: Build for Windows ARM64
     deps: [assets]
     cmds:
-      - GOOS=windows GOARCH=arm64 go build {{.LDFLAGS}} -o dist/{{.BINARY_NAME}}-windows-arm64.exe .
+      - CGO_ENABLED=0 GOOS=windows GOARCH=arm64 go build {{.WINDOWS_LDFLAGS}} -o dist/{{.BINARY_NAME}}-windows-arm64.exe .
 
-  # Build all platforms in parallel
+  # ──────────────────────────────────────────────────────────────────────────
+  # Build all platforms
+  # ──────────────────────────────────────────────────────────────────────────
   build-all:
     desc: Build for all platforms
     deps: [clean]
     cmds:
       - mkdir -p dist
-      - task: build-platforms
+      - task: build-linux-amd64
+      - task: build-linux-arm64
+      - task: build-darwin-arm64
+      - task: build-darwin-amd64
+      - task: build-windows-amd64
+      - task: build-windows-arm64
       - task: create-zips
 
   build-platforms:
-    desc: Build for all platforms (Linux, macOS, Windows)
-    deps:
-      - build-linux-amd64
-      - build-linux-arm64
-      - build-darwin-amd64
-      - build-darwin-arm64
-      - build-windows-amd64
-      - build-windows-arm64
+    desc: "Alias for build-all"
+    cmds: [task: build-all]
 
+  # ──────────────────────────────────────────────────────────────────────────
+  # macOS .app bundle packaging
+  # ──────────────────────────────────────────────────────────────────────────
+  package-darwin-arch:
+    internal: true
+    cmds:
+      - |
+        APP="dist/LLM Router.app"
+        mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
+        cp "dist/{{.BINARY_NAME}}-darwin-{{.DARWIN_ARCH}}" "$APP/Contents/MacOS/{{.BINARY_NAME}}"
+        cp build/darwin/icon.icns "$APP/Contents/Resources/"
+        cp build/darwin/Info.plist "$APP/Contents/"
+        codesign --force --deep --sign - "$APP" 2>/dev/null || true
+        cd dist && zip -r --symlinks "{{.BINARY_NAME}}-darwin-{{.DARWIN_ARCH}}.zip" "LLM Router.app"
+        cd .. && rm -rf "$APP"
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # Zip packaging
+  # ──────────────────────────────────────────────────────────────────────────
   create-zips:
     desc: Create ZIP files for all platforms
     cmds:
-      - cd dist && cp llmrouter-darwin-amd64 llmrouter && zip llmrouter-darwin-amd64.zip llmrouter && rm llmrouter
-      - cd dist && cp llmrouter-darwin-arm64 llmrouter && zip llmrouter-darwin-arm64.zip llmrouter && rm llmrouter
-      - cd dist && cp llmrouter-linux-amd64 llmrouter && zip llmrouter-linux-amd64.zip llmrouter && rm llmrouter
-      - cd dist && cp llmrouter-linux-arm64 llmrouter && zip llmrouter-linux-arm64.zip llmrouter && rm llmrouter
-      - cd dist && cp llmrouter-windows-amd64.exe llmrouter.exe && zip llmrouter-windows-amd64.zip llmrouter.exe && rm llmrouter.exe
-      - cd dist && cp llmrouter-windows-arm64.exe llmrouter.exe && zip llmrouter-windows-arm64.zip llmrouter.exe && rm llmrouter.exe
+      # macOS zips already created by package-darwin-arch (.app bundles)
+      - cd dist && cp {{.BINARY_NAME}}-linux-amd64 {{.BINARY_NAME}} && zip {{.BINARY_NAME}}-linux-amd64.zip {{.BINARY_NAME}} && rm {{.BINARY_NAME}}
+      - cd dist && cp {{.BINARY_NAME}}-linux-arm64 {{.BINARY_NAME}} && zip {{.BINARY_NAME}}-linux-arm64.zip {{.BINARY_NAME}} && rm {{.BINARY_NAME}}
+      - cd dist && cp {{.BINARY_NAME}}-windows-amd64.exe {{.BINARY_NAME}}.exe && zip {{.BINARY_NAME}}-windows-amd64.zip {{.BINARY_NAME}}.exe && rm {{.BINARY_NAME}}.exe
+      - cd dist && cp {{.BINARY_NAME}}-windows-arm64.exe {{.BINARY_NAME}}.exe && zip {{.BINARY_NAME}}-windows-arm64.zip {{.BINARY_NAME}}.exe && rm {{.BINARY_NAME}}.exe
 
+  # ──────────────────────────────────────────────────────────────────────────
+  # Release
+  # ──────────────────────────────────────────────────────────────────────────
   release:
-    desc: Tag the version and create GitHub release with all platform binaries
+    desc: Tag version, build all platforms, create GitHub release + brew formulas
     deps: [build-all]
     cmds:
       - |
-        # Check if tag exists
         if git tag -l v{{.VERSION}} | grep -q v{{.VERSION}}; then
           echo "Tag v{{.VERSION}} already exists, skipping tag creation"
         else
@@ -129,26 +170,53 @@ tasks:
           git tag -a v{{.VERSION}} -m "Release {{.VERSION}}"
           git push origin v{{.VERSION}}
         fi
-        # Create release and upload zip files only
         gh release create v{{.VERSION}} -t "Release {{.VERSION}}" -n "LLM Router {{.VERSION}}" dist/*.zip
       - task: homebrew-formula
 
   homebrew-formula:
-    desc: Generate the Homebrew formula
+    desc: Generate Homebrew formula and cask
     cmds:
-      - go run ./scripts/homebrew-formula/ > ../homebrew-tap/Formula/llmrouter.rb
+      - go run ./scripts/homebrew-formula/ -out ../homebrew-tap
 
+  # ──────────────────────────────────────────────────────────────────────────
+  # Dev
+  # ──────────────────────────────────────────────────────────────────────────
   run-server:
     desc: Run the server in development mode
     deps: [assets]
     cmds:
       - >-
-        go run . server
+        CGO_ENABLED=0 go run . server
         --personas-dir ./examples/personas
         --commands-dir ./examples/commands
         --resources-dir ./examples/resources
         --prompts-dir ./examples/prompts
         --routes-dir ./examples/routers
+
+  run-desktop:
+    desc: Run the desktop app in development mode
+    deps: [assets]
+    cmds:
+      # macOS requires the binary inside a .app bundle for NSApplication to
+      # work. Build into a temp .app and open it. On Linux/Windows, go run
+      # works directly.
+      - CGO_ENABLED=0 go build -o /tmp/llmrouter-dev .
+      - |
+        if [ "{{OS}}" = "darwin" ]; then
+          APP="/tmp/LLM Router Dev.app"
+          mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
+          cp /tmp/llmrouter-dev "$APP/Contents/MacOS/llmrouter"
+          cp build/darwin/Info.plist "$APP/Contents/"
+          cp build/darwin/icon.icns "$APP/Contents/Resources/" 2>/dev/null || true
+          open "$APP"
+        else
+          /tmp/llmrouter-dev \
+            --personas-dir ./examples/personas \
+            --commands-dir ./examples/commands \
+            --resources-dir ./examples/resources \
+            --prompts-dir ./examples/prompts \
+            --routes-dir ./examples/routers
+        fi
 
   watch:
     desc: Watch for changes and rebuild
@@ -160,6 +228,9 @@ tasks:
           echo "Rebuilt at $(date)"
         done
 
+  # ──────────────────────────────────────────────────────────────────────────
+  # Container
+  # ──────────────────────────────────────────────────────────────────────────
   container:
     desc: Build the docker image and push to Docker Hub
     method: none
@@ -167,27 +238,14 @@ tasks:
       - |
         echo "Detected container runtime: {{.BUILD_WITH}}"
         echo "Building for platforms: {{.PLATFORM_ARG}}"
-
         if [ "{{.BUILD_WITH}}" = "podman" ]; then
           podman manifest create {{.REGISTRY}}/llmrouter:{{.VERSION}}
-          podman build \
-            {{.PLATFORM_ARG}} \
-            --manifest {{.REGISTRY}}/llmrouter:{{.VERSION}} \
-            --build-arg VERSION={{.VERSION}} \
-            --build-arg DOCKER_HUB={{.HUB}} \
-            .
+          podman build {{.PLATFORM_ARG}} --manifest {{.REGISTRY}}/llmrouter:{{.VERSION}} --build-arg VERSION={{.VERSION}} --build-arg DOCKER_HUB={{.HUB}} .
           podman tag {{.REGISTRY}}/llmrouter:{{.VERSION}} {{.REGISTRY}}/llmrouter:latest
           podman manifest push {{.REGISTRY}}/llmrouter:{{.VERSION}}
           podman manifest push {{.REGISTRY}}/llmrouter:latest
         else
-          docker buildx build \
-          {{.PLATFORM_ARG}} \
-          --tag {{.REGISTRY}}/llmrouter:{{.VERSION}} \
-          --tag {{.REGISTRY}}/llmrouter:latest \
-          --build-arg VERSION={{.VERSION}} \
-          --build-arg DOCKER_HUB={{.HUB}} \
-          --push \
-          .
+          docker buildx build {{.PLATFORM_ARG}} --tag {{.REGISTRY}}/llmrouter:{{.VERSION}} --tag {{.REGISTRY}}/llmrouter:latest --build-arg VERSION={{.VERSION}} --build-arg DOCKER_HUB={{.HUB}} --push .
         fi
 
   container-local:
@@ -196,22 +254,10 @@ tasks:
     cmds:
       - |
         echo "Detected container runtime: {{.BUILD_WITH}}"
-        echo "Building for local platform only"
-
         if [ "{{.BUILD_WITH}}" = "podman" ]; then
-          podman build \
-            --tag {{.REGISTRY}}/llmrouter:{{.VERSION}} \
-            --tag {{.REGISTRY}}/llmrouter:latest \
-            --build-arg VERSION={{.VERSION}} \
-            --build-arg DOCKER_HUB={{.HUB}} \
-            .
+          podman build --tag {{.REGISTRY}}/llmrouter:{{.VERSION}} --tag {{.REGISTRY}}/llmrouter:latest --build-arg VERSION={{.VERSION}} --build-arg DOCKER_HUB={{.HUB}} .
         else
-          docker build \
-            --tag {{.REGISTRY}}/llmrouter:{{.VERSION}} \
-            --tag {{.REGISTRY}}/llmrouter:latest \
-            --build-arg VERSION={{.VERSION}} \
-            --build-arg DOCKER_HUB={{.HUB}} \
-            .
+          docker build --tag {{.REGISTRY}}/llmrouter:{{.VERSION}} --tag {{.REGISTRY}}/llmrouter:latest --build-arg VERSION={{.VERSION}} --build-arg DOCKER_HUB={{.HUB}} .
         fi
 
   tag:

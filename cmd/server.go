@@ -7,16 +7,16 @@ import (
 	"github.com/paularlott/llmrouter/internal/server"
 )
 
-var ServerCmd = &cli.Command{
-	Name:        "server",
-	Usage:       "Start the LLM router server",
-	Description: "Start the LLM router server with MCP and OpenAI API endpoints",
-	Flags: []cli.Flag{
+// ServerFlags returns the flag set for the server. Shared between the `server`
+// subcommand and the root command so that `llmrouter -p 8080` (desktop mode)
+// and `llmrouter server -p 8080` (headless) accept the same options.
+func ServerFlags() []cli.Flag {
+	return []cli.Flag{
 		&cli.StringFlag{
 			Name:         "host",
 			Aliases:      []string{"H"},
-			Usage:        "Host to bind to",
-			DefaultValue: "0.0.0.0",
+			Usage:        "Host to bind to (use 0.0.0.0 for all interfaces)",
+			DefaultValue: "127.0.0.1",
 			ConfigPath:   []string{"server.host"},
 		},
 		&cli.IntFlag{
@@ -104,7 +104,14 @@ var ServerCmd = &cli.Command{
 			Usage:        "Directory of slash-command .md files (use $ARGUMENTS to splice user input)",
 			ConfigPath:   []string{"chat.commands_dir"},
 		},
-	},
+	}
+}
+
+var ServerCmd = &cli.Command{
+	Name:        "server",
+	Usage:       "Start the LLM router server",
+	Description: "Start the LLM router server with MCP and OpenAI API endpoints",
+	Flags:       ServerFlags(),
 	Run: func(ctx context.Context, cmd *cli.Command) error {
 		return server.RunServer(ctx, cmd)
 	},
