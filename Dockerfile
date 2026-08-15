@@ -31,7 +31,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 	go mod download
 
 # Build the server-only binary (excludes glaze/webview via -tags server).
-# The release binary includes glaze; the Docker binary doesn't need it.
+# Same as the release linux binaries; only the linux-desktop variants include glaze.
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH:-amd64} \
     go build -tags=server -ldflags="-s -w -X github.com/paularlott/llmrouter/build.BuildDate=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
     -o /usr/local/bin/llmrouter .

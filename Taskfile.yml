@@ -66,18 +66,38 @@ tasks:
   # ──────────────────────────────────────────────────────────────────────────
   # Platform builds — single binary, CGO_ENABLED=0, cross-compile from any host.
   # macOS builds include .app bundle packaging.
+  #
+  # Linux has two variants:
+  #   - build-linux-*        server only (-tags server): fully static binary,
+  #                          no webview/GUI dependencies, runs anywhere
+  #                          (including Alpine/musl containers).
+  #   - build-linux-desktop-* includes the webview desktop mode. Links against
+  #                          glibc (via purego/dlopen); needs WebKitGTK
+  #                          installed for desktop mode.
   # ──────────────────────────────────────────────────────────────────────────
   build-linux-amd64:
-    desc: Build for Linux AMD64
+    desc: Build for Linux AMD64 (server only, static binary)
     deps: [assets]
     cmds:
-      - CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build {{.LDFLAGS}} -o dist/{{.BINARY_NAME}}-linux-amd64 .
+      - CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -tags=server {{.LDFLAGS}} -o dist/{{.BINARY_NAME}}-linux-amd64 .
 
   build-linux-arm64:
-    desc: Build for Linux ARM64
+    desc: Build for Linux ARM64 (server only, static binary)
     deps: [assets]
     cmds:
-      - CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build {{.LDFLAGS}} -o dist/{{.BINARY_NAME}}-linux-arm64 .
+      - CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -tags=server {{.LDFLAGS}} -o dist/{{.BINARY_NAME}}-linux-arm64 .
+
+  build-linux-desktop-amd64:
+    desc: Build for Linux AMD64 with desktop webview mode
+    deps: [assets]
+    cmds:
+      - CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build {{.LDFLAGS}} -o dist/{{.BINARY_NAME}}-linux-desktop-amd64 .
+
+  build-linux-desktop-arm64:
+    desc: Build for Linux ARM64 with desktop webview mode
+    deps: [assets]
+    cmds:
+      - CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build {{.LDFLAGS}} -o dist/{{.BINARY_NAME}}-linux-desktop-arm64 .
 
   build-darwin-arm64:
     desc: Build for macOS ARM64 (+ .app bundle)
@@ -117,6 +137,8 @@ tasks:
       - mkdir -p dist
       - task: build-linux-amd64
       - task: build-linux-arm64
+      - task: build-linux-desktop-amd64
+      - task: build-linux-desktop-arm64
       - task: build-darwin-arm64
       - task: build-darwin-amd64
       - task: build-windows-amd64
@@ -152,6 +174,8 @@ tasks:
       # macOS zips already created by package-darwin-arch (.app bundles)
       - cd dist && cp {{.BINARY_NAME}}-linux-amd64 {{.BINARY_NAME}} && zip {{.BINARY_NAME}}-linux-amd64.zip {{.BINARY_NAME}} && rm {{.BINARY_NAME}}
       - cd dist && cp {{.BINARY_NAME}}-linux-arm64 {{.BINARY_NAME}} && zip {{.BINARY_NAME}}-linux-arm64.zip {{.BINARY_NAME}} && rm {{.BINARY_NAME}}
+      - cd dist && cp {{.BINARY_NAME}}-linux-desktop-amd64 {{.BINARY_NAME}} && zip {{.BINARY_NAME}}-linux-desktop-amd64.zip {{.BINARY_NAME}} && rm {{.BINARY_NAME}}
+      - cd dist && cp {{.BINARY_NAME}}-linux-desktop-arm64 {{.BINARY_NAME}} && zip {{.BINARY_NAME}}-linux-desktop-arm64.zip {{.BINARY_NAME}} && rm {{.BINARY_NAME}}
       - cd dist && cp {{.BINARY_NAME}}-windows-amd64.exe {{.BINARY_NAME}}.exe && zip {{.BINARY_NAME}}-windows-amd64.zip {{.BINARY_NAME}}.exe && rm {{.BINARY_NAME}}.exe
       - cd dist && cp {{.BINARY_NAME}}-windows-arm64.exe {{.BINARY_NAME}}.exe && zip {{.BINARY_NAME}}-windows-arm64.zip {{.BINARY_NAME}}.exe && rm {{.BINARY_NAME}}.exe
 

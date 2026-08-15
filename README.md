@@ -30,7 +30,7 @@ LLM Router ships as a **single binary** that works in two modes:
 - `llmrouter` with no subcommand opens a native window pointing at the in-process server (glaze/webview — WKWebView on macOS, WebView2 on Windows, WebKitGTK on Linux)
 - The HTTP API still binds to the configured port, so external tools (editors, scripts, other MCP clients) work identically
 - Desktop mode defaults to localhost binding (`127.0.0.1`) and persistent storage at `~/.llmrouter/data/`
-- **Linux runtime dependency:** `sudo apt install libwebkit2gtk-4.1-0` (Ubuntu/Debian) or `sudo dnf install webkit2gtk4.1` (Fedora). The binary auto-detects the available WebKitGTK version at runtime (6.0 preferred, falls back to 4.1). macOS and Windows have no extra dependencies.
+- **Linux runtime dependency (desktop builds only):** `sudo apt install libwebkit2gtk-4.1-0` (Ubuntu/Debian) or `sudo dnf install webkit2gtk4.1` (Fedora). The binary auto-detects the available WebKitGTK version at runtime (6.0 preferred, falls back to 4.1). macOS and Windows have no extra dependencies. The default Linux release builds are server-only and have no GUI dependencies.
 
 ### Server (headless)
 
@@ -77,10 +77,14 @@ Download the latest release for your platform from [github.com/paularlott/llmrou
 | macOS    | Intel (AMD64)         | `llmrouter-darwin-amd64.zip`  |
 | Linux    | AMD64                 | `llmrouter-linux-amd64.zip`   |
 | Linux    | ARM64                 | `llmrouter-linux-arm64.zip`   |
+| Linux    | AMD64 (desktop)       | `llmrouter-linux-desktop-amd64.zip` |
+| Linux    | ARM64 (desktop)       | `llmrouter-linux-desktop-arm64.zip` |
 | Windows  | AMD64                 | `llmrouter-windows-amd64.zip` |
 | Windows  | ARM64                 | `llmrouter-windows-arm64.zip` |
 
 macOS downloads contain an `.app` bundle (drag to `/Applications`). Linux/Windows downloads contain a bare binary (extract and place in your PATH).
+
+Linux binaries come in two variants: the default `llmrouter-linux-*.zip` is a **headless server build** — fully static, no GUI dependencies, runs anywhere including Alpine containers (use `llmrouter server` to start it). The `llmrouter-linux-desktop-*.zip` builds additionally include desktop mode (`llmrouter` with no subcommand opens a webview window); they link against glibc and require WebKitGTK for desktop mode (see below).
 
 ### Build from Source
 
