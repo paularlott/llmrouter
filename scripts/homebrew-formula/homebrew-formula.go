@@ -77,7 +77,7 @@ end
 `
 
 // macCaskTemplate — macOS .app bundle, auto-installs to /Applications.
-// The postflight hook also symlinks the binary into PATH so `llmrouter`
+// The postflight steps also symlink the binary into PATH so `llmrouter`
 // works from the terminal without needing the formula.
 const macCaskTemplate = `cask "llmrouter" do
 	version "{{ .Version }}"
@@ -99,23 +99,27 @@ const macCaskTemplate = `cask "llmrouter" do
 
 	# Also make the binary available on PATH so the llmrouter command works
 	# from the terminal without separately installing the formula.
-	postflight do
+	postflight_steps do
 		# The formula also links the llmrouter CLI; refuse to fight over the symlink.
-		if File.directory?("#{HOMEBREW_PREFIX}/Cellar/llmrouter")
-			raise "llmrouter formula is installed, which also provides the llmrouter CLI. Uninstall it first:\n  brew uninstall llmrouter"
+		# A failing run step aborts the install and prints the message on stderr.
+		if_path_exists "{{"{{"}}HOMEBREW_PREFIX}}/Cellar/llmrouter" do
+			run "/bin/sh", args: ["-c",
+				"printf '%s\\n' " \
+				"'llmrouter formula is installed, which also provides the llmrouter CLI. Uninstall it first:' " \
+				"'  brew uninstall llmrouter' >&2; exit 1"]
 		end
 
 		# The app is ad-hoc signed (not notarized) and brew quarantines cask
 		# downloads, which makes Gatekeeper kill the binary on first exec.
 		# Strip the flag so the app and the CLI link work immediately.
-		# Non-bang system_command: xattr -d fails if the attribute is absent.
-		system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "/Applications/LLM Router.app"]
+		# must_succeed: false as xattr -d fails if the attribute is absent.
+		run "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "{{"{{"}}appdir}}/LLM Router.app"], must_succeed: false
 
-		FileUtils.ln_sf("/Applications/LLM Router.app/Contents/MacOS/llmrouter", "#{HOMEBREW_PREFIX}/bin/llmrouter")
-	end
-
-	uninstall_postflight do
-		FileUtils.rm_f "#{HOMEBREW_PREFIX}/bin/llmrouter"
+		# overwrite: true replaces any existing link (was FileUtils.ln_sf);
+		# remove_on_uninstall unlinks the CLI on uninstall, replacing the old
+		# uninstall_postflight hook.
+		symlink "{{"{{"}}appdir}}/LLM Router.app/Contents/MacOS/llmrouter", "{{"{{"}}HOMEBREW_PREFIX}}/bin/llmrouter",
+			overwrite: true, remove_on_uninstall: true
 	end
 
 	zap trash: [
