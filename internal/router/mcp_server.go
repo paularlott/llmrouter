@@ -34,6 +34,21 @@ func (r *remoteServerClient) ensureInitialized(ctx context.Context) error {
 	return nil
 }
 
+// declareUIAppsSupport advertises this client's support for the MCP Apps
+// extension (SEP-1865) to a remote server, mirroring what this router's own
+// chat UI (lmchatkit's mountAppView) actually renders: a sandboxed iframe
+// for a tool linked to a ui:// resource, federated the same as a native
+// tool. Without this, a spec-conformant remote server that only attaches
+// _meta.ui for clients that declared capabilities.extensions[io.model
+// contextprotocol/ui] has no way to know this router can render one, and
+// silently serves a plain-text-only tool instead — MCP Apps then quietly
+// never works for that server, with no error anywhere to explain why.
+func declareUIAppsSupport(client *mcp.Client) {
+	client.DeclareExtension(mcp.UIAppsExtensionID, map[string]any{
+		"mimeTypes": []string{mcp.UIAppMimeType},
+	})
+}
+
 // MCPServer wraps the MCP server functionality
 type MCPServer struct {
 	server               *mcp.Server
@@ -121,9 +136,11 @@ func (m *MCPServer) createRemoteServerEntry(config types.MCPRemoteServerConfig, 
 
 	// Create client for MCP server registration (may be filtered)
 	client := mcp.NewClient(normalizedURL, auth, config.Namespace)
+	declareUIAppsSupport(client)
 
 	// Create a separate unfiltered client for admin UI tool listing
 	unfilteredClient := mcp.NewClient(normalizedURL, auth, config.Namespace)
+	declareUIAppsSupport(unfilteredClient)
 
 	// Determine visibility
 	visibility := mcp.ToolVisibilityNative
@@ -250,6 +267,51 @@ func (m *MCPServer) ReloadAllServers(storageServers []*storage.MCPServerConfig) 
 	m.logger.Info("reloaded MCP servers", "static", len(m.config.MCP.RemoteServers), "storage", len(storageServers))
 }
 
+// toolAdminMeta extracts a tool's icons and "is this an MCP app" flag for
+// the admin UI. tool.Meta["ui"] always arrives as map[string]any here (these
+// tools are fetched via Client.ListTools from a remote server, so it was
+// deserialized from JSON, never a native mcp.UIToolMeta value) — the JSON
+// round-trip normalizes that shape into the typed struct.
+func toolAdminMeta(tool mcp.MCPTool) ([]admin.Icon, bool) {
+	var icons []admin.Icon
+	if len(tool.Icons) > 0 {
+		icons = make([]admin.Icon, 0, len(tool.Icons))
+		for _, ic := range tool.Icons {
+			icons = append(icons, admin.Icon{Src: ic.Src, MimeType: ic.MimeType, Sizes: ic.Sizes, Theme: ic.Theme})
+		}
+	}
+
+	isApp := false
+	if raw, ok := tool.Meta["ui"]; ok && raw != nil {
+		if b, err := json.Marshal(raw); err == nil {
+			var ui mcp.UIToolMeta
+			if err := json.Unmarshal(b, &ui); err == nil {
+				isApp = ui.ResourceURI != ""
+			}
+		}
+	}
+
+	return icons, isApp
+}
+
+// GetProtocolVersionForAdmin returns the protocol version namespace's remote
+// server actually negotiated (e.g. "2025-06-18" for a Legacy server, or the
+// Modern era's fixed revision), connecting lazily if not already initialized.
+// Returns "" (not an error) if the namespace is unknown or the connection
+// attempt fails — the admin UI treats an empty version as "unavailable"
+// rather than surfacing a connection error on every server card.
+func (m *MCPServer) GetProtocolVersionForAdmin(namespace string) (string, error) {
+	rsClient, exists := m.remoteClients[namespace]
+	if !exists || rsClient.client == nil {
+		return "", nil
+	}
+	if err := rsClient.ensureInitialized(context.Background()); err != nil {
+		m.logger.Warn("failed to initialize MCP client for protocol version lookup", "namespace", namespace, "url", rsClient.config.URL, "error", err)
+		return "", nil
+	}
+	return rsClient.client.ProtocolVersion(), nil
+}
+
 // GetToolsForAdmin returns tools for a specific namespace for the admin UI
 // This fetches ALL tools from the remote server (not filtered) and calculates enabled state
 func (m *MCPServer) GetToolsForAdmin(namespace string) ([]admin.ToolInfo, error) {
@@ -318,11 +380,14 @@ func (m *MCPServer) GetToolsForAdmin(namespace string) ([]admin.ToolInfo, error)
 			inputSchema = make(map[string]interface{})
 		}
 
+		icons, isApp := toolAdminMeta(tool)
 		result = append(result, admin.ToolInfo{
 			Name:        toolNameWithoutPrefix,
 			Description: tool.Description,
 			InputSchema: inputSchema,
 			Enabled:     enabled,
+			Icons:       icons,
+			IsApp:       isApp,
 		})
 	}
 
@@ -416,11 +481,14 @@ func (m *MCPServer) GetStorageServerTools(namespace string, server *storage.MCPS
 			inputSchema = make(map[string]interface{})
 		}
 
+		icons, isApp := toolAdminMeta(tool)
 		result = append(result, admin.ToolInfo{
 			Name:        toolNameWithoutPrefix,
 			Description: tool.Description,
 			InputSchema: inputSchema,
 			Enabled:     enabled,
+			Icons:       icons,
+			IsApp:       isApp,
 		})
 	}
 

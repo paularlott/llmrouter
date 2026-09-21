@@ -37,6 +37,7 @@ type Admin struct {
 	getMCPResources func(namespace string) ([]ResourceInfo, error)
 	getMCPPrompts   func(namespace string) ([]PromptInfo, error)
 	callMCPTool     func(namespace, toolName string, args map[string]any) (*ToolCallResult, error)
+	getMCPProtocol  func(namespace string) (string, error)
 
 	// MCP storage (for dynamic server management)
 	mcpStorage         storage.MCPStorage
@@ -108,6 +109,21 @@ type ToolInfo struct {
 	Description string                 `json:"description"`
 	InputSchema map[string]interface{} `json:"input_schema"`
 	Enabled     bool                   `json:"enabled"`
+	// Icons mirrors the tool's MCP icons convention entries, if any.
+	Icons []Icon `json:"icons,omitempty"`
+	// IsApp is true when the tool declares a linked ui:// resource
+	// (MCP Apps extension, SEP-1865, _meta.ui.resourceUri) — the admin UI
+	// uses this to badge the tool as an "app" rather than a plain tool.
+	IsApp bool `json:"is_app,omitempty"`
+}
+
+// Icon is one MCP icons-convention entry. It mirrors the relevant parts of
+// mcp.Icon without coupling this package to the mcp dependency.
+type Icon struct {
+	Src      string   `json:"src"`
+	MimeType string   `json:"mime_type,omitempty"`
+	Sizes    []string `json:"sizes,omitempty"`
+	Theme    string   `json:"theme,omitempty"`
 }
 
 // ToolCallResult represents the result of executing a tool via the admin UI.
@@ -226,6 +242,14 @@ func (a *Admin) SetPersonaStorage(ps storage.PersonaStorage, writable bool, onCh
 // 503 (tool execution not available).
 func (a *Admin) SetMCPToolCaller(fn func(namespace, toolName string, args map[string]any) (*ToolCallResult, error)) {
 	a.callMCPTool = fn
+}
+
+// SetMCPProtocolGetter wires the "which protocol version is this remote
+// server actually using" lookup for the admin UI's MCP Servers page. Called
+// after New but before RegisterRoutes. If fn is nil, the protocol endpoint
+// returns an empty string (the UI shows nothing rather than erroring).
+func (a *Admin) SetMCPProtocolGetter(fn func(namespace string) (string, error)) {
+	a.getMCPProtocol = fn
 }
 
 // SetRefreshModels wires a forced model rescan from the admin UI. Called

@@ -398,6 +398,16 @@
                     >
                       OAuth2
                     </span>
+                    <!-- Protocol version: fetched lazily (see loadProtocolVersion),
+                         so it's absent while pending and shown once resolved.
+                         An empty string means the lookup failed or returned
+                         nothing (e.g. the server is offline) — no badge then. -->
+                    <span
+                      x-show="server.protocolVersion"
+                      class="px-2 py-0.5 text-xs font-mono font-medium rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400"
+                      :title="'MCP protocol version negotiated with this server'"
+                      x-text="server.protocolVersion"
+                    ></span>
                   </div>
                   <div
                     class="flex items-center gap-4 text-sm text-slate-600 dark:text-slate-300"
@@ -1256,10 +1266,33 @@
                       <!-- Name + description -->
                       <div class="flex-1 min-w-0">
                         <div class="flex items-center gap-2">
+                          <!-- Tool icon (MCP icons convention). Only src schemes the
+                               spec allows (https:// or data:) are rendered — an
+                               unconditional :src would still fetch a disallowed URL
+                               even while x-show hid the resulting <img> (x-show only
+                               toggles display, it doesn't stop the browser loading
+                               the src), leaking the admin's IP/user-agent to whatever
+                               origin a malicious tool declared. :src is gated by the
+                               same check, to null (not ''), so the attribute is
+                               omitted entirely rather than requesting empty-string's
+                               well-known "refetch the current page" behavior. -->
+                          <img
+                            x-show="tool.icons && tool.icons.length && /^(https:\/\/|data:)/.test(tool.icons[0].src)"
+                            :src="(tool.icons && tool.icons.length && /^(https:\/\/|data:)/.test(tool.icons[0].src)) ? tool.icons[0].src : null"
+                            alt=""
+                            class="w-4 h-4 rounded shrink-0 object-contain"
+                          />
                           <span
                             class="font-mono text-sm font-semibold text-slate-900 dark:text-white"
                             x-text="tool.name"
                           ></span>
+                          <!-- MCP Apps badge: this tool links to a ui:// resource -->
+                          <span
+                            x-show="tool.is_app"
+                            class="px-1.5 py-0.5 rounded text-xs font-mono font-semibold bg-indigo-100 dark:bg-indigo-800/60 text-indigo-700 dark:text-indigo-200"
+                            title="This tool has a linked MCP Apps view"
+                            >APP</span
+                          >
                         </div>
                         <p
                           class="text-sm text-slate-500 dark:text-slate-300 mt-0.5"

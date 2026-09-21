@@ -46,6 +46,7 @@ func (a *Admin) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("PUT /admin/api/mcp-servers/{namespace}/toggle", a.requireAuth(a.HandleToggleMCPServer))
 	mux.HandleFunc("DELETE /admin/api/mcp-servers/{namespace}", a.requireAuth(a.HandleDeleteMCPServer))
 	mux.HandleFunc("GET /admin/api/mcp-servers/{namespace}/tools", a.requireAuth(a.HandleGetMCPServerTools))
+	mux.HandleFunc("GET /admin/api/mcp-servers/{namespace}/protocol", a.requireAuth(a.HandleGetMCPServerProtocol))
 	mux.HandleFunc("PUT /admin/api/mcp-servers/{namespace}/tools/toggle", a.requireAuth(a.HandleToggleMCPServerTool))
 	mux.HandleFunc("POST /admin/api/mcp-servers/{namespace}/tools/call", a.requireAuth(a.HandleCallMCPServerTool))
 	mux.HandleFunc("GET /admin/api/mcp-servers/{namespace}/resources", a.requireAuth(a.HandleGetMCPServerResources))
@@ -567,6 +568,33 @@ func (a *Admin) HandleGetMCPServerTools(w http.ResponseWriter, r *http.Request) 
 	}
 
 	writeJSON(w, http.StatusOK, tools)
+}
+
+// HandleGetMCPServerProtocol returns the protocol version actually
+// negotiated with a remote server (e.g. "2025-06-18" for a Legacy server, or
+// the Modern era's fixed revision). Connecting to check this is the same
+// lazy on-demand pattern as HandleGetMCPServerTools — it isn't known until
+// the client actually initializes, so the admin UI fetches it per server
+// rather than the server list eagerly connecting to everything up front.
+func (a *Admin) HandleGetMCPServerProtocol(w http.ResponseWriter, r *http.Request) {
+	namespace := r.PathValue("namespace")
+	if namespace == "" {
+		writeError(w, http.StatusBadRequest, "namespace required")
+		return
+	}
+
+	if a.getMCPProtocol == nil {
+		writeJSON(w, http.StatusOK, map[string]string{"protocol_version": ""})
+		return
+	}
+
+	version, err := a.getMCPProtocol(namespace)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{"protocol_version": version})
 }
 
 // HandleToggleMCPServerTool toggles a tool's enabled state (lazy write)

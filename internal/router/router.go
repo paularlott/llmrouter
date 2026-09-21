@@ -265,6 +265,7 @@ func NewRouter(config *types.Config, logger Logger) (*Router, error) {
 		router.admin.SetProviderStorage(providerStorage, providerStorageWritable, router.reloadProviders)
 		router.admin.SetPersonaStorage(personaStorage, personaStorageWritable, router.reloadPersonas, router.getPersonas)
 		router.admin.SetMCPToolCaller(router.callMCPTool)
+		router.admin.SetMCPProtocolGetter(router.getMCPServerProtocol)
 		router.admin.SetRefreshModels(func() {
 			ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 			defer cancel()
@@ -1759,6 +1760,18 @@ func (r *Router) getMCPTools(namespace string) ([]admin.ToolInfo, error) {
 
 	// Fall back to config-based server
 	return r.mcpServer.GetToolsForAdmin(namespace)
+}
+
+// getMCPServerProtocol returns the protocol version actually negotiated with
+// namespace's remote server. Unlike getMCPTools, this doesn't need a
+// storage-vs-config branch — both kinds of server share the same
+// remoteClients entry, and the negotiated version is a property of that one
+// connection either way.
+func (r *Router) getMCPServerProtocol(namespace string) (string, error) {
+	if r.mcpServer == nil {
+		return "", fmt.Errorf("MCP server not available")
+	}
+	return r.mcpServer.GetProtocolVersionForAdmin(namespace)
 }
 
 // getMCPResources returns resources (static + templates) for an MCP server for

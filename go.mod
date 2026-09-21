@@ -10,8 +10,8 @@ require (
 	github.com/paularlott/cli v0.9.1
 	github.com/paularlott/lmchatkit v0.9.1
 	github.com/paularlott/logger v0.3.0
-	github.com/paularlott/mcp v0.26.0
-	github.com/paularlott/scriptling v0.25.2
+	github.com/paularlott/mcp v0.27.0
+	github.com/paularlott/scriptling v0.25.4
 	github.com/paularlott/snapshotkv v0.6.0
 )
 
@@ -21,7 +21,7 @@ require (
 	github.com/dgraph-io/badger/v4 v4.9.6 // indirect
 	github.com/dgraph-io/ristretto/v2 v2.4.2 // indirect
 	github.com/dustin/go-humanize v1.1.0 // indirect
-	github.com/ebitengine/purego v0.11.0 // indirect
+	github.com/ebitengine/purego v0.11.1 // indirect
 	github.com/go-logr/logr v1.4.4 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-ole/go-ole v1.3.0 // indirect

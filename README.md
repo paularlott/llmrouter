@@ -14,7 +14,7 @@ A unified gateway that aggregates multiple LLM providers behind a single endpoin
 - **Weight-Based Load Balancing**: Distribute load across providers with configurable weights
 - **Smart Routing**: Request the `auto` model and a [Scriptling](https://scriptling.dev/) script picks the best provider/model based on tags, load, and request content
 - **MCP Aggregator**: Combine tools, resources, and prompts from multiple remote MCP servers with namespace isolation, OAuth support, and per-tool visibility / allow / deny filtering
-- **Chat UI**: Built-in interface at `/chat` with personas, conversation history, slash commands, `@prompt` / `@resource` menus, live MCP tool calling, markdown rendering, and `skill://` resources auto-surfaced to the model
+- **Chat UI**: Built-in interface at `/chat` with personas, conversation history, slash commands, `@prompt` / `@resource` menus, live MCP tool calling, [MCP Apps](https://github.com/modelcontextprotocol/ext-apps) rendering (interactive tool UIs in a sandboxed, auto-resizing iframe — for both native and federated tools), markdown rendering, and `skill://` resources auto-surfaced to the model
 - **Personas**: System prompts, default models, and generation parameters — defined in the config file or managed through the admin UI
 - **Admin UI**: Optional web interface at `/admin` to manage providers, personas, and MCP servers (create / edit / delete, enable / disable), browse models (with rescan) and tools, and test-run MCP tools directly from the browser
 - **Responses API**: OpenAI-compatible responses storage (emulated for all providers)
@@ -496,6 +496,8 @@ When `admin_password` is set and a personas directory is configured, a built-in 
 ```bash
 ./llmrouter server --personas-dir ./personas --commands-dir ./commands --resources-dir ./resources
 ```
+
+**MCP Apps:** When a tool's `tools/list` entry declares `_meta.ui.resourceUri` ([SEP-1865](https://github.com/modelcontextprotocol/ext-apps)), calling it in the chat UI renders its linked `ui://` resource in a sandboxed, auto-resizing iframe instead of plain text. This works identically for a tool served natively (via `[scripting]`, see below) and one federated from a remote MCP server (see `[[mcp.remote_servers]]` under [MCP Tool Filtering](#mcp-tool-filtering)) — the router's own `_meta` federation and the chat UI's rendering (built on `lmchatkit`) both pass `_meta.ui` through unchanged. No configuration is required beyond the tool already declaring `_meta.ui` on its own server.
 
 **Skills:** Resources with a `skill://` URI prefix are automatically surfaced to the LLM. On every chat request, the router queries the MCP server for `skill://` resources and appends their names and descriptions to the persona's system prompt. A virtual tool (`lmchatkit__get_skill`) is injected into the tool list — the model calls it to retrieve a skill's full instructions on demand. The tool routes to the standard MCP `ReadResource` API, so skills work from any source (files, remote servers, or custom providers). The tool is auto-approved (no user prompt) since it's a read-only context fetch. Skills are transient — the stored conversation is not modified; the augmentation is recomputed on each request.
 

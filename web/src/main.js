@@ -258,10 +258,34 @@ Alpine.data("mcpServers", () => ({
 
       if (!response.ok) throw new Error("Failed to load servers");
       this.servers = await response.json();
+      // Protocol version isn't known from config alone — it's whatever the
+      // remote actually negotiates on connect — so it's fetched lazily per
+      // server, in parallel, without blocking the server list itself from
+      // rendering (a slow or offline remote shouldn't stall the whole page).
+      for (const server of this.servers) this.loadProtocolVersion(server);
     } catch (err) {
       this.error = err.message;
     } finally {
       this.loading = false;
+    }
+  },
+
+  // loadProtocolVersion fetches and caches the protocol version a remote
+  // server negotiated, connecting lazily (same pattern as opening the Tools
+  // modal). server.protocolVersion is undefined while pending, "" if the
+  // server is unreachable or the version is otherwise unknown (the card
+  // shows nothing in that case), or the version string once resolved.
+  async loadProtocolVersion(server) {
+    try {
+      const response = await fetch(`/admin/api/mcp-servers/${encodeURIComponent(server.namespace)}/protocol`);
+      if (!response.ok) {
+        server.protocolVersion = "";
+        return;
+      }
+      const data = await response.json();
+      server.protocolVersion = data.protocol_version || "";
+    } catch (err) {
+      server.protocolVersion = "";
     }
   },
 
