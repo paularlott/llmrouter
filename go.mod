@@ -8,10 +8,10 @@ require (
 	github.com/fsnotify/fsnotify v1.10.1
 	github.com/google/uuid v1.6.0
 	github.com/paularlott/cli v0.9.1
-	github.com/paularlott/lmchatkit v0.9.1
+	github.com/paularlott/lmchatkit v0.10.2
 	github.com/paularlott/logger v0.3.0
-	github.com/paularlott/mcp v0.27.0
-	github.com/paularlott/scriptling v0.25.4
+	github.com/paularlott/mcp v0.27.1
+	github.com/paularlott/scriptling v0.26.0
 	github.com/paularlott/snapshotkv v0.6.0
 )
 
@@ -60,7 +60,7 @@ require (
 	golang.org/x/text v0.42.0 // indirect
 	google.golang.org/protobuf v1.36.12 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	modernc.org/libc v1.77.0 // indirect
+	modernc.org/libc v1.77.1 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.12.1 // indirect
 	modernc.org/sqlite v1.59.0 // indirect
