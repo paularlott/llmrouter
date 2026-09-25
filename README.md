@@ -517,14 +517,14 @@ When `admin_password` is set and a personas directory is configured, a built-in 
 
 **MCP Apps:** When a tool's `tools/list` entry declares `_meta.ui.resourceUri` ([SEP-1865](https://github.com/modelcontextprotocol/ext-apps)), calling it in the chat UI renders its linked `ui://` resource in a sandboxed, auto-resizing iframe instead of plain text. This works identically for a tool served natively (via `[scripting]`, see below) and one federated from a remote MCP server (see `[[mcp.remote_servers]]` under [MCP Tool Filtering](#mcp-tool-filtering)) — the router's own `_meta` federation and the chat UI's rendering (built on `lmchatkit`) both pass `_meta.ui` through unchanged. No configuration is required beyond the tool already declaring `_meta.ui` on its own server.
 
-**Skills:** Resources with a `skill://` URI prefix are automatically surfaced to the LLM. On every chat request, the router queries the MCP server for `skill://` resources and appends their names and descriptions to the persona's system prompt. A virtual tool (`lmchatkit__get_skill`) is injected into the tool list — the model calls it to retrieve a skill's full instructions on demand. The tool routes to the standard MCP `ReadResource` API, so skills work from any source (files, remote servers, or custom providers). The tool is auto-approved (no user prompt) since it's a read-only context fetch. Skills are transient — the stored conversation is not modified; the augmentation is recomputed on each request.
+**Skills:** Agent Skills ([SEP-2640](https://agentskills.io/specification)) served from `--skills-dir`: one subdirectory per skill containing a `SKILL.md` (plus any extra files), registered on both the chat-side server and the public `/mcp` endpoint, so clients see `skills/list`, `skills/get` and every file as a `skill://` resource. On every chat request the router appends the available skills to the persona's system prompt as `name: description (uri)`, including the skills of every enabled remote MCP server, fetched in parallel with a one-second budget each and cached for a minute. A virtual tool (`lmchatkit__get_skill`) is injected into the tool list: the model calls it with a skill URI to retrieve the full content on demand. It routes to the standard MCP `ReadResource` API, so skills work from any source. The tool is auto-approved (no user prompt) since it's a read-only context fetch. Skills are transient: the stored conversation is not modified; the augmentation is recomputed on each request.
 
-Example skill resource directory structure:
+Example skills directory structure:
 ```
-resources/
-└── skill/
-    ├── golang.md    → skill://golang.md
-    └── testing.md   → skill://testing.md
+skills/
+└── golang/
+    ├── SKILL.md       → skill://golang/SKILL.md
+    └── reference.md   → skill://golang/reference.md
 ```
 
 ### MCP OAuth Authentication
