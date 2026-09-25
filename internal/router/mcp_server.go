@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/paularlott/llmrouter/internal/admin"
 	"github.com/paularlott/llmrouter/internal/storage"
@@ -19,6 +20,7 @@ import (
 type remoteServerClient struct {
 	client      *mcp.Client
 	config      types.MCPRemoteServerConfig
+	enabled     bool // storage-based servers can be disabled; disabled ones are never contacted for listings
 	initialized bool
 }
 
@@ -52,6 +54,7 @@ func declareUIAppsSupport(client *mcp.Client) {
 // MCPServer wraps the MCP server functionality
 type MCPServer struct {
 	server               *mcp.Server
+	endpointServer       *mcp.Server // the public /mcp endpoint: llmrouter's own tools plus opt-in federated servers (never their apps)
 	config               *types.Config
 	logger               Logger
 	remoteClients        map[string]*remoteServerClient // namespace -> client (for admin UI)
@@ -64,10 +67,11 @@ func NewMCPServer(config *types.Config, logger Logger) (*MCPServer, error) {
 	server := mcp.NewServer("llmrouter", "1.0.0")
 
 	mcpServer := &MCPServer{
-		server:        server,
-		config:        config,
-		logger:        logger,
-		remoteClients: make(map[string]*remoteServerClient),
+		server:         server,
+		endpointServer: mcp.NewServer("llmrouter", "1.0.0"),
+		config:         config,
+		logger:         logger,
+		remoteClients:  make(map[string]*remoteServerClient),
 	}
 
 	// Register static servers from config
@@ -78,6 +82,7 @@ func NewMCPServer(config *types.Config, logger Logger) (*MCPServer, error) {
 		entries = append(entries, entry)
 
 		// Store unfiltered client for admin UI tool listing
+		rsClient.enabled = true
 		mcpServer.remoteClients[remoteServer.Namespace] = rsClient
 	}
 
@@ -202,12 +207,23 @@ func (m *MCPServer) createRemoteServerEntry(config types.MCPRemoteServerConfig, 
 }
 
 func (m *MCPServer) HandleRequest(w http.ResponseWriter, r *http.Request) {
-	m.server.HandleRequest(w, r)
+	m.endpointServer.HandleRequest(w, r)
 }
 
 // ReloadAllServers atomically replaces all remote servers (static + storage-based)
+// on both MCP servers:
+//
+//   - m.server is the chat-side view: every enabled remote server, apps
+//     included — the web chat and scripts resolve their tools through it
+//     and mount app views via lmchatkit's app-proxy.
+//   - m.endpointServer is the public /mcp endpoint: llmrouter's own tools
+//     plus only the servers opted in with federate = true, and never their
+//     app tools (ExcludeApps) — a federated app view would call its own
+//     bare, host-agnostic tool names, which the namespaced endpoint can't
+//     resolve.
 func (m *MCPServer) ReloadAllServers(storageServers []*storage.MCPServerConfig) {
 	entries := make([]mcp.RemoteServerEntry, 0, len(m.pendingStaticEntries)+len(storageServers))
+	endpointEntries := make([]mcp.RemoteServerEntry, 0, len(m.pendingStaticEntries)+len(storageServers))
 
 	// Clear existing remote clients
 	m.remoteClients = make(map[string]*remoteServerClient)
@@ -215,9 +231,15 @@ func (m *MCPServer) ReloadAllServers(storageServers []*storage.MCPServerConfig) 
 	// Add static servers from config
 	for _, remoteServer := range m.config.MCP.RemoteServers {
 		entry, rsClient := m.createRemoteServerEntry(remoteServer, nil)
+		rsClient.enabled = true
 		entries = append(entries, entry)
+		if remoteServer.Federate {
+			endpointEntry := entry
+			endpointEntry.ExcludeApps = true
+			endpointEntries = append(endpointEntries, endpointEntry)
+		}
 		m.remoteClients[remoteServer.Namespace] = rsClient
-		m.logger.Info("registering static MCP server", "namespace", remoteServer.Namespace, "url", remoteServer.URL)
+		m.logger.Info("registering static MCP server", "namespace", remoteServer.Namespace, "url", remoteServer.URL, "federate", remoteServer.Federate)
 	}
 
 	// Add storage-based servers (only enabled ones are registered with MCP)
@@ -239,13 +261,20 @@ func (m *MCPServer) ReloadAllServers(storageServers []*storage.MCPServerConfig) 
 			ToolDenylist:      server.ToolDenylist,
 			RemoteSearch:      server.RemoteSearch,
 			Notifications:     server.Notifications,
+			Federate:          server.Federate,
 		}
 		entry, rsClient := m.createRemoteServerEntry(config, server)
+		rsClient.enabled = server.Enabled
 		m.remoteClients[server.Namespace] = rsClient
 
 		// Only register enabled servers with the MCP server
 		if server.Enabled {
 			entries = append(entries, entry)
+			if server.Federate {
+				endpointEntry := entry
+				endpointEntry.ExcludeApps = true
+				endpointEntries = append(endpointEntries, endpointEntry)
+			}
 			if server.Command != "" {
 				m.logger.Info("registering storage-based MCP server", "namespace", server.Namespace, "command", server.Command)
 			} else {
@@ -259,19 +288,20 @@ func (m *MCPServer) ReloadAllServers(storageServers []*storage.MCPServerConfig) 
 	if err := m.server.ReplaceRemoteServers(entries); err != nil {
 		m.logger.Warn("failed to replace remote MCP servers", "error", err)
 	}
+	if err := m.endpointServer.ReplaceRemoteServers(endpointEntries); err != nil {
+		m.logger.Warn("failed to replace remote MCP servers on the /mcp endpoint", "error", err)
+	}
 
 	// The federated tool set just changed (servers added/removed/replaced): tell
 	// connected clients to drop their cached tool list and re-fetch.
 	m.server.NotifyToolsChanged()
+	m.endpointServer.NotifyToolsChanged()
 
 	m.logger.Info("reloaded MCP servers", "static", len(m.config.MCP.RemoteServers), "storage", len(storageServers))
 }
 
 // toolAdminMeta extracts a tool's icons and "is this an MCP app" flag for
-// the admin UI. tool.Meta["ui"] always arrives as map[string]any here (these
-// tools are fetched via Client.ListTools from a remote server, so it was
-// deserialized from JSON, never a native mcp.UIToolMeta value) — the JSON
-// round-trip normalizes that shape into the typed struct.
+// the admin UI, using the library's own app check (_meta.ui.resourceUri).
 func toolAdminMeta(tool mcp.MCPTool) ([]admin.Icon, bool) {
 	var icons []admin.Icon
 	if len(tool.Icons) > 0 {
@@ -281,17 +311,7 @@ func toolAdminMeta(tool mcp.MCPTool) ([]admin.Icon, bool) {
 		}
 	}
 
-	isApp := false
-	if raw, ok := tool.Meta["ui"]; ok && raw != nil {
-		if b, err := json.Marshal(raw); err == nil {
-			var ui mcp.UIToolMeta
-			if err := json.Unmarshal(b, &ui); err == nil {
-				isApp = ui.ResourceURI != ""
-			}
-		}
-	}
-
-	return icons, isApp
+	return icons, mcp.ToolIsApp(tool)
 }
 
 // GetProtocolVersionForAdmin returns the protocol version namespace's remote
@@ -518,6 +538,18 @@ func (m *MCPServer) GetResourcesForAdmin(namespace string) ([]admin.ResourceInfo
 
 	prefix := namespace + mcp.DefaultNamespaceSeparator
 
+	// The authoritative record of which resources are skill files is the
+	// server's skills/list (the spec forbids inferring skill-ness from the
+	// URI scheme alone), so cross-reference it before listing.
+	skillURIs := map[string]bool{}
+	if skills, err := rsClient.client.ListSkills(ctx); err == nil {
+		for _, skill := range skills {
+			for _, res := range skill.Resources {
+				skillURIs[res.URI] = true
+			}
+		}
+	}
+
 	static, err := rsClient.client.ListResources(ctx)
 	if err != nil {
 		m.logger.Warn("failed to list resources from remote server", "namespace", namespace, "error", err)
@@ -532,6 +564,7 @@ func (m *MCPServer) GetResourcesForAdmin(namespace string) ([]admin.ResourceInfo
 			Name:        r.Name,
 			Description: r.Description,
 			MimeType:    r.MimeType,
+			Skill:       skillURIs[r.URI],
 		})
 	}
 
@@ -617,8 +650,10 @@ func NewMCPServerWithScriptling(config *types.Config, logger Logger) (*MCPServer
 	}
 
 	// Set up scriptling-served MCP content if any source folder is configured.
-	if config.Scripting.ToolsDir != "" || config.Scripting.ResourcesDir != "" || config.Scripting.PromptsDir != "" || config.Scripting.ExecScript {
-		manager, err := NewScriptlingToolManager(config.Scripting, mcpServer.server, logger)
+	// Registered on both servers: llmrouter's own tools/resources/prompts are
+	// native content on the chat-side server and the public /mcp endpoint.
+	if config.Scripting.ToolsDir != "" || config.Scripting.ResourcesDir != "" || config.Scripting.PromptsDir != "" || config.Scripting.SkillsDir != "" || config.Scripting.ExecScript {
+		manager, err := NewScriptlingToolManager(config.Scripting, logger, mcpServer.server, mcpServer.endpointServer)
 		if err != nil {
 			logger.Warn("Failed to setup scriptling tools", "error", err)
 		} else {
@@ -629,9 +664,36 @@ func NewMCPServerWithScriptling(config *types.Config, logger Logger) (*MCPServer
 			logger.Info("Scriptling MCP content enabled",
 				"tools_dir", config.Scripting.ToolsDir,
 				"resources_dir", config.Scripting.ResourcesDir,
-				"prompts_dir", config.Scripting.PromptsDir)
+				"prompts_dir", config.Scripting.PromptsDir,
+				"skills_dir", config.Scripting.SkillsDir)
 		}
 	}
 
 	return mcpServer, nil
+}
+
+// ReadResourceForAdmin reads one resource from the remote server behind
+// namespace, for the admin UI's viewer popup. uri is the upstream name as
+// shown in the listing (the namespace prefix the client adds on listing is
+// not part of the remote's own URI).
+func (m *MCPServer) ReadResourceForAdmin(namespace, uri string) (*admin.ResourceReadResult, error) {
+	rsClient, exists := m.remoteClients[namespace]
+	if !exists || rsClient.client == nil {
+		return nil, fmt.Errorf("MCP server %q not found", namespace)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	if err := rsClient.ensureInitialized(ctx); err != nil {
+		return nil, fmt.Errorf("failed to connect to MCP server: %w", err)
+	}
+	resp, err := rsClient.client.ReadResource(ctx, uri)
+	if err != nil {
+		return nil, err
+	}
+	result := &admin.ResourceReadResult{URI: uri}
+	if len(resp.Contents) > 0 {
+		result.MimeType = resp.Contents[0].MimeType
+		result.Text = resp.Contents[0].Text
+	}
+	return result, nil
 }

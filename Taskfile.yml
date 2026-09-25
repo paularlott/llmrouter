@@ -215,6 +215,7 @@ tasks:
         --commands-dir ./examples/commands
         --resources-dir ./examples/resources
         --prompts-dir ./examples/prompts
+        --skills-dir ./examples/skills
         --routes-dir ./examples/routers
 
   run-desktop:
@@ -238,7 +239,8 @@ tasks:
             --personas-dir ./examples/personas \
             --commands-dir ./examples/commands \
             --resources-dir ./examples/resources \
-            --prompts-dir ./examples/prompts \
+            --prompts-dir ./examples/prompts
+        --skills-dir ./examples/skills \
             --routes-dir ./examples/routers
         fi
 

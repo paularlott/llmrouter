@@ -198,6 +198,7 @@ token = "secret"
 tool_visibility = "native"    # native | discoverable
 tool_allowlist = ["search", "query"]  # Optional: only these tools are enabled
 tool_denylist = ["delete"]           # Optional: these tools are disabled
+federate = true                       # Optional: expose this server's (non-app) tools on the /mcp endpoint
 ```
 
 ### Provider Types
@@ -413,6 +414,23 @@ Tools from remote MCP servers can be filtered using `tool_allowlist` or `tool_de
 
 Note: If both are defined, `tool_allowlist` takes precedence and `tool_denylist` is ignored.
 
+### Federation and the `/mcp` Endpoint
+
+Remote MCP servers serve two different audiences, and only one of them sees a server by default:
+
+- **The web chat and scripts** always see every configured remote server, tools and MCP Apps included. Nothing to opt into; this is how the chat has always worked.
+- **The public `/mcp` endpoint** (external MCP clients) serves only the router's own tools, resources and prompts by default. To also expose a remote server's tools there, set `federate = true` on it. MCP clients that multi-home can otherwise connect to the remote server directly.
+
+A federated server's tools are exposed under their namespace prefix as usual, with one exception: **tools marked as MCP Apps** (linked to a `ui://` resource via `_meta.ui.resourceUri`) are never federated to the endpoint, whatever the flags say. An app view calls its own tools by bare, host-agnostic names, which a namespaced endpoint can't resolve; apps belong where they're rendered, and that's the chat.
+
+```toml
+[[mcp.remote_servers]]
+namespace = "github"
+url = "https://github.example.com/mcp"
+token = "secret"
+federate = true   # tools appear on /mcp as github__<tool> (apps excluded)
+```
+
 ```toml
 [[mcp.remote_servers]]
 namespace = "github"
@@ -589,7 +607,7 @@ DELETE /v1/conversations/{conversation_id}/items/{item_id}
 ### MCP
 
 ```bash
-POST /mcp    # MCP protocol — aggregates tools from all configured remote servers
+POST /mcp    # MCP protocol — the router's own tools, plus remote servers opted in with federate = true (apps excluded)
 ```
 
 ### Admin UI

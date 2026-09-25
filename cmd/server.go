@@ -79,6 +79,11 @@ func ServerFlags() []cli.Flag {
 			Usage:        "Directory containing scriptling MCP prompts (.toml+.py dynamic, or .md/.txt static)",
 			ConfigPath:   []string{"scripting.prompts_dir"},
 		},
+		&cli.StringFlag{
+			Name:       "skills-dir",
+			Usage:      "Directory containing MCP skills (.md files, one skill per file)",
+			ConfigPath: []string{"scripting.skills_dir"},
+		},
 		&cli.StringSliceFlag{
 			Name:       "plugin-dir",
 			Usage:      "Directory containing scriptling plugin executables (can be repeated)",

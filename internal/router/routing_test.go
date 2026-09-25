@@ -11,9 +11,9 @@ import (
 // mockClient satisfies ai.Client without making real HTTP calls.
 type mockClient struct{ providerName string }
 
-func (m *mockClient) Provider() string                        { return m.providerName }
-func (m *mockClient) SupportsCapability(string) bool          { return false }
-func (m *mockClient) Close() error                            { return nil }
+func (m *mockClient) Provider() string               { return m.providerName }
+func (m *mockClient) SupportsCapability(string) bool { return false }
+func (m *mockClient) Close() error                   { return nil }
 func (m *mockClient) GetModels(context.Context) (*ai.ModelsResponse, error) {
 	return &ai.ModelsResponse{}, nil
 }
@@ -86,8 +86,9 @@ func newSmartRouterFromSource(src, defaultModel string, r *Router, logger Logger
 }
 
 // newSmartTestRouter builds a Router + SmartRouter wired together with two providers:
-//   p1 → model-a (tags: cheap)
-//   p2 → model-b (tags: capable)
+//
+//	p1 → model-a (tags: cheap)
+//	p2 → model-b (tags: capable)
 func newSmartTestRouter(t *testing.T, script string) (*Router, *SmartRouter) {
 	t.Helper()
 	r := &Router{

@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -192,14 +193,14 @@ required = false
 	}
 
 	mainServer := mcp_lib.NewServer("test", "1.0")
-	manager, err := NewScriptlingToolManager(config, mainServer, &testLogger{})
+	manager, err := NewScriptlingToolManager(config, &testLogger{}, mainServer)
 	if err != nil {
 		t.Fatalf("NewScriptlingToolManager failed: %v", err)
 	}
 	defer manager.Shutdown()
 
 	// Verify tools are registered on the main server
-	tools := mainServer.ListTools()
+	tools := mainServer.ListToolsWithContext(context.Background())
 	if len(tools) == 0 {
 		t.Fatal("expected at least one tool to be registered on main server")
 	}
@@ -209,7 +210,7 @@ func TestScriptlingToolManager_NoToolsDir(t *testing.T) {
 	config := types.ScriptingConfig{}
 
 	mainServer := mcp_lib.NewServer("test", "1.0")
-	manager, err := NewScriptlingToolManager(config, mainServer, &testLogger{})
+	manager, err := NewScriptlingToolManager(config, &testLogger{}, mainServer)
 	if err != nil {
 		t.Fatalf("NewScriptlingToolManager failed: %v", err)
 	}
@@ -285,7 +286,7 @@ required = false
 	}
 
 	mainServer := mcp_lib.NewServer("test", "1.0")
-	manager, err := NewScriptlingToolManager(config, mainServer, &testLogger{})
+	manager, err := NewScriptlingToolManager(config, &testLogger{}, mainServer)
 	if err != nil {
 		t.Fatalf("NewScriptlingToolManager failed: %v", err)
 	}
@@ -302,5 +303,45 @@ required = false
 		// Success
 	case <-time.After(2 * time.Second):
 		t.Fatal("Shutdown timed out")
+	}
+}
+
+// A skills directory registers one skill per .md file on every server the
+// manager serves, and the extension capability is declared.
+// A skills directory registers one skill per subdirectory with a SKILL.md
+// (Agent Skills format), files becoming readable resources, on every server
+// the manager serves.
+func TestScriptlingSkillsServed(t *testing.T) {
+	dir := t.TempDir()
+	skillDir := filepath.Join(dir, "code-review")
+	os.MkdirAll(filepath.Join(skillDir, "references"), 0o755)
+	writeFile(t, filepath.Join(skillDir, "SKILL.md"), []byte("---\nname: code-review\ndescription: Review changesets\n---\n\nRead the diff twice."))
+	writeFile(t, filepath.Join(skillDir, "references", "checklist.md"), []byte("Checklist."))
+
+	mainServer := mcp_lib.NewServer("test", "1.0")
+	endpointServer := mcp_lib.NewServer("test-endpoint", "1.0")
+	manager, err := NewScriptlingToolManager(types.ScriptingConfig{
+		SkillsDir: dir,
+	}, &testLogger{}, mainServer, endpointServer)
+	if err != nil {
+		t.Fatalf("manager: %v", err)
+	}
+	defer manager.Shutdown()
+
+	for _, s := range []*mcp_lib.Server{mainServer, endpointServer} {
+		skills := s.ListSkills()
+		if len(skills) != 1 || skills[0].URI != "skill://code-review/SKILL.md" {
+			t.Fatalf("skills = %+v", skills)
+		}
+		if skills[0].Frontmatter["description"] != "Review changesets" {
+			t.Fatalf("frontmatter = %+v", skills[0].Frontmatter)
+		}
+		if len(skills[0].Resources) != 2 {
+			t.Fatalf("resources = %+v", skills[0].Resources)
+		}
+		res, err := s.ReadResource(context.Background(), "skill://code-review/references/checklist.md")
+		if err != nil || !strings.Contains(res.Contents[0].Text, "Checklist.") {
+			t.Fatalf("skill file read = (%+v, %v)", res, err)
+		}
 	}
 }

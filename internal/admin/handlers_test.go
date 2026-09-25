@@ -153,6 +153,7 @@ func TestAdminNewWiresResourceAndPromptCallbacks(t *testing.T) {
 			gotResources = append(gotResources, ResourceInfo{URI: namespace})
 			return nil, nil
 		},
+		func(namespace, uri string) (*ResourceReadResult, error) { return nil, nil },
 		func(namespace string) ([]PromptInfo, error) {
 			gotPrompts = append(gotPrompts, PromptInfo{Name: namespace})
 			return nil, nil
@@ -182,7 +183,7 @@ func TestHandleLoginAcceptsPassword(t *testing.T) {
 	cfg := &types.Config{}
 	cfg.Server.AdminPassword = "secret"
 
-	a := New(cfg, nil, nil, nil, nil, nil, nil, nil, nil, false, nil, nil)
+	a := New(cfg, nil, nil, nil, nil, nil, nil, nil, nil, nil, false, nil, nil)
 	if a == nil {
 		t.Fatal("New returned nil")
 	}
@@ -214,7 +215,7 @@ func TestHandleLoginAcceptsPassword(t *testing.T) {
 func TestHandleLoginRejectsWrongPassword(t *testing.T) {
 	cfg := &types.Config{}
 	cfg.Server.AdminPassword = "admin"
-	a := New(cfg, nil, nil, nil, nil, nil, nil, nil, nil, false, nil, nil)
+	a := New(cfg, nil, nil, nil, nil, nil, nil, nil, nil, nil, false, nil, nil)
 
 	req := httptest.NewRequest(http.MethodPost, "/admin/api/login",
 		strings.NewReader(`{"password":"nope"}`))

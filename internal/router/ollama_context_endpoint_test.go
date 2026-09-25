@@ -27,11 +27,11 @@ func (c *contextDiscoveryClient) GetModels(ctx context.Context) (*openai.ModelsR
 
 func newContextTestRouter() *Router {
 	r := &Router{
-		Providers:   map[string]*Provider{},
-		ModelMap:    map[string][]string{},
-		ModelTags:   map[string][]string{},
+		Providers:    map[string]*Provider{},
+		ModelMap:     map[string][]string{},
+		ModelTags:    map[string][]string{},
 		ModelContext: map[string]int{},
-		logger:      &testLogger{},
+		logger:       &testLogger{},
 	}
 	return r
 }
@@ -55,8 +55,8 @@ func TestOllamaShow_ServesContextLength(t *testing.T) {
 		t.Fatalf("want 200, got %d body %s", rec.Code, rec.Body.String())
 	}
 	var got struct {
-		ModelInfo map[string]any `json:"model_info"`
-		Parameters string        `json:"parameters"`
+		ModelInfo  map[string]any `json:"model_info"`
+		Parameters string         `json:"parameters"`
 	}
 	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
 		t.Fatalf("decode: %v", err)

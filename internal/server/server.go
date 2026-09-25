@@ -66,6 +66,7 @@ func buildServer(cmd *cli.Command, desktopMode bool) (*router.Router, *types.Con
 			ToolsDir:     cmd.GetString("tools-dir"),
 			ResourcesDir: cmd.GetString("resources-dir"),
 			PromptsDir:   cmd.GetString("prompts-dir"),
+			SkillsDir:    cmd.GetString("skills-dir"),
 			PluginDirs:   cmd.GetStringSlice("plugin-dir"),
 			LibPaths:     cmd.GetStringSlice("libpath"),
 			ExecScript:   cmd.GetBool("mcp-exec-script"),

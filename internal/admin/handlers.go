@@ -1,6 +1,8 @@
 package admin
 
 import (
+	"github.com/paularlott/mcp"
+
 	"crypto/subtle"
 	"encoding/json"
 	"net/http"
@@ -50,6 +52,7 @@ func (a *Admin) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("PUT /admin/api/mcp-servers/{namespace}/tools/toggle", a.requireAuth(a.HandleToggleMCPServerTool))
 	mux.HandleFunc("POST /admin/api/mcp-servers/{namespace}/tools/call", a.requireAuth(a.HandleCallMCPServerTool))
 	mux.HandleFunc("GET /admin/api/mcp-servers/{namespace}/resources", a.requireAuth(a.HandleGetMCPServerResources))
+	mux.HandleFunc("GET /admin/api/mcp-servers/{namespace}/resources/read", a.requireAuth(a.HandleReadMCPServerResource))
 	mux.HandleFunc("GET /admin/api/mcp-servers/{namespace}/prompts", a.requireAuth(a.HandleGetMCPServerPrompts))
 	mux.HandleFunc("POST /admin/api/mcp-servers/refresh-cache", a.requireAuth(a.HandleRefreshMCPCache))
 	mux.HandleFunc("GET /admin/api/mcp-storage-status", a.requireAuth(a.HandleMCPStorageStatus))
@@ -297,6 +300,7 @@ func (a *Admin) HandleGetMCPServer(w http.ResponseWriter, r *http.Request) {
 				ToolDenylist:   server.ToolDenylist,
 				StaticServer:   false,
 				RemoteSearch:   server.RemoteSearch,
+				Federate:       server.Federate,
 			})
 			return
 		}
@@ -339,6 +343,7 @@ func (a *Admin) HandleCreateMCPServer(w http.ResponseWriter, r *http.Request) {
 		ToolDenylist      []string `json:"tool_denylist"`
 		RemoteSearch      bool     `json:"remote_search"`
 		Notifications     bool     `json:"notifications"`
+		Federate          bool     `json:"federate"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -348,6 +353,10 @@ func (a *Admin) HandleCreateMCPServer(w http.ResponseWriter, r *http.Request) {
 
 	if req.Namespace == "" {
 		writeError(w, http.StatusBadRequest, "namespace is required")
+		return
+	}
+	if err := mcp.ValidateNamespace(req.Namespace); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -377,6 +386,7 @@ func (a *Admin) HandleCreateMCPServer(w http.ResponseWriter, r *http.Request) {
 		ToolDenylist:      req.ToolDenylist,
 		RemoteSearch:      req.RemoteSearch,
 		Notifications:     req.Notifications,
+		Federate:          req.Federate,
 	}
 
 	if err := a.mcpStorage.Create(r.Context(), server); err != nil {
@@ -401,6 +411,7 @@ func (a *Admin) HandleCreateMCPServer(w http.ResponseWriter, r *http.Request) {
 		ToolDenylist:   server.ToolDenylist,
 		StaticServer:   false,
 		RemoteSearch:   server.RemoteSearch,
+		Federate:       server.Federate,
 	})
 }
 
@@ -440,6 +451,7 @@ func (a *Admin) HandleUpdateMCPServer(w http.ResponseWriter, r *http.Request) {
 		ToolDenylist      []string `json:"tool_denylist"`
 		RemoteSearch      bool     `json:"remote_search"`
 		Notifications     bool     `json:"notifications"`
+		Federate          bool     `json:"federate"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -479,6 +491,7 @@ func (a *Admin) HandleUpdateMCPServer(w http.ResponseWriter, r *http.Request) {
 	server.Args = req.Args
 	server.Env = req.Env
 	server.Notifications = req.Notifications
+	server.Federate = req.Federate
 
 	if err := a.mcpStorage.Update(r.Context(), server); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to update server")
@@ -502,6 +515,7 @@ func (a *Admin) HandleUpdateMCPServer(w http.ResponseWriter, r *http.Request) {
 		ToolDenylist:   server.ToolDenylist,
 		StaticServer:   false,
 		RemoteSearch:   server.RemoteSearch,
+		Federate:       server.Federate,
 	})
 }
 
@@ -781,6 +795,7 @@ func (a *Admin) HandleToggleMCPServer(w http.ResponseWriter, r *http.Request) {
 		ToolDenylist:   server.ToolDenylist,
 		StaticServer:   false,
 		RemoteSearch:   server.RemoteSearch,
+		Federate:       server.Federate,
 	})
 }
 
@@ -793,4 +808,25 @@ func (a *Admin) HandleRefreshMCPCache(w http.ResponseWriter, r *http.Request) {
 
 	a.onMCPCacheRefresh()
 	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
+}
+
+// HandleReadMCPServerResource reads one resource's content from a remote
+// MCP server for the admin UI's resource viewer.
+func (a *Admin) HandleReadMCPServerResource(w http.ResponseWriter, r *http.Request) {
+	namespace := r.PathValue("namespace")
+	uri := r.URL.Query().Get("uri")
+	if namespace == "" || uri == "" {
+		writeError(w, http.StatusBadRequest, "namespace and uri required")
+		return
+	}
+	if a.getMCPResourceRead == nil {
+		writeError(w, http.StatusNotImplemented, "resource reads unavailable")
+		return
+	}
+	result, err := a.getMCPResourceRead(namespace, uri)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
 }

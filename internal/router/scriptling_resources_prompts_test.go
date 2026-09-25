@@ -88,7 +88,7 @@ func TestScriptlingManagerResourcesAndPrompts(t *testing.T) {
 		ToolsDir:     toolsDir,
 		ResourcesDir: resDir,
 		PromptsDir:   promptsDir,
-	}, mainServer, &testLogger{})
+	}, &testLogger{}, mainServer)
 	if err != nil {
 		t.Fatalf("NewScriptlingToolManager: %v", err)
 	}
@@ -180,7 +180,7 @@ func TestScriptlingManagerResourcesOnlyDir(t *testing.T) {
 	mainServer := mcplib.NewServer("t", "1.0")
 	manager, err := NewScriptlingToolManager(types.ScriptingConfig{
 		ResourcesDir: resDir,
-	}, mainServer, &testLogger{})
+	}, &testLogger{}, mainServer)
 	if err != nil {
 		t.Fatalf("NewScriptlingToolManager: %v", err)
 	}
@@ -207,7 +207,7 @@ func TestScriptlingManagerPromptsOnlyDir(t *testing.T) {
 	mainServer := mcplib.NewServer("t", "1.0")
 	manager, err := NewScriptlingToolManager(types.ScriptingConfig{
 		PromptsDir: promptsDir,
-	}, mainServer, &testLogger{})
+	}, &testLogger{}, mainServer)
 	if err != nil {
 		t.Fatalf("NewScriptlingToolManager: %v", err)
 	}
@@ -251,7 +251,7 @@ func TestScriptlingManagerPromptsReload(t *testing.T) {
 	mainServer := mcplib.NewServer("t", "1.0")
 	manager, err := NewScriptlingToolManager(types.ScriptingConfig{
 		PromptsDir: promptsDir,
-	}, mainServer, &testLogger{})
+	}, &testLogger{}, mainServer)
 	if err != nil {
 		t.Fatalf("NewScriptlingToolManager: %v", err)
 	}
@@ -307,7 +307,7 @@ func TestScriptlingManagerResourcesReload(t *testing.T) {
 	mainServer := mcplib.NewServer("t", "1.0")
 	manager, err := NewScriptlingToolManager(types.ScriptingConfig{
 		ResourcesDir: resDir,
-	}, mainServer, &testLogger{})
+	}, &testLogger{}, mainServer)
 	if err != nil {
 		t.Fatalf("NewScriptlingToolManager: %v", err)
 	}
@@ -358,7 +358,7 @@ func TestScriptlingManagerResourcesReload(t *testing.T) {
 // cleanly with no source folders configured.
 func TestScriptlingManagerNoDirs(t *testing.T) {
 	mainServer := mcplib.NewServer("t", "1.0")
-	manager, err := NewScriptlingToolManager(types.ScriptingConfig{}, mainServer, &testLogger{})
+	manager, err := NewScriptlingToolManager(types.ScriptingConfig{}, &testLogger{}, mainServer)
 	if err != nil {
 		t.Fatalf("NewScriptlingToolManager: %v", err)
 	}

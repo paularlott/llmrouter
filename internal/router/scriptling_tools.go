@@ -10,8 +10,9 @@ import (
 	"time"
 
 	"github.com/fsnotify/fsnotify"
-	scriptlinglog "github.com/paularlott/logger"
 	"github.com/paularlott/llmrouter/internal/types"
+	"github.com/paularlott/lmchatkit"
+	scriptlinglog "github.com/paularlott/logger"
 	mcp_lib "github.com/paularlott/mcp"
 	"github.com/paularlott/mcp/toolmetadata"
 	"github.com/paularlott/scriptling"
@@ -20,7 +21,6 @@ import (
 	scriptlingplugin "github.com/paularlott/scriptling/plugin"
 	mcpcli "github.com/paularlott/scriptling/scriptling-cli/mcp"
 	"github.com/paularlott/scriptling/scriptling-cli/setup"
-	"github.com/paularlott/lmchatkit"
 )
 
 // scriptlingToolManager owns scriptling-served MCP content — tools, resources
@@ -39,6 +39,7 @@ type scriptlingToolManager struct {
 	toolsDirAbs      string
 	resourcesDirAbs  string
 	promptsDirAbs    string
+	skillsDirAbs     string
 	watcher          *fsnotify.Watcher
 	plugins          *scriptlingplugin.Manager
 	debounceDuration time.Duration
@@ -48,7 +49,7 @@ type scriptlingToolManager struct {
 	promptTimer      *time.Timer            // single debounce timer for full prompts reload
 	done             chan struct{}
 	wg               sync.WaitGroup
-	mainServer       *mcp_lib.Server
+	servers          []*mcp_lib.Server // every server that should serve the scriptling content: the chat-side server and the public /mcp endpoint server
 	handlerCfg       mcpcli.HandlerConfig
 
 	// Tracked keys so reload-in-place can unregister what it previously added.
@@ -77,12 +78,14 @@ func (stm *scriptlingToolManager) broadcast(eventType string) {
 }
 
 // NewScriptlingToolManager builds a manager, registers every folder-sourced
-// tool / resource / prompt on mainServer, and starts watching for changes.
-func NewScriptlingToolManager(config types.ScriptingConfig, mainServer *mcp_lib.Server, logger Logger) (*scriptlingToolManager, error) {
+// tool / resource / prompt on every given server, and starts watching for
+// changes. Servers typically are the chat-side MCP server and the public
+// /mcp endpoint server — llmrouter's own content is native on both.
+func NewScriptlingToolManager(config types.ScriptingConfig, logger Logger, servers ...*mcp_lib.Server) (*scriptlingToolManager, error) {
 	stm := &scriptlingToolManager{
 		config:           config,
 		logger:           logger,
-		mainServer:       mainServer,
+		servers:          servers,
 		debounceDuration: 500 * time.Millisecond,
 		done:             make(chan struct{}),
 		toolTimers:       make(map[string]*time.Timer),
@@ -96,6 +99,7 @@ func NewScriptlingToolManager(config types.ScriptingConfig, mainServer *mcp_lib.
 		{config.ToolsDir, &stm.toolsDirAbs},
 		{config.ResourcesDir, &stm.resourcesDirAbs},
 		{config.PromptsDir, &stm.promptsDirAbs},
+		{config.SkillsDir, &stm.skillsDirAbs},
 	} {
 		if pair.src != "" {
 			abs, err := filepath.Abs(pair.src)
@@ -136,7 +140,15 @@ func NewScriptlingToolManager(config types.ScriptingConfig, mainServer *mcp_lib.
 	}
 
 	if config.ExecScript {
-		stm.registerExecTool(stm.mainServer)
+		for _, s := range stm.servers {
+			stm.registerExecTool(s)
+		}
+	}
+
+	if stm.skillsDirAbs != "" {
+		if err := stm.registerSkills(); err != nil {
+			return nil, err
+		}
 	}
 
 	if stm.toolsDirAbs != "" || stm.resourcesDirAbs != "" || stm.promptsDirAbs != "" {
@@ -418,7 +430,13 @@ func (stm *scriptlingToolManager) handleToolDelete(toolName string) {
 		return
 	}
 
-	if stm.mainServer.UnregisterTool(toolName) {
+	unregistered := false
+	for _, s := range stm.servers {
+		if s.UnregisterTool(toolName) {
+			unregistered = true
+		}
+	}
+	if unregistered {
 		stm.logger.Info("Unregistered scriptling MCP tool", "name", toolName)
 	}
 }
@@ -461,7 +479,9 @@ func (stm *scriptlingToolManager) registerTool(toolName string, meta *toolmetada
 	if meta.Discoverable {
 		mode = "discoverable"
 	}
-	stm.mainServer.RegisterTool(tool, handler)
+	for _, s := range stm.servers {
+		s.RegisterTool(tool, handler)
+	}
 	stm.logger.Info("Registered scriptling MCP tool", "name", toolName, "mode", mode)
 }
 
@@ -484,10 +504,14 @@ func (stm *scriptlingToolManager) reloadResources() {
 
 	// Unregister everything we previously registered.
 	for _, uri := range stm.resourceStaticURIs {
-		stm.mainServer.UnregisterResource(uri)
+		for _, s := range stm.servers {
+			s.UnregisterResource(uri)
+		}
 	}
 	for _, uriTmpl := range stm.resourceTemplates {
-		stm.mainServer.UnregisterResourceTemplate(uriTmpl)
+		for _, s := range stm.servers {
+			s.UnregisterResourceTemplate(uriTmpl)
+		}
 	}
 	// Clear tracking BEFORE re-registering. registerResources may
 	// partially succeed (register some, fail on others) — we always
@@ -504,8 +528,12 @@ func (stm *scriptlingToolManager) reloadResources() {
 	}
 	stm.logger.Info("Resources reloaded",
 		"new_static", len(staticURIs), "new_templates", len(templates))
-	stm.mainServer.NotifyResourcesChanged()
-	if stm.eventBroadcaster != nil { stm.eventBroadcaster.Broadcast(lmchatkit.ServerEvent{Type: "resources_changed"}) }
+	for _, s := range stm.servers {
+		s.NotifyResourcesChanged()
+	}
+	if stm.eventBroadcaster != nil {
+		stm.eventBroadcaster.Broadcast(lmchatkit.ServerEvent{Type: "resources_changed"})
+	}
 }
 
 // registerResources scans the resources folder and registers every static
@@ -522,18 +550,22 @@ func (stm *scriptlingToolManager) registerResources() (staticURIs, templates []s
 			if err != nil {
 				return nil, nil, fmt.Errorf("failed to load resource template %s: %w", e.URI, err)
 			}
-			stm.mainServer.RegisterResourceTemplate(
-				mcp_lib.NewResourceTemplate(e.URI, e.Name, e.Description, e.MimeType),
-				handler,
-			)
+			for _, s := range stm.servers {
+				s.RegisterResourceTemplate(
+					mcp_lib.NewResourceTemplate(e.URI, e.Name, e.Description, e.MimeType),
+					handler,
+				)
+			}
 			templates = append(templates, e.URI)
 			stm.logger.Info("Registered scriptling MCP resource template", "uri", e.URI)
 		} else {
 			handler := mcpcli.BuildStaticResourceHandler(mcpcli.FileReader(e.FilePath), e.URI, e.MimeType)
-			stm.mainServer.RegisterResource(
-				mcp_lib.NewResource(e.URI, e.Name, e.Description, e.MimeType),
-				handler,
-			)
+			for _, s := range stm.servers {
+				s.RegisterResource(
+					mcp_lib.NewResource(e.URI, e.Name, e.Description, e.MimeType),
+					handler,
+				)
+			}
 			staticURIs = append(staticURIs, e.URI)
 			stm.logger.Info("Registered scriptling MCP resource", "uri", e.URI)
 		}
@@ -554,7 +586,9 @@ func (stm *scriptlingToolManager) schedulePromptsReload() {
 
 func (stm *scriptlingToolManager) reloadPrompts() {
 	for _, name := range stm.promptNames {
-		stm.mainServer.UnregisterPrompt(name)
+		for _, s := range stm.servers {
+			s.UnregisterPrompt(name)
+		}
 	}
 	names, err := stm.registerPrompts()
 	if err != nil {
@@ -562,8 +596,12 @@ func (stm *scriptlingToolManager) reloadPrompts() {
 	} else {
 		stm.promptNames = names
 	}
-	stm.mainServer.NotifyPromptsChanged()
-	if stm.eventBroadcaster != nil { stm.eventBroadcaster.Broadcast(lmchatkit.ServerEvent{Type: "prompts_changed"}) }
+	for _, s := range stm.servers {
+		s.NotifyPromptsChanged()
+	}
+	if stm.eventBroadcaster != nil {
+		stm.eventBroadcaster.Broadcast(lmchatkit.ServerEvent{Type: "prompts_changed"})
+	}
 }
 
 // registerPrompts scans the prompts folder and registers every prompt on the
@@ -590,7 +628,9 @@ func (stm *scriptlingToolManager) registerPrompts() ([]string, error) {
 		for _, arg := range e.Arguments {
 			builder.Argument(arg.Name, arg.Description, arg.Required)
 		}
-		stm.mainServer.RegisterPrompt(builder, handler)
+		for _, s := range stm.servers {
+			s.RegisterPrompt(builder, handler)
+		}
 		names = append(names, e.Name)
 		mode := "static"
 		if !e.Static {
@@ -628,4 +668,88 @@ func (stm *scriptlingToolManager) Shutdown() {
 func fileExists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil
+}
+
+// registerSkills registers one MCP skill per subdirectory of the skills
+// directory that contains a SKILL.md (the Agent Skills format): every file
+// in the directory becomes a skill resource, and the SKILL.md frontmatter's
+// description seeds the skill's frontmatter. Registered on every server
+// the manager serves.
+func (stm *scriptlingToolManager) registerSkills() error {
+	entries, err := os.ReadDir(stm.skillsDirAbs)
+	if err != nil {
+		return fmt.Errorf("failed to read skills directory: %w", err)
+	}
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		skillDir := filepath.Join(stm.skillsDirAbs, e.Name())
+		skillMD, err := os.ReadFile(filepath.Join(skillDir, "SKILL.md"))
+		if err != nil {
+			// Not a skill directory; skip rather than fail the server.
+			continue
+		}
+		// The listing frontmatter is parsed verbatim from the SKILL.md by
+		// the library; Description is only the fallback for a file without
+		// a frontmatter block.
+		builder := mcp_lib.NewSkill(e.Name()).Description(frontmatterValue(string(skillMD), "description"))
+		err = filepath.WalkDir(skillDir, func(p string, d os.DirEntry, err error) error {
+			if err != nil || d.IsDir() {
+				return err
+			}
+			content, err := os.ReadFile(p)
+			if err != nil {
+				return err
+			}
+			rel, err := filepath.Rel(skillDir, p)
+			if err != nil {
+				return err
+			}
+			builder.File(filepath.ToSlash(rel), content)
+			return nil
+		})
+		if err != nil {
+			return fmt.Errorf("failed to read skill %s: %w", e.Name(), err)
+		}
+		for _, s := range stm.servers {
+			s.RegisterSkill(builder)
+		}
+		stm.logger.Info("Registered MCP skill", "name", e.Name())
+	}
+	return nil
+}
+
+// frontmatterValue pulls one top-level value out of a SKILL.md's YAML
+// frontmatter block ("---\nkey: value\n---"), without a YAML dependency.
+func frontmatterValue(doc, key string) string {
+	lines := strings.Split(doc, "\n")
+	if len(lines) == 0 || strings.TrimSpace(lines[0]) != "---" {
+		return ""
+	}
+	for _, line := range lines[1:] {
+		if strings.TrimSpace(line) == "---" {
+			break
+		}
+		if strings.HasPrefix(line, key+":") {
+			return strings.TrimSpace(strings.TrimPrefix(line, key+":"))
+		}
+	}
+	return ""
+}
+
+// firstContentLine returns the first non-empty, non-heading line of a
+// skill body, truncated for use as a one-line description.
+func firstContentLine(s string) string {
+	for _, line := range strings.Split(s, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		if len(line) > 120 {
+			line = line[:120]
+		}
+		return line
+	}
+	return ""
 }

@@ -66,8 +66,9 @@ type MCPRemoteServerConfig struct {
 	ToolAllowlist     []string `json:"tool_allowlist,omitempty" toml:"tool_allowlist"`   // If set, only these tools are enabled
 	ToolDenylist      []string `json:"tool_denylist,omitempty" toml:"tool_denylist"`     // If set, these tools are disabled
 	StaticServer      bool     `json:"static_server,omitempty" toml:"static_server"`     // If true, server is defined in config (read-only in UI)
-	RemoteSearch      bool     `json:"remote_search,omitempty" toml:"remote_search"`     // Delegate tool_search to this remote server
-	Notifications     bool     `json:"notifications,omitempty" toml:"notifications"`     // Accept listChanged notifications from this server and propagate them
+	RemoteSearch      bool     `json:"remote_search,omitempty" toml:"remote_search"`   // Delegate tool_search to this remote server
+	Notifications     bool     `json:"notifications,omitempty" toml:"notifications"`   // Accept listChanged notifications from this server and propagate them
+	Federate          bool     `json:"federate,omitempty" toml:"federate"`             // Expose this server's (non-app) tools through the public /mcp endpoint; the chat always sees every remote server
 }
 
 type StorageConfig struct {
@@ -99,6 +100,7 @@ type ScriptingConfig struct {
 	ToolsDir     string   `json:"tools_dir,omitempty"`      // Directory containing .toml/.py tool pairs
 	ResourcesDir string   `json:"resources_dir,omitempty"`  // Directory containing static files and resource templates (first segment = URI scheme)
 	PromptsDir   string   `json:"prompts_dir,omitempty"`    // Directory containing .toml+.py dynamic prompts or static .md/.txt prompts
+	SkillsDir    string   `json:"skills_dir,omitempty"`      // Directory containing MCP skills (.md files, one skill per file)
 	PluginDirs   []string `json:"plugin_dirs,omitempty"`    // Directories containing plugin executables
 	LibPaths     []string `json:"lib_paths,omitempty"`      // Additional directories to search for libraries
 	ExecScript   bool     `json:"exec_script,omitempty"`    // Register the built-in execute_script MCP tool

@@ -19,11 +19,11 @@ import (
 // exactly the wire format that provider's mcp/ai client sends, so reaching it
 // at all proves the inbound Ollama request was translated to that native shape.
 type upstream struct {
-	name       string // provider name
-	gotPath    string
-	gotBody    map[string]any
-	reply      []byte
-	replyCT    string
+	name    string // provider name
+	gotPath string
+	gotBody map[string]any
+	reply   []byte
+	replyCT string
 }
 
 func newUpstream(t *testing.T, name string, reply []byte) (*upstream, *httptest.Server) {
@@ -53,16 +53,16 @@ func buildCrossFormatRouter(t *testing.T) (*Router, map[string]*upstream) {
 	openaiReply, _ := json.Marshal(map[string]any{
 		"id": "chatcmpl-x", "object": "chat.completion", "model": "m-openai",
 		"choices": []map[string]any{{"index": 0, "message": map[string]any{"role": "assistant", "content": "reply-openai"}, "finish_reason": "stop"}},
-		"usage": map[string]any{"prompt_tokens": 1, "completion_tokens": 2, "total_tokens": 3},
+		"usage":   map[string]any{"prompt_tokens": 1, "completion_tokens": 2, "total_tokens": 3},
 	})
 	ollamaReply, _ := json.Marshal(map[string]any{
 		"model": "m-ollama", "created_at": "2024-01-01T00:00:00Z",
-		"message": map[string]any{"role": "assistant", "content": "reply-ollama"},
+		"message":     map[string]any{"role": "assistant", "content": "reply-ollama"},
 		"done_reason": "stop", "done": true, "prompt_eval_count": 1, "eval_count": 2,
 	})
 	claudeReply, _ := json.Marshal(map[string]any{
 		"id": "msg_x", "type": "message", "role": "assistant", "model": "m-claude",
-		"content": []map[string]any{{"type": "text", "text": "reply-claude"}},
+		"content":     []map[string]any{{"type": "text", "text": "reply-claude"}},
 		"stop_reason": "end_turn", "usage": map[string]any{"input_tokens": 1, "output_tokens": 2},
 	})
 	// Gemini delegates chat to its OpenAI-compat /openai/ endpoint, so its
@@ -71,7 +71,7 @@ func buildCrossFormatRouter(t *testing.T) (*Router, map[string]*upstream) {
 	geminiReply, _ := json.Marshal(map[string]any{
 		"id": "chatcmpl-g", "object": "chat.completion", "model": "m-gemini",
 		"choices": []map[string]any{{"index": 0, "message": map[string]any{"role": "assistant", "content": "reply-gemini"}, "finish_reason": "stop"}},
-		"usage": map[string]any{"prompt_tokens": 1, "completion_tokens": 2, "total_tokens": 3},
+		"usage":   map[string]any{"prompt_tokens": 1, "completion_tokens": 2, "total_tokens": 3},
 	})
 
 	upOllama, ollamaSrv := newUpstream(t, "ollama", ollamaReply)
@@ -97,11 +97,11 @@ func buildCrossFormatRouter(t *testing.T) (*Router, map[string]*upstream) {
 	}
 
 	r := &Router{
-		Providers:   map[string]*Provider{},
-		ModelMap:    map[string][]string{},
-		ModelTags:   map[string][]string{},
+		Providers:    map[string]*Provider{},
+		ModelMap:     map[string][]string{},
+		ModelTags:    map[string][]string{},
 		ModelContext: map[string]int{},
-		logger:      &testLogger{},
+		logger:       &testLogger{},
 	}
 
 	add := func(name, providerType, model string, c ai.Client) {

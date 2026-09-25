@@ -255,7 +255,7 @@ func NewRouter(config *types.Config, logger Logger) (*Router, error) {
 	// Load stored providers alongside config-file providers
 	router.loadStoredProviders(config, logger)
 
-	router.admin = admin.New(config, router.getStats, router.getProviders, router.getMCPServers, router.getMCPTools, router.getMCPResources, router.getMCPPrompts, router.getModels, mcpStorage, mcpStorageWritable, router.reloadMCPServers, router.reloadMCPServers)
+	router.admin = admin.New(config, router.getStats, router.getProviders, router.getMCPServers, router.getMCPTools, router.getMCPResources, router.readMCPResource, router.getMCPPrompts, router.getModels, mcpStorage, mcpStorageWritable, router.reloadMCPServers, router.reloadMCPServers)
 
 	// Configure and register admin UI. admin.New() returns nil when the UI
 	// should be completely disabled: no password AND bound to a non-loopback
@@ -1713,6 +1713,7 @@ func (r *Router) getMCPServers() []admin.MCPServerInfo {
 			ToolDenylist:   s.ToolDenylist,
 			StaticServer:   true,
 			RemoteSearch:   s.RemoteSearch,
+			Federate:       s.Federate,
 		})
 	}
 
@@ -1734,6 +1735,7 @@ func (r *Router) getMCPServers() []admin.MCPServerInfo {
 					ToolDenylist:   s.ToolDenylist,
 					StaticServer:   false,
 					RemoteSearch:   s.RemoteSearch,
+					Federate:       s.Federate,
 				})
 			}
 		}
@@ -1782,6 +1784,15 @@ func (r *Router) getMCPResources(namespace string) ([]admin.ResourceInfo, error)
 		return nil, fmt.Errorf("MCP server not available")
 	}
 	return r.mcpServer.GetResourcesForAdmin(namespace)
+}
+
+// readMCPResource reads one resource from a remote MCP server for the
+// admin UI's viewer popup.
+func (r *Router) readMCPResource(namespace, uri string) (*admin.ResourceReadResult, error) {
+	if r.mcpServer == nil {
+		return nil, fmt.Errorf("MCP server not available")
+	}
+	return r.mcpServer.ReadResourceForAdmin(namespace, uri)
 }
 
 // callMCPTool executes a tool on a remote MCP server for the admin UI. Both

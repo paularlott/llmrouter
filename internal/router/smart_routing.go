@@ -12,11 +12,11 @@ import (
 
 	"github.com/BurntSushi/toml"
 	"github.com/fsnotify/fsnotify"
+	"github.com/paularlott/llmrouter/internal/types"
 	scriptling "github.com/paularlott/scriptling"
 	"github.com/paularlott/scriptling/extlibs/net/resolve"
 	"github.com/paularlott/scriptling/object"
 	scriptlingsetup "github.com/paularlott/scriptling/scriptling-cli/setup"
-	"github.com/paularlott/llmrouter/internal/types"
 )
 
 const (
@@ -433,7 +433,7 @@ func (m *SmartRouterManager) reconcileCollisions(modelMap map[string][]string) {
 type desiredRouter struct {
 	defaultModel string
 	vars         map[string]string
-	contextSize  int // advertised context window for the virtual model (0 = use fallback)
+	contextSize  int    // advertised context window for the virtual model (0 = use fallback)
 	scriptPath   string // empty when no <name>.py exists (alias-only router)
 	sig          string
 }

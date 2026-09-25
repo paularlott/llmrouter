@@ -32,12 +32,13 @@ type Admin struct {
 	refreshModels func() // Called to force a rescan of models from all providers
 
 	// MCP callbacks (for read-only display of config-based servers)
-	getMCPServers   func() []MCPServerInfo
-	getMCPTools     func(namespace string) ([]ToolInfo, error)
-	getMCPResources func(namespace string) ([]ResourceInfo, error)
-	getMCPPrompts   func(namespace string) ([]PromptInfo, error)
-	callMCPTool     func(namespace, toolName string, args map[string]any) (*ToolCallResult, error)
-	getMCPProtocol  func(namespace string) (string, error)
+	getMCPServers      func() []MCPServerInfo
+	getMCPTools        func(namespace string) ([]ToolInfo, error)
+	getMCPResources    func(namespace string) ([]ResourceInfo, error)
+	getMCPResourceRead func(namespace, uri string) (*ResourceReadResult, error)
+	getMCPPrompts      func(namespace string) ([]PromptInfo, error)
+	callMCPTool        func(namespace, toolName string, args map[string]any) (*ToolCallResult, error)
+	getMCPProtocol     func(namespace string) (string, error)
 
 	// MCP storage (for dynamic server management)
 	mcpStorage         storage.MCPStorage
@@ -94,6 +95,7 @@ type MCPServerInfo struct {
 	ToolDenylist   []string `json:"tool_denylist,omitempty"`
 	StaticServer   bool     `json:"static_server"`
 	RemoteSearch   bool     `json:"remote_search"`
+	Federate       bool     `json:"federate"`
 }
 
 // ModelInfo represents a model and its providers for the UI
@@ -146,12 +148,23 @@ type ToolCallContent struct {
 // server. Templates carry a URITemplate with {var} placeholders; static
 // resources carry a concrete URI. Both are shown read-only in the UI — the
 // router has no per-resource enable/disable toggle the way it does for tools.
+// ResourceReadResult is one resource's content, as served to the admin UI
+// viewer popup.
+type ResourceReadResult struct {
+	URI      string `json:"uri"`
+	MimeType string `json:"mime_type,omitempty"`
+	Text     string `json:"text,omitempty"`
+}
+
 type ResourceInfo struct {
 	URI         string `json:"uri"`
 	Template    bool   `json:"template"`
 	Name        string `json:"name"`
 	Description string `json:"description"`
 	MimeType    string `json:"mime_type,omitempty"`
+	// Skill marks a resource that belongs to a skill directory (SEP-2640):
+	// its URI appears in the server's authoritative skills/list.
+	Skill bool `json:"skill,omitempty"`
 }
 
 // PromptInfo represents a prompt exposed by an MCP server. Arguments is the
@@ -189,7 +202,7 @@ type PersonaInfo struct {
 // When bound to localhost (127.0.0.1 / ::1) with no password, the admin UI
 // is enabled with open access — safe for desktop mode and local-only dev.
 // Set --admin-password to require login.
-func New(config *types.Config, getStats func() *Stats, getProviders func() []ProviderInfo, getMCPServers func() []MCPServerInfo, getMCPTools func(string) ([]ToolInfo, error), getMCPResources func(string) ([]ResourceInfo, error), getMCPPrompts func(string) ([]PromptInfo, error), getModels func() []ModelInfo, mcpStorage storage.MCPStorage, mcpStorageWritable bool, onMCPServerChange func(), onMCPCacheRefresh func()) *Admin {
+func New(config *types.Config, getStats func() *Stats, getProviders func() []ProviderInfo, getMCPServers func() []MCPServerInfo, getMCPTools func(string) ([]ToolInfo, error), getMCPResources func(string) ([]ResourceInfo, error), getMCPResourceRead func(string, string) (*ResourceReadResult, error), getMCPPrompts func(string) ([]PromptInfo, error), getModels func() []ModelInfo, mcpStorage storage.MCPStorage, mcpStorageWritable bool, onMCPServerChange func(), onMCPCacheRefresh func()) *Admin {
 	if config.Server.AdminPassword == "" && !isLoopback(config.Server.Host) {
 		return nil
 	}
@@ -203,6 +216,7 @@ func New(config *types.Config, getStats func() *Stats, getProviders func() []Pro
 		getMCPServers:      getMCPServers,
 		getMCPTools:        getMCPTools,
 		getMCPResources:    getMCPResources,
+		getMCPResourceRead: getMCPResourceRead,
 		getMCPPrompts:      getMCPPrompts,
 		getModels:          getModels,
 		mcpStorage:         mcpStorage,

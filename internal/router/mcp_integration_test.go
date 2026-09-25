@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/paularlott/llmrouter/internal/admin"
@@ -87,7 +88,10 @@ func assertUIToolMeta(t *testing.T, tm map[string]interface{}) {
 // resources/read with its own _meta.ui (CSP) hints intact.
 func TestMCPServer_ServesNativeUITool(t *testing.T) {
 	s := newTestMCPServer(t)
+	// Native content is served on both servers (the scriptling manager
+	// registers on each in production); mirror that here.
 	registerUITool(s.server)
+	registerUITool(s.endpointServer)
 
 	resp := mcpRequest(t, s, map[string]interface{}{
 		"jsonrpc": "2.0", "id": 1, "method": "tools/list",
@@ -130,60 +134,93 @@ func TestMCPServer_ServesNativeUITool(t *testing.T) {
 	}
 }
 
-// TestMCPServer_PassesThroughFederatedUITool proves llmrouter's federation
-// path (a remote MCP server registered via types.MCPRemoteServerConfig)
-// preserves a tool's _meta.ui/icons on tools/list, and that resources/read
-// on llmrouter's own endpoint proxies through to the remote for the paired
-// ui:// resource — the "passing through from remote mcp servers" requirement.
-func TestMCPServer_PassesThroughFederatedUITool(t *testing.T) {
-	remote := mcp.NewServer("remote", "0.0.1")
-	registerUITool(remote)
-	ts := httptest.NewServer(http.HandlerFunc(remote.HandleRequest))
-	defer ts.Close()
-
-	cfg := &types.Config{
-		MCP: types.MCPConfig{
-			RemoteServers: []types.MCPRemoteServerConfig{
-				{Namespace: "", URL: ts.URL},
+// TestMCPServer_FederateGatingAndAppExclusion proves the /mcp endpoint's
+// federation rules: by default a remote server's tools never reach the
+// endpoint (the chat keeps them), and a server opted in with federate =
+// true reaches it minus its MCP Apps tools — an app view speaks bare,
+// host-agnostic tool names, so re-serving it under a federation namespace
+// would break its in-page calls to its own tools.
+func TestMCPServer_FederateGatingAndAppExclusion(t *testing.T) {
+	newRemote := func() *httptest.Server {
+		remote := mcp.NewServer("remote", "0.1.1")
+		registerUITool(remote) // sales_report: the MCP Apps tool + its ui:// resource
+		remote.RegisterTool(
+			mcp.NewTool("plain_report", "a plain federated tool"),
+			func(ctx context.Context, req *mcp.ToolRequest) (*mcp.ToolResponse, error) {
+				return mcp.NewToolResponseText("ok"), nil
 			},
-		},
+		)
+		ts := httptest.NewServer(http.HandlerFunc(remote.HandleRequest))
+		t.Cleanup(ts.Close)
+		return ts
 	}
-	s, err := NewMCPServer(cfg, &testLogger{})
-	if err != nil {
-		t.Fatalf("NewMCPServer: %v", err)
-	}
-	s.ReloadAllServers(nil)
 
-	resp := mcpRequest(t, s, map[string]interface{}{
-		"jsonrpc": "2.0", "id": 1, "method": "tools/list",
-	})
-	if resp["error"] != nil {
-		t.Fatalf("tools/list returned error: %v", resp["error"])
+	names := func(s *mcp.Server) string {
+		var b strings.Builder
+		for _, tool := range s.ListToolsWithContext(context.Background()) {
+			b.WriteString(tool.Name + " ")
+		}
+		return b.String()
 	}
-	result := resp["result"].(map[string]interface{})
-	tools, _ := result["tools"].([]interface{})
-	assertUIToolMeta(t, findToolByName(t, tools, "sales_report"))
 
-	resp = mcpRequest(t, s, map[string]interface{}{
-		"jsonrpc": "2.0", "id": 2, "method": "resources/read",
-		"params": map[string]interface{}{"uri": testUIResourceURI},
+	t.Run("federate opts in, minus apps", func(t *testing.T) {
+		cfg := &types.Config{
+			MCP: types.MCPConfig{
+				RemoteServers: []types.MCPRemoteServerConfig{
+					{Namespace: "fed", URL: newRemote().URL, Federate: true},
+				},
+			},
+		}
+		s, err := NewMCPServer(cfg, &testLogger{})
+		if err != nil {
+			t.Fatalf("NewMCPServer: %v", err)
+		}
+		s.ReloadAllServers(nil)
+
+		endpoint := names(s.endpointServer)
+		if !strings.Contains(endpoint, "fed"+mcp.DefaultNamespaceSeparator+"plain_report") {
+			t.Fatalf("federated plain tool must reach the endpoint: %q", endpoint)
+		}
+		if strings.Contains(endpoint, "sales_report") {
+			t.Fatalf("federated app tool must stay off the endpoint: %q", endpoint)
+		}
+
+		chat := names(s.server)
+		if !strings.Contains(chat, "fed"+mcp.DefaultNamespaceSeparator+"sales_report") {
+			t.Fatalf("chat-side server keeps the app tool (it mounts app views): %q", chat)
+		}
+
+		// The app's ui:// resource is readable through the chat-side server
+		// (fan-out to the remote) but not through the endpoint.
+		if _, err := s.server.ReadResource(context.Background(), testUIResourceURI); err != nil {
+			t.Fatalf("chat-side read of the federated ui:// resource failed: %v", err)
+		}
+		if _, err := s.endpointServer.ReadResource(context.Background(), testUIResourceURI); err == nil {
+			t.Fatal("endpoint must not serve a federated app's ui:// resource")
+		}
 	})
-	if resp["error"] != nil {
-		t.Fatalf("resources/read returned error: %v", resp["error"])
-	}
-	result = resp["result"].(map[string]interface{})
-	contents, _ := result["contents"].([]interface{})
-	if len(contents) != 1 {
-		t.Fatalf("expected 1 content entry, got: %+v", contents)
-	}
-	content := contents[0].(map[string]interface{})
-	meta, ok := content["_meta"].(map[string]interface{})
-	if !ok {
-		t.Fatalf("expected _meta on federated resource content, got: %+v", content)
-	}
-	if _, ok := meta["ui"].(map[string]interface{}); !ok {
-		t.Fatalf("expected _meta.ui on federated resource content, got: %+v", meta)
-	}
+
+	t.Run("no federate means endpoint-native only", func(t *testing.T) {
+		cfg := &types.Config{
+			MCP: types.MCPConfig{
+				RemoteServers: []types.MCPRemoteServerConfig{
+					{Namespace: "fed", URL: newRemote().URL},
+				},
+			},
+		}
+		s, err := NewMCPServer(cfg, &testLogger{})
+		if err != nil {
+			t.Fatalf("NewMCPServer: %v", err)
+		}
+		s.ReloadAllServers(nil)
+
+		if endpoint := names(s.endpointServer); strings.Contains(endpoint, "fed") {
+			t.Fatalf("a server without federate must not reach the endpoint: %q", endpoint)
+		}
+		if chat := names(s.server); !strings.Contains(chat, "fed"+mcp.DefaultNamespaceSeparator+"plain_report") {
+			t.Fatalf("chat-side server keeps every remote server: %q", chat)
+		}
+	})
 }
 
 // TestMCPServer_DeclaresUIAppsSupportToRemote is the other direction of the

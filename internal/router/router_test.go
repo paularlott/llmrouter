@@ -783,6 +783,7 @@ func (m *modelRecorderClient) ChatCompletion(_ context.Context, req openai.ChatC
 	}
 	return &openai.ChatCompletionResponse{Model: req.Model}, nil
 }
+
 type countingClient struct {
 	mockClient
 	name    string

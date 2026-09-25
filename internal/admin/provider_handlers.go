@@ -77,22 +77,22 @@ func (a *Admin) HandleListProviders(w http.ResponseWriter, r *http.Request) {
 				if weight <= 0 {
 					weight = 1.0
 				}
-			detail := ProviderDetail{
-				Name:               sp.Name,
-				Provider:           sp.Provider,
-				BaseURL:            sp.BaseURL,
-				Enabled:            sp.Enabled,
-				Weight:             weight,
-				Models:             sp.Models,
-				ModelAllowlist:     sp.ModelAllowlist,
-				Tags:               sp.Tags,
-				ModelDenylist:      sp.ModelDenylist,
-				ModelAliases:       sp.ModelAliases,
-				ModelTags:          sp.ModelTags,
-				DefaultContextSize: sp.DefaultContextSize,
-				ModelContext:       sp.ModelContext,
-				StaticProvider:     false,
-			}
+				detail := ProviderDetail{
+					Name:               sp.Name,
+					Provider:           sp.Provider,
+					BaseURL:            sp.BaseURL,
+					Enabled:            sp.Enabled,
+					Weight:             weight,
+					Models:             sp.Models,
+					ModelAllowlist:     sp.ModelAllowlist,
+					Tags:               sp.Tags,
+					ModelDenylist:      sp.ModelDenylist,
+					ModelAliases:       sp.ModelAliases,
+					ModelTags:          sp.ModelTags,
+					DefaultContextSize: sp.DefaultContextSize,
+					ModelContext:       sp.ModelContext,
+					StaticProvider:     false,
+				}
 				// Enrich with runtime health/model count if available
 				if a.getProviders != nil {
 					for _, rp := range a.getProviders() {

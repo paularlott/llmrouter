@@ -82,6 +82,7 @@ type Router struct {
 	shutdownOnce         sync.Once
 	wg                   sync.WaitGroup
 	mcpServer            *MCPServer
+	skillCache           sync.Map // namespace -> skillCacheEntry (skills listing, short TTL)
 	mux                  *http.ServeMux
 	sharedStore          *storage.Store
 	responsesService     *responses.Service

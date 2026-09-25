@@ -217,7 +217,7 @@ Alpine.data("mcpServers", () => ({
     oauth_refresh_token: "",
     enabled: true,
     tool_visibility: "native",
-    remote_search: false,
+    remote_search: false, federate: false,
     notifications: false,
   },
 
@@ -321,7 +321,7 @@ Alpine.data("mcpServers", () => ({
       oauth_refresh_token: "",
       enabled: true,
       tool_visibility: "native",
-      remote_search: false,
+      remote_search: false, federate: false,
       notifications: false,
     };
     this.editingServer = null;
@@ -346,6 +346,7 @@ Alpine.data("mcpServers", () => ({
       tool_visibility: server.tool_visibility || "native",
       remote_search: server.remote_search || false,
       notifications: server.notifications || false,
+      federate: server.federate || false,
     };
     this.showAddModal = true;
   },
@@ -716,6 +717,28 @@ Alpine.data("mcpServers", () => ({
     this.callingToolInProgress = false;
   },
 
+  showResourceModal: false,
+  viewingResource: null,
+  loadingResource: false,
+  resourceViewError: null,
+  async viewResource(resource) {
+    this.viewingResource = { uri: resource.uri, mime_type: resource.mime_type };
+    this.resourceViewError = null;
+    this.loadingResource = true;
+    this.showResourceModal = true;
+    try {
+      const e = await fetch(
+        `/admin/api/mcp-servers/${encodeURIComponent(this.resourcesServer.namespace)}/resources/read?uri=${encodeURIComponent(resource.uri)}`,
+      );
+      const t = await e.json();
+      if (!e.ok) throw new Error(t.error || "Failed to read resource");
+      this.viewingResource = t;
+    } catch (e) {
+      this.resourceViewError = e.message;
+    } finally {
+      this.loadingResource = false;
+    }
+  },
   viewResources(server) {
     this.resourcesServer = server;
     this.resources = [];

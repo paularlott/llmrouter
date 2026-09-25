@@ -30,6 +30,7 @@ type MCPServerConfig struct {
 	DisabledTools     []string `json:"disabled_tools,omitempty"` // Tools disabled via UI toggle
 	RemoteSearch      bool     `json:"remote_search,omitempty"`  // Delegate tool_search to this remote
 	Notifications     bool     `json:"notifications,omitempty"`  // Accept listChanged notifications from this server and propagate them
+	Federate          bool     `json:"federate,omitempty"`       // Expose this server's (non-app) tools through the public /mcp endpoint
 	CreatedAt         int64    `json:"created_at"`
 	UpdatedAt         int64    `json:"updated_at"`
 }
@@ -167,6 +168,7 @@ func (s *SnapshotMCPStorage) saveServer(key string, server *MCPServerConfig) err
 		"disabled_tools":      server.DisabledTools,
 		"remote_search":       server.RemoteSearch,
 		"notifications":       server.Notifications,
+		"federate":            server.Federate,
 		"created_at":          server.CreatedAt,
 		"updated_at":          server.UpdatedAt,
 	}
@@ -389,6 +391,9 @@ func parseMCPServerConfig(data map[string]any) (*MCPServerConfig, error) {
 	}
 	if v, ok := data["notifications"].(bool); ok {
 		server.Notifications = v
+	}
+	if v, ok := data["federate"].(bool); ok {
+		server.Federate = v
 	}
 	if v, ok := data["created_at"].(int64); ok {
 		server.CreatedAt = v
