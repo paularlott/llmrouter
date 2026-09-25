@@ -215,12 +215,14 @@ func (m *MCPServer) HandleRequest(w http.ResponseWriter, r *http.Request) {
 //
 //   - m.server is the chat-side view: every enabled remote server, apps
 //     included — the web chat and scripts resolve their tools through it
-//     and mount app views via lmchatkit's app-proxy.
+//     and mount app views via lmchatkit's app-proxy. Remote skills reach
+//     the chat through the system-prompt listing, not this server.
 //   - m.endpointServer is the public /mcp endpoint: llmrouter's own tools
 //     plus only the servers opted in with federate = true, and never their
 //     app tools (ExcludeApps) — a federated app view would call its own
 //     bare, host-agnostic tool names, which the namespaced endpoint can't
-//     resolve.
+//     resolve. Federated servers also serve their skills here
+//     (FederateSkills) under skill://<namespace>/… URIs.
 func (m *MCPServer) ReloadAllServers(storageServers []*storage.MCPServerConfig) {
 	entries := make([]mcp.RemoteServerEntry, 0, len(m.pendingStaticEntries)+len(storageServers))
 	endpointEntries := make([]mcp.RemoteServerEntry, 0, len(m.pendingStaticEntries)+len(storageServers))
@@ -236,6 +238,7 @@ func (m *MCPServer) ReloadAllServers(storageServers []*storage.MCPServerConfig) 
 		if remoteServer.Federate {
 			endpointEntry := entry
 			endpointEntry.ExcludeApps = true
+			endpointEntry.FederateSkills = true
 			endpointEntries = append(endpointEntries, endpointEntry)
 		}
 		m.remoteClients[remoteServer.Namespace] = rsClient
@@ -273,6 +276,7 @@ func (m *MCPServer) ReloadAllServers(storageServers []*storage.MCPServerConfig) 
 			if server.Federate {
 				endpointEntry := entry
 				endpointEntry.ExcludeApps = true
+				endpointEntry.FederateSkills = true
 				endpointEntries = append(endpointEntries, endpointEntry)
 			}
 			if server.Command != "" {

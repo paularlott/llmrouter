@@ -198,7 +198,7 @@ token = "secret"
 tool_visibility = "native"    # native | discoverable
 tool_allowlist = ["search", "query"]  # Optional: only these tools are enabled
 tool_denylist = ["delete"]           # Optional: these tools are disabled
-federate = true                       # Optional: expose this server's (non-app) tools on the /mcp endpoint
+federate = true                       # Optional: expose this server's (non-app) tools and skills on the /mcp endpoint
 ```
 
 ### Provider Types
@@ -423,12 +423,14 @@ Remote MCP servers serve two different audiences, and only one of them sees a se
 
 A federated server's tools are exposed under their namespace prefix as usual, with one exception: **tools marked as MCP Apps** (linked to a `ui://` resource via `_meta.ui.resourceUri`) are never federated to the endpoint, whatever the flags say. An app view calls its own tools by bare, host-agnostic names, which a namespaced endpoint can't resolve; apps belong where they're rendered, and that's the chat.
 
+A federated server's **skills** are served too: `skills/list` and `skills/get` on the endpoint carry its skills under `skill://<namespace>/…` URIs (the skills spec's sanctioned rewrite: manifests are rewritten to match, digests are untouched, and every file read routes back to the owning server). Without `federate`, a remote's skills reach only the web chat, via the system-prompt listing and the `lmchatkit__get_skill` tool.
+
 ```toml
 [[mcp.remote_servers]]
 namespace = "github"
 url = "https://github.example.com/mcp"
 token = "secret"
-federate = true   # tools appear on /mcp as github__<tool> (apps excluded)
+federate = true   # tools appear on /mcp as github__<tool> (apps excluded); skills as skill://github/…
 ```
 
 ```toml
@@ -607,7 +609,7 @@ DELETE /v1/conversations/{conversation_id}/items/{item_id}
 ### MCP
 
 ```bash
-POST /mcp    # MCP protocol — the router's own tools, plus remote servers opted in with federate = true (apps excluded)
+POST /mcp    # MCP protocol — the router's own tools, plus remote servers opted in with federate = true (apps excluded, skills namespaced)
 ```
 
 ### Admin UI

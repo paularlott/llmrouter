@@ -712,8 +712,20 @@ func (stm *scriptlingToolManager) registerSkills() error {
 		if err != nil {
 			return fmt.Errorf("failed to read skill %s: %w", e.Name(), err)
 		}
+		// One bad skill directory (missing SKILL.md pieces, frontmatter name
+		// not matching the directory name) is skipped with a warning on
+		// every server, never a failed server. Validation is deterministic,
+		// so what one server rejects, all do.
+		var regErr error
 		for _, s := range stm.servers {
-			s.RegisterSkill(builder)
+			if err := s.RegisterSkill(builder); err != nil {
+				regErr = err
+				break
+			}
+		}
+		if regErr != nil {
+			stm.logger.Warn("Skipping MCP skill", "name", e.Name(), "error", regErr)
+			continue
 		}
 		stm.logger.Info("Registered MCP skill", "name", e.Name())
 	}
