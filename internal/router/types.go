@@ -14,6 +14,7 @@ import (
 	"github.com/paularlott/logger"
 	"github.com/paularlott/mcp/ai"
 	"github.com/paularlott/mcp/ai/openai"
+	mcplib "github.com/paularlott/mcp"
 )
 
 type Logger = logger.Logger
@@ -82,7 +83,7 @@ type Router struct {
 	shutdownOnce         sync.Once
 	wg                   sync.WaitGroup
 	mcpServer            *MCPServer
-	skillCache           sync.Map // namespace -> skillCacheEntry (skills listing, short TTL)
+	skillCache           mcplib.SkillsListingCache // chat prompt skills listings, short TTL (zero value ready)
 	mux                  *http.ServeMux
 	sharedStore          *storage.Store
 	responsesService     *responses.Service

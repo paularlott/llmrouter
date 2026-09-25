@@ -8,9 +8,9 @@ require (
 	github.com/fsnotify/fsnotify v1.10.1
 	github.com/google/uuid v1.6.0
 	github.com/paularlott/cli v0.9.1
-	github.com/paularlott/lmchatkit v0.10.3
+	github.com/paularlott/lmchatkit v0.11.0
 	github.com/paularlott/logger v0.3.0
-	github.com/paularlott/mcp v0.27.1
+	github.com/paularlott/mcp v0.28.0
 	github.com/paularlott/scriptling v0.26.0
 	github.com/paularlott/snapshotkv v0.6.0
 )
@@ -32,7 +32,7 @@ require (
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
 	github.com/jackc/pgx/v5 v5.11.0 // indirect
 	github.com/jackc/puddle/v2 v2.2.2 // indirect
-	github.com/klauspost/compress v1.20.0 // indirect
+	github.com/klauspost/compress v1.20.1 // indirect
 	github.com/lufia/plan9stats v0.0.0-20260802145828-341c2f0c90b5 // indirect
 	github.com/mattn/go-isatty v0.0.24 // indirect
 	github.com/ncruces/go-strftime v1.0.0 // indirect
@@ -65,5 +65,3 @@ require (
 	modernc.org/memory v1.12.1 // indirect
 	modernc.org/sqlite v1.59.0 // indirect
 )
-
-replace github.com/paularlott/mcp => ../mcp

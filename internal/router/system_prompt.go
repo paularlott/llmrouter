@@ -4,8 +4,6 @@ import (
 	"context"
 	"sort"
 	"strings"
-	"sync"
-	"time"
 
 	mcplib "github.com/paularlott/mcp"
 )
@@ -39,80 +37,39 @@ func (r *Router) augmentSystemPrompt(ctx context.Context, current string) string
 	return b.String()
 }
 
-// skillCacheEntry is a cached per-remote skills listing.
-type skillCacheEntry struct {
-	skills []mcplib.Skill
-	expiry time.Time
-}
-
 // listChatSkills collects skills from the chat-side server's own registry
-// and from every attached remote MCP server (remote titles carry the
+// and from every attached remote MCP server (remote lines carry the
 // server's namespace so same-named skills stay distinguishable), formatted
 // for the system prompt.
 //
-// Remotes are fetched in parallel, each with its OWN one-second budget:
-// skills are additive context, so one slow or dead remote must never
-// starve the others (the first version shared one budget across the loop,
-// and a single hanging initialize killed every server after it). Dead
-// remotes are skipped with a visible warning; successful listings are
-// cached for a minute so repeat chats don't pay the round trips again.
-// Results render in namespace order — the prompt stays deterministic.
+// Remote listings run through the shared mcplib.SkillsListingCache:
+// fetched in parallel with a one-second budget each (skills are additive
+// context, so one slow or dead remote must never starve the others — the
+// first version shared one budget across the loop, and a single hanging
+// initialize killed every server after it), cached for a minute so repeat
+// chats don't pay the round trips again, and rendered in namespace order
+// so the prompt stays deterministic.
 func (r *Router) listChatSkills(ctx context.Context) string {
-	type remoteResult struct {
-		namespace string
-		skills    []mcplib.Skill
-	}
-	var (
-		mu      sync.Mutex
-		results []remoteResult
-		wg      sync.WaitGroup
-	)
-
+	var sources []mcplib.RemoteSkillsSource
 	for namespace, rsClient := range r.mcpServer.remoteClients {
 		if rsClient.client == nil || !rsClient.enabled {
 			continue // nothing configured, or the operator disabled this server
 		}
-		if cached, ok := r.skillCache.Load(namespace); ok {
-			if entry := cached.(skillCacheEntry); time.Now().Before(entry.expiry) {
-				mu.Lock()
-				results = append(results, remoteResult{namespace, entry.skills})
-				mu.Unlock()
-				continue
-			}
-		}
-		wg.Add(1)
-		go func(namespace string, rsClient *remoteServerClient) {
-			defer wg.Done()
-			remoteCtx, cancel := context.WithTimeout(ctx, time.Second)
-			defer cancel()
-			if err := rsClient.ensureInitialized(remoteCtx); err != nil {
-				r.logger.Warn("skills listing: remote not reachable, skipping",
-					"namespace", namespace, "error", err)
-				return
-			}
-			skills, err := rsClient.client.ListSkills(remoteCtx)
-			if err != nil {
-				r.logger.Warn("skills listing: remote skills/list failed, skipping",
-					"namespace", namespace, "error", err)
-				return
-			}
-			r.skillCache.Store(namespace, skillCacheEntry{skills: skills, expiry: time.Now().Add(time.Minute)})
-			mu.Lock()
-			results = append(results, remoteResult{namespace, skills})
-			mu.Unlock()
-		}(namespace, rsClient)
+		sources = append(sources, mcplib.RemoteSkillsSource{Namespace: namespace, Client: rsClient.client})
 	}
-	wg.Wait()
 
-	sort.Slice(results, func(i, j int) bool { return results[i].namespace < results[j].namespace })
+	results := r.skillCache.Listings(ctx, sources, func(namespace string, err error) {
+		r.logger.Warn("skills listing: remote failed, skipping", "namespace", namespace, "error", err)
+	})
+	sort.Slice(results, func(i, j int) bool { return results[i].Namespace < results[j].Namespace })
 
 	var lines []string
 	for _, skill := range r.mcpServer.server.ListSkills() {
-		lines = append(lines, skillLine("", skill))
+		lines = append(lines, mcplib.SkillPromptLine("", skill))
 	}
 	for _, res := range results {
-		for _, skill := range res.skills {
-			lines = append(lines, skillLine(res.namespace, skill))
+		for _, skill := range res.Skills {
+			lines = append(lines, mcplib.SkillPromptLine(res.Namespace, skill))
 		}
 	}
 
@@ -127,22 +84,4 @@ func (r *Router) listChatSkills(ctx context.Context) string {
 		b.WriteByte('\n')
 	}
 	return b.String()
-}
-
-// skillLine renders one prompt line: "- name: description (uri)". The
-// description is what lets the model decide a skill is relevant before
-// spending a read on it; the name is the frontmatter name (names are
-// labels), namespaced for remote servers.
-func skillLine(namespace string, skill mcplib.Skill) string {
-	name, _ := skill.Frontmatter["name"].(string)
-	if name == "" {
-		name = strings.TrimSuffix(strings.TrimPrefix(skill.URI, "skill://"), "/SKILL.md")
-	}
-	if namespace != "" {
-		name = namespace + "/" + name
-	}
-	if description, _ := skill.Frontmatter["description"].(string); description != "" {
-		return "- " + name + ": " + description + " (" + skill.URI + ")"
-	}
-	return "- " + name + " (" + skill.URI + ")"
 }
