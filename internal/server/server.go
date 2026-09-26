@@ -85,7 +85,6 @@ func buildServer(cmd *cli.Command, desktopMode bool) (*router.Router, *types.Con
 		MaxIdleConns:        100,
 		MaxIdleConnsPerHost: 10,
 		IdleConnTimeout:     90 * time.Second,
-		Timeout:             30 * time.Second,
 		InsecureSkipVerify:  false,
 	})
 
