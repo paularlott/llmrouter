@@ -33,10 +33,12 @@ type Admin struct {
 
 	// MCP callbacks (for read-only display of config-based servers)
 	getMCPServers      func() []MCPServerInfo
+	getLocalServerInfo func() MCPServerInfo
 	getMCPTools        func(namespace string) ([]ToolInfo, error)
 	getMCPResources    func(namespace string) ([]ResourceInfo, error)
 	getMCPResourceRead func(namespace, uri string) (*ResourceReadResult, error)
 	getMCPPrompts      func(namespace string) ([]PromptInfo, error)
+	callMCPPrompt      func(namespace, name string, args map[string]string) (*PromptCallResult, error)
 	callMCPTool        func(namespace, toolName string, args map[string]any) (*ToolCallResult, error)
 	getMCPProtocol     func(namespace string) (string, error)
 
@@ -96,6 +98,11 @@ type MCPServerInfo struct {
 	StaticServer   bool     `json:"static_server"`
 	RemoteSearch   bool     `json:"remote_search"`
 	Federate       bool     `json:"federate"`
+	// LocalServer marks llmrouter's own scriptling-served content (tools,
+	// resources, prompts, skills from disk or an app package): visible and
+	// callable in the UI, but not editable, toggleable or removable — it is
+	// served by llmrouter itself, not a remote connection.
+	LocalServer bool `json:"local_server"`
 }
 
 // ModelInfo represents a model and its providers for the UI
@@ -169,6 +176,19 @@ type ResourceInfo struct {
 
 // PromptInfo represents a prompt exposed by an MCP server. Arguments is the
 // (possibly empty) list of named arguments the prompt accepts.
+// PromptCallResult is the rendered form of one prompt: its description and
+// the messages prompts/get produced, for the admin UI's test popup.
+type PromptCallResult struct {
+	Description string              `json:"description,omitempty"`
+	Messages    []PromptCallMessage `json:"messages"`
+}
+
+// PromptCallMessage is one message of a rendered prompt.
+type PromptCallMessage struct {
+	Role string `json:"role"`
+	Text string `json:"text"`
+}
+
 type PromptInfo struct {
 	Name        string           `json:"name"`
 	Description string           `json:"description"`
@@ -202,7 +222,7 @@ type PersonaInfo struct {
 // When bound to localhost (127.0.0.1 / ::1) with no password, the admin UI
 // is enabled with open access — safe for desktop mode and local-only dev.
 // Set --admin-password to require login.
-func New(config *types.Config, getStats func() *Stats, getProviders func() []ProviderInfo, getMCPServers func() []MCPServerInfo, getMCPTools func(string) ([]ToolInfo, error), getMCPResources func(string) ([]ResourceInfo, error), getMCPResourceRead func(string, string) (*ResourceReadResult, error), getMCPPrompts func(string) ([]PromptInfo, error), getModels func() []ModelInfo, mcpStorage storage.MCPStorage, mcpStorageWritable bool, onMCPServerChange func(), onMCPCacheRefresh func()) *Admin {
+func New(config *types.Config, getStats func() *Stats, getProviders func() []ProviderInfo, getMCPServers func() []MCPServerInfo, getLocalServerInfo func() MCPServerInfo, getMCPTools func(string) ([]ToolInfo, error), getMCPResources func(string) ([]ResourceInfo, error), getMCPResourceRead func(string, string) (*ResourceReadResult, error), getMCPPrompts func(string) ([]PromptInfo, error), callMCPPrompt func(string, string, map[string]string) (*PromptCallResult, error), getModels func() []ModelInfo, mcpStorage storage.MCPStorage, mcpStorageWritable bool, onMCPServerChange func(), onMCPCacheRefresh func()) *Admin {
 	if config.Server.AdminPassword == "" && !isLoopback(config.Server.Host) {
 		return nil
 	}
@@ -214,10 +234,12 @@ func New(config *types.Config, getStats func() *Stats, getProviders func() []Pro
 		getStats:           getStats,
 		getProviders:       getProviders,
 		getMCPServers:      getMCPServers,
+		getLocalServerInfo: getLocalServerInfo,
 		getMCPTools:        getMCPTools,
 		getMCPResources:    getMCPResources,
 		getMCPResourceRead: getMCPResourceRead,
 		getMCPPrompts:      getMCPPrompts,
+		callMCPPrompt:      callMCPPrompt,
 		getModels:          getModels,
 		mcpStorage:         mcpStorage,
 		mcpStorageWritable: mcpStorageWritable,

@@ -213,10 +213,12 @@ tasks:
         CGO_ENABLED=0 go run . server
         --personas-dir ./examples/personas
         --commands-dir ./examples/commands
+        --tools-dir ./examples/mcp-tools
         --resources-dir ./examples/resources
         --prompts-dir ./examples/prompts
         --skills-dir ./examples/skills
         --routes-dir ./examples/routers
+
 
   run-desktop:
     desc: Run the desktop app in development mode

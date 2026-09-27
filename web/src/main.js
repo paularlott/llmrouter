@@ -175,6 +175,13 @@ Alpine.data("mcpServers", () => ({
   showToolsModal: false,
   showResourcesModal: false,
   showPromptsModal: false,
+  showPromptTestModal: false,
+  promptTestServer: null,
+  promptTestPrompt: null,
+  promptTestArgs: {},
+  promptTestResult: null,
+  promptTestError: null,
+  promptTestInProgress: false,
   editingServer: null,
   deletingServer: null,
   toolsServer: null,
@@ -768,6 +775,53 @@ Alpine.data("mcpServers", () => ({
       this.resourcesError = err.message;
     } finally {
       this.loadingResources = false;
+    }
+  },
+
+
+  openPromptTest(prompt) {
+    this.promptTestPrompt = prompt;
+    this.promptTestArgs = {};
+    this.promptTestResult = null;
+    this.promptTestError = null;
+    // Seed every argument so x-model binds cleanly.
+    for (const arg of prompt.arguments || []) {
+      this.promptTestArgs[arg.name] = "";
+    }
+    this.showPromptTestModal = true;
+  },
+
+  closePromptTest() {
+    this.showPromptTestModal = false;
+  },
+
+  async runPromptTest() {
+    if (!this.promptTestPrompt || !this.promptsServer) return;
+    this.promptTestError = null;
+    this.promptTestInProgress = true;
+    const args = {};
+    for (const [name, value] of Object.entries(this.promptTestArgs)) {
+      if (typeof value === "string" && value.trim() === "") continue;
+      args[name] = value;
+    }
+    try {
+      const response = await fetch(
+        `/admin/api/mcp-servers/${this.promptsServer.namespace}/prompts/get`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: this.promptTestPrompt.name, arguments: args }),
+        },
+      );
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.error || `HTTP ${response.status}`);
+      }
+      this.promptTestResult = await response.json();
+    } catch (err) {
+      this.promptTestError = err.message;
+    } finally {
+      this.promptTestInProgress = false;
     }
   },
 

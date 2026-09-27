@@ -1,0 +1,13 @@
+description = "Summarize sales figures per region"
+keywords = ["sales", "report"]
+
+[[parameters]]
+name = "region"
+type = "string"
+description = "Region to summarize (eu, us, apac); 'all' summarizes everything"
+required = false
+
+# MCP Apps link (SEP-1865): hosts that implement the UI extension render the
+# ui://sales.html view when this tool is invoked instead of showing raw text.
+[ui]
+resourceUri = "ui://sales.html"

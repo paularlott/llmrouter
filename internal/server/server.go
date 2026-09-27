@@ -67,7 +67,6 @@ func buildServer(cmd *cli.Command, desktopMode bool) (*router.Router, *types.Con
 			ResourcesDir: cmd.GetString("resources-dir"),
 			PromptsDir:   cmd.GetString("prompts-dir"),
 			SkillsDir:    cmd.GetString("skills-dir"),
-			AppDir:       cmd.GetString("app-dir"),
 			PluginDirs:   cmd.GetStringSlice("plugin-dir"),
 			LibPaths:     cmd.GetStringSlice("libpath"),
 			ExecScript:   cmd.GetBool("mcp-exec-script"),
@@ -151,7 +150,6 @@ func buildServer(cmd *cli.Command, desktopMode bool) (*router.Router, *types.Con
 			config.Scripting.ResourcesDir = scriptingCfg.GetString("resources_dir")
 			config.Scripting.PromptsDir = scriptingCfg.GetString("prompts_dir")
 			config.Scripting.SkillsDir = scriptingCfg.GetString("skills_dir")
-			config.Scripting.AppDir = scriptingCfg.GetString("app_dir")
 			config.Scripting.PluginDirs = scriptingCfg.GetStringSlice("plugin_dirs")
 			config.Scripting.LibPaths = scriptingCfg.GetStringSlice("lib_paths")
 			config.Scripting.ExecScript = scriptingCfg.GetBool("exec_script")

@@ -701,3 +701,28 @@ func (m *MCPServer) ReadResourceForAdmin(namespace, uri string) (*admin.Resource
 	}
 	return result, nil
 }
+
+// CallPromptForAdmin renders one prompt on the remote server behind
+// namespace, for the admin UI's test popup.
+func (m *MCPServer) CallPromptForAdmin(namespace, name string, args map[string]string) (*admin.PromptCallResult, error) {
+	rsClient, exists := m.remoteClients[namespace]
+	if !exists {
+		return nil, fmt.Errorf("unknown MCP server namespace: %s", namespace)
+	}
+	ctx := context.Background()
+	if err := rsClient.ensureInitialized(ctx); err != nil {
+		return nil, fmt.Errorf("failed to initialize MCP client for %s: %w", namespace, err)
+	}
+	resp, err := rsClient.client.GetPrompt(ctx, name, args)
+	if err != nil {
+		return nil, err
+	}
+	result := &admin.PromptCallResult{Description: resp.Description}
+	for _, msg := range resp.Messages {
+		result.Messages = append(result.Messages, admin.PromptCallMessage{
+			Role: string(msg.Role),
+			Text: msg.Content.Text,
+		})
+	}
+	return result, nil
+}

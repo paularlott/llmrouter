@@ -20,7 +20,6 @@ import (
 	"github.com/paularlott/scriptling/extlibs/secretprovider"
 	scriptlingplugin "github.com/paularlott/scriptling/plugin"
 	mcpcli "github.com/paularlott/scriptling/scriptling-cli/mcp"
-	"github.com/paularlott/scriptling/scriptling-cli/pack"
 	"github.com/paularlott/scriptling/scriptling-cli/setup"
 )
 
@@ -92,64 +91,6 @@ func NewScriptlingToolManager(config types.ScriptingConfig, logger Logger, serve
 		debounceDuration: 500 * time.Millisecond,
 		done:             make(chan struct{}),
 		toolTimers:       make(map[string]*time.Timer),
-	}
-
-	// An unpacked MCP app package (manifest.toml declaring serve=["mcp"])
-	// provides its convention dirs; an explicitly configured dir wins over
-	// the package's. The app's ui:// resources carry the MCP Apps MIME type
-	// via the shared scan, and the UI Apps extension is advertised so
-	// capable clients offer the UI.
-	appServesMCP := false
-	if config.AppDir != "" {
-		// llmrouter serves app packages from disk only: the watcher needs
-		// real directories to hot-reload. Packed .zip artifacts are
-		// scriptling's job (scriptling --package serves zips, dirs and URLs).
-		if strings.HasSuffix(config.AppDir, ".zip") {
-			return nil, fmt.Errorf("app_dir must be an unpacked app directory, got %s: serve packed .zip app packages with scriptling --package", config.AppDir)
-		}
-		if info, err := os.Stat(config.AppDir); err == nil && !info.IsDir() {
-			return nil, fmt.Errorf("app_dir must be an unpacked app directory, got file %s: serve packed .zip app packages with scriptling --package", config.AppDir)
-		}
-		bundle, err := pack.OpenBundleDir(config.AppDir)
-		if err != nil {
-			return nil, fmt.Errorf("failed to open MCP app package %s: %w", config.AppDir, err)
-		}
-		for _, proto := range bundle.Manifest.Serve {
-			if proto == "mcp" {
-				appServesMCP = true
-			}
-		}
-		if !appServesMCP {
-			return nil, fmt.Errorf("MCP app package %s does not serve mcp (manifest serve: %v)", config.AppDir, bundle.Manifest.Serve)
-		}
-		if config.ToolsDir == "" {
-			if fileExists(filepath.Join(config.AppDir, "tools")) {
-				config.ToolsDir = filepath.Join(config.AppDir, "tools")
-			}
-		}
-		if config.ResourcesDir == "" {
-			if fileExists(filepath.Join(config.AppDir, "resources")) {
-				config.ResourcesDir = filepath.Join(config.AppDir, "resources")
-			}
-		}
-		if config.PromptsDir == "" {
-			if fileExists(filepath.Join(config.AppDir, "prompts")) {
-				config.PromptsDir = filepath.Join(config.AppDir, "prompts")
-			}
-		}
-		if config.SkillsDir == "" {
-			if fileExists(filepath.Join(config.AppDir, "skills")) {
-				config.SkillsDir = filepath.Join(config.AppDir, "skills")
-			}
-		}
-		logger.Info("Serving MCP app package", "path", config.AppDir, "name", bundle.Manifest.Name, "version", bundle.Manifest.Version)
-	}
-	if appServesMCP {
-		for _, s := range servers {
-			s.DeclareExtension(mcp_lib.UIAppsExtensionID, map[string]any{
-				"mimeTypes": []string{mcp_lib.UIAppMimeType},
-			})
-		}
 	}
 
 	// Resolve absolute paths for each configured source folder.
@@ -613,6 +554,20 @@ func (stm *scriptlingToolManager) registerResources() (staticURIs, templates []s
 	entries, err := mcpcli.ScanResourcesTree(stm.resourcesDirAbs)
 	if err != nil {
 		return nil, nil, err
+	}
+	// ui:// resources ARE MCP app views: their presence is what makes this
+	// server serve an app, so the UI Apps extension is declared on the spot
+	// rather than gated behind any manifest or flag (DeclareExtension is an
+	// idempotent map write, so reloads re-declaring it are free).
+	for _, e := range entries {
+		if strings.HasPrefix(e.URI, "ui://") {
+			for _, s := range stm.servers {
+				s.DeclareExtension(mcp_lib.UIAppsExtensionID, map[string]any{
+					"mimeTypes": []string{mcp_lib.UIAppMimeType},
+				})
+			}
+			break
+		}
 	}
 	for _, e := range entries {
 		if e.Template {

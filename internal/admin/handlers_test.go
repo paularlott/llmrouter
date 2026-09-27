@@ -148,6 +148,7 @@ func TestAdminNewWiresResourceAndPromptCallbacks(t *testing.T) {
 		func() *Stats { return nil },
 		func() []ProviderInfo { return nil },
 		func() []MCPServerInfo { return nil },
+		func() MCPServerInfo { return MCPServerInfo{} },
 		func(string) ([]ToolInfo, error) { return nil, nil },
 		func(namespace string) ([]ResourceInfo, error) {
 			gotResources = append(gotResources, ResourceInfo{URI: namespace})
@@ -158,6 +159,7 @@ func TestAdminNewWiresResourceAndPromptCallbacks(t *testing.T) {
 			gotPrompts = append(gotPrompts, PromptInfo{Name: namespace})
 			return nil, nil
 		},
+		nil,
 		func() []ModelInfo { return nil },
 		nil, false, nil, nil,
 	)
@@ -183,7 +185,7 @@ func TestHandleLoginAcceptsPassword(t *testing.T) {
 	cfg := &types.Config{}
 	cfg.Server.AdminPassword = "secret"
 
-	a := New(cfg, nil, nil, nil, nil, nil, nil, nil, nil, nil, false, nil, nil)
+	a := New(cfg, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, false, nil, nil)
 	if a == nil {
 		t.Fatal("New returned nil")
 	}
@@ -215,7 +217,7 @@ func TestHandleLoginAcceptsPassword(t *testing.T) {
 func TestHandleLoginRejectsWrongPassword(t *testing.T) {
 	cfg := &types.Config{}
 	cfg.Server.AdminPassword = "admin"
-	a := New(cfg, nil, nil, nil, nil, nil, nil, nil, nil, nil, false, nil, nil)
+	a := New(cfg, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, false, nil, nil)
 
 	req := httptest.NewRequest(http.MethodPost, "/admin/api/login",
 		strings.NewReader(`{"password":"nope"}`))
@@ -233,5 +235,54 @@ func TestRequireAuthMiddlewareReturnsNilWhenNoPassword(t *testing.T) {
 	a := &Admin{sessions: map[string]*Session{}}
 	if a.RequireAuthMiddleware() != nil {
 		t.Fatal("RequireAuthMiddleware should be nil when no password set")
+	}
+}
+
+// TestLocalNamespaceNotModifiable: the reserved "local" namespace (llmrouter's
+// own scriptling content) is visible in listings but rejected by every
+// mutating endpoint, and GET resolves through the local-info hook.
+func TestLocalNamespaceNotModifiable(t *testing.T) {
+	cfg := &types.Config{}
+	cfg.Server.AdminPassword = "p"
+
+	a := New(cfg,
+		func() *Stats { return nil },
+		func() []ProviderInfo { return nil },
+		func() []MCPServerInfo {
+			return []MCPServerInfo{{Namespace: "local", Enabled: true, LocalServer: true}}
+		},
+		func() MCPServerInfo { return MCPServerInfo{Namespace: "local", Enabled: true, LocalServer: true} },
+		nil, nil, nil, nil, nil,
+		func() []ModelInfo { return nil },
+		nil, false, nil, nil,
+	)
+
+	// GET single resolves the local entry via the hook.
+	req := httptest.NewRequest(http.MethodGet, "/admin/api/mcp-servers/local", nil)
+	req.SetPathValue("namespace", "local")
+	rec := httptest.NewRecorder()
+	a.HandleGetMCPServer(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET local: %d (%s)", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), `"local_server":true`) {
+		t.Fatalf("GET local body: %s", rec.Body.String())
+	}
+
+	for _, tc := range []struct {
+		method  string
+		handler func(http.ResponseWriter, *http.Request)
+	}{
+		{http.MethodPut, a.HandleUpdateMCPServer},
+		{http.MethodPut, a.HandleToggleMCPServer},
+		{http.MethodDelete, a.HandleDeleteMCPServer},
+	} {
+		req := httptest.NewRequest(tc.method, "/admin/api/mcp-servers/local", nil)
+		req.SetPathValue("namespace", "local")
+		rec := httptest.NewRecorder()
+		tc.handler(rec, req)
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("%s local: %d (%s)", tc.method, rec.Code, rec.Body.String())
+		}
 	}
 }

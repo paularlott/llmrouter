@@ -51,6 +51,7 @@ func (a *Admin) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /admin/api/mcp-servers/{namespace}/protocol", a.requireAuth(a.HandleGetMCPServerProtocol))
 	mux.HandleFunc("PUT /admin/api/mcp-servers/{namespace}/tools/toggle", a.requireAuth(a.HandleToggleMCPServerTool))
 	mux.HandleFunc("POST /admin/api/mcp-servers/{namespace}/tools/call", a.requireAuth(a.HandleCallMCPServerTool))
+	mux.HandleFunc("POST /admin/api/mcp-servers/{namespace}/prompts/get", a.requireAuth(a.HandleCallMCPServerPrompt))
 	mux.HandleFunc("GET /admin/api/mcp-servers/{namespace}/resources", a.requireAuth(a.HandleGetMCPServerResources))
 	mux.HandleFunc("GET /admin/api/mcp-servers/{namespace}/resources/read", a.requireAuth(a.HandleReadMCPServerResource))
 	mux.HandleFunc("GET /admin/api/mcp-servers/{namespace}/prompts", a.requireAuth(a.HandleGetMCPServerPrompts))
@@ -283,6 +284,11 @@ func (a *Admin) HandleGetMCPServer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if namespace == LocalNamespace && a.getLocalServerInfo != nil {
+		writeJSON(w, http.StatusOK, a.getLocalServerInfo())
+		return
+	}
+
 	// First check dynamic servers in storage
 	if a.mcpStorage != nil {
 		server, err := a.mcpStorage.Get(r.Context(), namespace)
@@ -417,6 +423,10 @@ func (a *Admin) HandleCreateMCPServer(w http.ResponseWriter, r *http.Request) {
 
 // HandleUpdateMCPServer updates an MCP server
 func (a *Admin) HandleUpdateMCPServer(w http.ResponseWriter, r *http.Request) {
+if namespace := r.PathValue("namespace"); namespace == LocalNamespace {
+		writeError(w, http.StatusBadRequest, "the local server is served by llmrouter itself and cannot be modified")
+		return
+	}
 	namespace := r.PathValue("namespace")
 	if namespace == "" {
 		writeError(w, http.StatusBadRequest, "namespace required")
@@ -521,6 +531,10 @@ func (a *Admin) HandleUpdateMCPServer(w http.ResponseWriter, r *http.Request) {
 
 // HandleDeleteMCPServer deletes an MCP server
 func (a *Admin) HandleDeleteMCPServer(w http.ResponseWriter, r *http.Request) {
+if namespace := r.PathValue("namespace"); namespace == LocalNamespace {
+		writeError(w, http.StatusBadRequest, "the local server is served by llmrouter itself and cannot be modified")
+		return
+	}
 	namespace := r.PathValue("namespace")
 	if namespace == "" {
 		writeError(w, http.StatusBadRequest, "namespace required")
@@ -743,6 +757,10 @@ func (a *Admin) HandleGetMCPServerPrompts(w http.ResponseWriter, r *http.Request
 
 // HandleToggleMCPServer toggles an MCP server's enabled state
 func (a *Admin) HandleToggleMCPServer(w http.ResponseWriter, r *http.Request) {
+if namespace := r.PathValue("namespace"); namespace == LocalNamespace {
+		writeError(w, http.StatusBadRequest, "the local server is served by llmrouter itself and cannot be modified")
+		return
+	}
 	namespace := r.PathValue("namespace")
 	if namespace == "" {
 		writeError(w, http.StatusBadRequest, "namespace required")
@@ -824,6 +842,45 @@ func (a *Admin) HandleReadMCPServerResource(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	result, err := a.getMCPResourceRead(namespace, uri)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
+// LocalNamespace is the reserved namespace under which the admin UI reaches
+// llmrouter's own scriptling-served content.
+const LocalNamespace = "local"
+
+// HandleCallMCPServerPrompt renders a prompt with the given arguments and
+// returns its messages for the admin UI's test popup.
+func (a *Admin) HandleCallMCPServerPrompt(w http.ResponseWriter, r *http.Request) {
+	namespace := r.PathValue("namespace")
+	if namespace == "" {
+		writeError(w, http.StatusBadRequest, "namespace required")
+		return
+	}
+	if a.callMCPPrompt == nil {
+		writeError(w, http.StatusServiceUnavailable, "prompt execution not available")
+		return
+	}
+	var req struct {
+		Name      string            `json:"name"`
+		Arguments map[string]string `json:"arguments"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if req.Name == "" {
+		writeError(w, http.StatusBadRequest, "name is required")
+		return
+	}
+	if req.Arguments == nil {
+		req.Arguments = map[string]string{}
+	}
+	result, err := a.callMCPPrompt(namespace, req.Name, req.Arguments)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return

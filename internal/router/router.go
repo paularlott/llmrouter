@@ -255,7 +255,7 @@ func NewRouter(config *types.Config, logger Logger) (*Router, error) {
 	// Load stored providers alongside config-file providers
 	router.loadStoredProviders(config, logger)
 
-	router.admin = admin.New(config, router.getStats, router.getProviders, router.getMCPServers, router.getMCPTools, router.getMCPResources, router.readMCPResource, router.getMCPPrompts, router.getModels, mcpStorage, mcpStorageWritable, router.reloadMCPServers, router.reloadMCPServers)
+	router.admin = admin.New(config, router.getStats, router.getProviders, router.getMCPServers, router.getLocalServerInfoHook, router.getMCPTools, router.getMCPResources, router.readMCPResource, router.getMCPPrompts, router.callMCPPrompt, router.getModels, mcpStorage, mcpStorageWritable, router.reloadMCPServers, router.reloadMCPServers)
 
 	// Configure and register admin UI. admin.New() returns nil when the UI
 	// should be completely disabled: no password AND bound to a non-loopback
@@ -1697,7 +1697,13 @@ func (r *Router) reloadPersonas() {
 
 // getMCPServers returns MCP server information for the admin UI
 func (r *Router) getMCPServers() []admin.MCPServerInfo {
-	servers := make([]admin.MCPServerInfo, 0, len(r.config.MCP.RemoteServers))
+	servers := make([]admin.MCPServerInfo, 0, len(r.config.MCP.RemoteServers)+1)
+
+	// llmrouter's own scriptling-served content heads the list under the
+	// reserved "local" namespace: visible and callable, never editable.
+	if info, ok := r.localServerInfo(); ok {
+		servers = append(servers, info)
+	}
 
 	// Add static servers from config
 	for _, s := range r.config.MCP.RemoteServers {
@@ -1741,7 +1747,17 @@ func (r *Router) getMCPServers() []admin.MCPServerInfo {
 		}
 	}
 
-	sort.Slice(servers, func(i, j int) bool { return servers[i].Namespace < servers[j].Namespace })
+	// Alphabetical by namespace, with llmrouter's own local entry pinned
+	// to the top so it is the first thing the admin UI shows.
+	sort.SliceStable(servers, func(i, j int) bool {
+		if servers[i].LocalServer {
+			return !servers[j].LocalServer
+		}
+		if servers[j].LocalServer {
+			return false
+		}
+		return servers[i].Namespace < servers[j].Namespace
+	})
 	return servers
 }
 
@@ -1749,6 +1765,9 @@ func (r *Router) getMCPServers() []admin.MCPServerInfo {
 func (r *Router) getMCPTools(namespace string) ([]admin.ToolInfo, error) {
 	if r.mcpServer == nil {
 		return nil, fmt.Errorf("MCP server not available")
+	}
+	if namespace == admin.LocalNamespace {
+		return r.localTools()
 	}
 
 	// First check if this is a storage-based server
@@ -1773,6 +1792,9 @@ func (r *Router) getMCPServerProtocol(namespace string) (string, error) {
 	if r.mcpServer == nil {
 		return "", fmt.Errorf("MCP server not available")
 	}
+	if namespace == admin.LocalNamespace {
+		return "in-process", nil
+	}
 	return r.mcpServer.GetProtocolVersionForAdmin(namespace)
 }
 
@@ -1783,6 +1805,9 @@ func (r *Router) getMCPResources(namespace string) ([]admin.ResourceInfo, error)
 	if r.mcpServer == nil {
 		return nil, fmt.Errorf("MCP server not available")
 	}
+	if namespace == admin.LocalNamespace {
+		return r.localResources()
+	}
 	return r.mcpServer.GetResourcesForAdmin(namespace)
 }
 
@@ -1791,6 +1816,9 @@ func (r *Router) getMCPResources(namespace string) ([]admin.ResourceInfo, error)
 func (r *Router) readMCPResource(namespace, uri string) (*admin.ResourceReadResult, error) {
 	if r.mcpServer == nil {
 		return nil, fmt.Errorf("MCP server not available")
+	}
+	if namespace == admin.LocalNamespace {
+		return r.localReadResource(uri)
 	}
 	return r.mcpServer.ReadResourceForAdmin(namespace, uri)
 }
@@ -1802,6 +1830,9 @@ func (r *Router) callMCPTool(namespace, toolName string, args map[string]any) (*
 	if r.mcpServer == nil {
 		return nil, fmt.Errorf("MCP server not available")
 	}
+	if namespace == admin.LocalNamespace {
+		return r.localCallTool(toolName, args)
+	}
 	return r.mcpServer.CallToolForAdmin(namespace, toolName, args)
 }
 
@@ -1809,6 +1840,9 @@ func (r *Router) callMCPTool(namespace, toolName string, args map[string]any) (*
 func (r *Router) getMCPPrompts(namespace string) ([]admin.PromptInfo, error) {
 	if r.mcpServer == nil {
 		return nil, fmt.Errorf("MCP server not available")
+	}
+	if namespace == admin.LocalNamespace {
+		return r.localPrompts()
 	}
 	return r.mcpServer.GetPromptsForAdmin(namespace)
 }
@@ -2474,4 +2508,153 @@ func (r *Router) HandleDeleteItem(w http.ResponseWriter, req *http.Request) {
 	if err := writeJSON(w, conversation); err != nil {
 		r.logger.WithError(err).Error("failed to write response")
 	}
+}
+
+// localServerInfo describes the scriptling-served local content for the
+// admin UI, present only when a scripting source is configured.
+func (r *Router) localServerInfo() (admin.MCPServerInfo, bool) {
+	if r.mcpServer == nil || r.mcpServer.scriptlingManager == nil {
+		return admin.MCPServerInfo{}, false
+	}
+	return admin.MCPServerInfo{
+		Namespace:      admin.LocalNamespace,
+		URL:            "local",
+		Enabled:        true,
+		ToolVisibility: "all",
+		LocalServer:    true,
+	}, true
+}
+
+// localTools lists the locally-served tools straight off the in-process
+// server the scriptling manager registers on.
+func (r *Router) localTools() ([]admin.ToolInfo, error) {
+	tools := r.mcpServer.server.ListToolsWithContext(context.Background())
+	out := make([]admin.ToolInfo, 0, len(tools))
+	for _, t := range tools {
+		info := admin.ToolInfo{
+			Name:        t.Name,
+			Description: t.Description,
+			Enabled:     true,
+			// Same app/icons mapping the remote listings apply, so a
+			// ui-linked local tool shows its app badge too.
+			IsApp: mcplib.ToolIsApp(t),
+		}
+		if len(t.Icons) > 0 {
+			info.Icons = make([]admin.Icon, 0, len(t.Icons))
+			for _, ic := range t.Icons {
+				info.Icons = append(info.Icons, admin.Icon{Src: ic.Src, MimeType: ic.MimeType, Sizes: ic.Sizes, Theme: ic.Theme})
+			}
+		}
+		if schema, ok := t.InputSchema.(map[string]interface{}); ok {
+			info.InputSchema = schema
+		}
+		out = append(out, info)
+	}
+	return out, nil
+}
+
+func (r *Router) localResources() ([]admin.ResourceInfo, error) {
+	resources := r.mcpServer.server.ListResources(context.Background())
+	templates := r.mcpServer.server.ListResourceTemplates(context.Background())
+	out := make([]admin.ResourceInfo, 0, len(resources)+len(templates))
+	for _, res := range resources {
+		out = append(out, admin.ResourceInfo{
+			URI:         res.URI,
+			Name:        res.Name,
+			Description: res.Description,
+			MimeType:    res.MimeType,
+			Skill:       strings.HasPrefix(res.URI, "skill://"),
+		})
+	}
+	for _, tmpl := range templates {
+		out = append(out, admin.ResourceInfo{
+			URI:         tmpl.URITemplate,
+			Template:    true,
+			Name:        tmpl.Name,
+			Description: tmpl.Description,
+			MimeType:    tmpl.MimeType,
+		})
+	}
+	return out, nil
+}
+
+func (r *Router) localReadResource(uri string) (*admin.ResourceReadResult, error) {
+	res, err := r.mcpServer.server.ReadResource(context.Background(), uri)
+	if err != nil {
+		return nil, err
+	}
+	out := &admin.ResourceReadResult{URI: uri}
+	if len(res.Contents) > 0 {
+		out.MimeType = res.Contents[0].MimeType
+		out.Text = res.Contents[0].Text
+	}
+	return out, nil
+}
+
+func (r *Router) localPrompts() ([]admin.PromptInfo, error) {
+	prompts := r.mcpServer.server.ListPrompts(context.Background())
+	out := make([]admin.PromptInfo, 0, len(prompts))
+	for _, p := range prompts {
+		info := admin.PromptInfo{Name: p.Name, Description: p.Description}
+		for _, a := range p.Arguments {
+			info.Arguments = append(info.Arguments, admin.PromptArgument{
+				Name:        a.Name,
+				Description: a.Description,
+				Required:    a.Required,
+			})
+		}
+		out = append(out, info)
+	}
+	return out, nil
+}
+
+func (r *Router) localCallTool(toolName string, args map[string]any) (*admin.ToolCallResult, error) {
+	resp, err := r.mcpServer.server.CallTool(context.Background(), toolName, args)
+	if err != nil {
+		return nil, err
+	}
+	result := &admin.ToolCallResult{StructuredContent: resp.StructuredContent}
+	for _, c := range resp.Content {
+		result.Content = append(result.Content, admin.ToolCallContent{
+			Type: c.Type,
+			Text: c.Text,
+		})
+	}
+	return result, nil
+}
+
+// getLocalServerInfoHook adapts localServerInfo's (info, ok) to the
+// constructor's plain MCPServerInfo signature.
+func (r *Router) getLocalServerInfoHook() admin.MCPServerInfo {
+	info, _ := r.localServerInfo()
+	return info
+}
+
+// callMCPPrompt renders a prompt with arguments for the admin UI's test
+// popup: in-process for the local namespace, over the wire for remotes.
+func (r *Router) callMCPPrompt(namespace, name string, args map[string]string) (*admin.PromptCallResult, error) {
+	if r.mcpServer == nil {
+		return nil, fmt.Errorf("MCP server not available")
+	}
+	if namespace == admin.LocalNamespace {
+		resp, err := r.mcpServer.server.GetPrompt(context.Background(), name, args)
+		if err != nil {
+			return nil, err
+		}
+		return promptResponseToResult(resp), nil
+	}
+	return r.mcpServer.CallPromptForAdmin(namespace, name, args)
+}
+
+// promptResponseToResult flattens the lib's PromptResponse into the admin
+// UI's simple role/text message list.
+func promptResponseToResult(resp *mcplib.PromptResponse) *admin.PromptCallResult {
+	result := &admin.PromptCallResult{Description: resp.Description}
+	for _, msg := range resp.Messages {
+		result.Messages = append(result.Messages, admin.PromptCallMessage{
+			Role: string(msg.Role),
+			Text: msg.Content.Text,
+		})
+	}
+	return result
 }

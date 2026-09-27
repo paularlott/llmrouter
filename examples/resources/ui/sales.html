@@ -1,0 +1,279 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Sales Dashboard</title>
+<style>
+  body {
+    margin: 0;
+    font-family: ui-sans-serif, system-ui, sans-serif;
+    background: linear-gradient(160deg, #0f172a 0%, #1e293b 100%);
+    color: #e2e8f0;
+    /* Self-sizing: MCP App hosts render this view inside an iframe whose
+       default viewport can be ~150px tall, so the dashboard must carry its
+       own sensible height rather than stretching to 100vh (which collapses
+       to the iframe height and produces a wide short strip). */
+    min-height: 560px;
+    display: flex;
+    flex-direction: column;
+  }
+  header {
+    padding: 20px 28px 8px;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  h1 { margin: 0; font-size: 20px; font-weight: 600; }
+  h1 .accent { color: #38bdf8; }
+  .pill {
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #38bdf8;
+    border: 1px solid rgba(56, 189, 248, 0.4);
+    border-radius: 999px;
+    padding: 3px 10px;
+  }
+  /* A definite CSS height (not flex-stretch) so the canvas never depends on
+     its own attribute height for layout. */
+  #chart {
+    display: block;
+    width: 100%;
+    height: 340px;
+    flex: none;
+  }
+  .figures {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    padding: 12px 28px 6px;
+  }
+  .figure {
+    background: rgba(30, 41, 59, 0.7);
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    border-radius: 12px;
+    padding: 10px 16px;
+    min-width: 120px;
+  }
+  .figure .label {
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #94a3b8;
+  }
+  .figure .value { font-size: 22px; font-weight: 700; margin-top: 2px; }
+  footer {
+    margin-top: auto;
+    padding: 10px 28px 18px;
+    font-size: 12px;
+    color: #94a3b8;
+    line-height: 1.5;
+  }
+  code {
+    font-family: ui-monospace, monospace;
+    background: rgba(15, 23, 42, 0.8);
+    border-radius: 4px;
+    padding: 1px 5px;
+    color: #7dd3fc;
+  }
+</style>
+</head>
+<body>
+  <header>
+    <h1>Sales <span class="accent">Dashboard</span></h1>
+    <span class="pill">MCP App · canvas</span>
+  </header>
+
+  <main style="display: contents;">
+    <canvas id="chart"></canvas>
+    <div class="figures">
+      <div class="figure">
+        <div class="label">Units</div>
+        <div class="value" id="units">4,010</div>
+      </div>
+      <div class="figure">
+        <div class="label">Revenue</div>
+        <div class="value" id="revenue">$172,830</div>
+      </div>
+      <div class="figure">
+        <div class="label">Top region</div>
+        <div class="value" id="top">us</div>
+      </div>
+    </div>
+  </main>
+
+  <footer>
+    Rendered from the <code>ui://sales.html</code> resource linked to the
+    <code>sales_summary</code> tool via <code>_meta.ui.resourceUri</code> — the
+    extension advertisement and MIME type come from llmrouter's resource scan,
+    no flags or manifests involved. The bars animate on load; hosts without the
+    UI extension show the tool's text result instead.
+  </footer>
+
+<script>
+(function () {
+  // ---- MCP Apps host bridge -------------------------------------------------
+  // The iframe a host renders this view in starts at an arbitrary default
+  // size; the app is responsible for reporting its real content height via
+  // the ui/notifications/size-changed notification (MCP Apps "Container
+  // Dimensions"). Without this the view renders as a wide short strip.
+  var nextId = 1;
+  var pending = new Map();
+
+  window.addEventListener('message', function (ev) {
+    var msg = ev.data;
+    if (!msg || msg.jsonrpc !== '2.0') return;
+    if (msg.id !== undefined && pending.has(msg.id)) {
+      var entry = pending.get(msg.id);
+      pending.delete(msg.id);
+      if (msg.error) entry.reject(new Error(msg.error.message));
+      else entry.resolve(msg.result);
+    }
+  });
+
+  function request(method, params) {
+    var id = nextId++;
+    window.parent.postMessage({ jsonrpc: '2.0', id: id, method: method, params: params }, '*');
+    return new Promise(function (resolve, reject) {
+      pending.set(id, { resolve: resolve, reject: reject });
+    });
+  }
+
+  function reportSize() {
+    var rect = document.documentElement.getBoundingClientRect();
+    window.parent.postMessage({
+      jsonrpc: '2.0',
+      method: 'ui/notifications/size-changed',
+      params: { width: Math.ceil(rect.width), height: Math.ceil(rect.height) },
+    }, '*');
+  }
+
+  request('ui/initialize', {
+    protocolVersion: '2026-01-26',
+    appCapabilities: {},
+    appInfo: { name: 'sales-dashboard', version: '1.0.0' },
+  }).then(function (init) {
+    // Host-declared maxHeight caps how tall we may report; past it the view
+    // scrolls internally instead of growing (applied via CSS so every
+    // measurement already respects it).
+    var dims = init && init.hostContext && init.hostContext.containerDimensions;
+    if (dims && dims.maxHeight) {
+      document.documentElement.style.maxHeight = dims.maxHeight + 'px';
+      document.documentElement.style.overflowY = 'auto';
+    }
+  }).catch(function () {
+    // Hosts without the bridge still get the fallback reports below.
+  });
+
+  // Report immediately and on every layout change.
+  if (typeof ResizeObserver !== 'undefined') {
+    new ResizeObserver(reportSize).observe(document.documentElement);
+  } else {
+    window.addEventListener('load', reportSize);
+    window.addEventListener('resize', reportSize);
+  }
+
+  // ---- The chart ------------------------------------------------------------
+  // Same figures the sales_summary tool reports (region="all").
+  var data = [
+    { region: "eu",   units: 1240, revenue: 48210.0 },
+    { region: "us",   units: 1810, revenue: 91500.0 },
+    { region: "apac", units: 960,  revenue: 33120.0 }
+  ];
+  var maxRevenue = Math.max.apply(null, data.map(function (d) { return d.revenue; }));
+
+  var canvas = document.getElementById("chart");
+  var ctx = canvas.getContext("2d");
+  var start = null;
+  var sweep = 0;
+  var DURATION = 900; // ms of grow-in
+
+  function resize() {
+    var rect = canvas.getBoundingClientRect();
+    var dpr = window.devicePixelRatio || 1;
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  window.addEventListener("resize", function () { resize(); });
+
+  function draw(progress) {
+    var rect = canvas.getBoundingClientRect();
+    var w = rect.width, h = rect.height;
+    ctx.clearRect(0, 0, w, h);
+
+    var pad = 28;
+    var barW = Math.min(90, (w - pad * 2) / data.length - 24);
+    var gap = (w - pad * 2 - barW * data.length) / (data.length + 1);
+    var baseY = h - 24;
+    var chartH = baseY - 20;
+
+    ctx.strokeStyle = "rgba(148, 163, 184, 0.12)";
+    ctx.lineWidth = 1;
+    for (var g = 0; g <= 4; g++) {
+      var gy = 20 + (chartH / 4) * g;
+      ctx.beginPath();
+      ctx.moveTo(pad, gy);
+      ctx.lineTo(w - pad, gy);
+      ctx.stroke();
+    }
+
+    data.forEach(function (d, i) {
+      var t = 1 - Math.pow(1 - progress, 3);
+      var barH = (d.revenue / maxRevenue) * chartH * t;
+      var x = pad + gap + i * (barW + gap);
+      var y = baseY - barH;
+
+      var glow = ctx.createLinearGradient(0, y, 0, baseY);
+      glow.addColorStop(0, "rgba(56, 189, 248, 0.9)");
+      glow.addColorStop(1, "rgba(56, 189, 248, 0.15)");
+      ctx.fillStyle = glow;
+      ctx.beginPath();
+      if (ctx.roundRect) {
+        ctx.roundRect(x, y, barW, barH, [6, 6, 0, 0]);
+      } else {
+        ctx.rect(x, y, barW, barH);
+      }
+      ctx.fill();
+
+      ctx.fillStyle = "#94a3b8";
+      ctx.font = "600 12px ui-monospace, monospace";
+      ctx.textAlign = "center";
+      ctx.fillText(d.region, x + barW / 2, baseY + 16);
+
+      if (progress > 0.55) {
+        ctx.fillStyle = "rgba(226, 232, 240, " + ((progress - 0.55) / 0.45) + ")";
+        ctx.font = "600 13px ui-sans-serif, system-ui, sans-serif";
+        ctx.fillText("$" + Math.round(d.revenue / 1000) + "k", x + barW / 2, y - 8);
+      }
+    });
+  }
+
+  function drawSweep(w, h, phase) {
+    var p = 28;
+    var x = p + (w - p * 2) * phase;
+    ctx.fillStyle = "rgba(56, 189, 248, 0.06)";
+    ctx.fillRect(x - 14, 20, 28, h - 44);
+  }
+
+  function frame(ts) {
+    if (start === null) start = ts;
+    var rect = canvas.getBoundingClientRect();
+    var progress = Math.min(1, (ts - start) / DURATION);
+
+    draw(progress);
+    if (progress >= 1) {
+      sweep = (sweep + 0.006) % 1.15;
+      drawSweep(rect.width, rect.height, sweep);
+    }
+    requestAnimationFrame(frame);
+  }
+
+  resize();
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
