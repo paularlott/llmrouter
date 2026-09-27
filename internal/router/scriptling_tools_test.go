@@ -644,7 +644,7 @@ func TestUIResourcesViaDirFlagsDeclareAppsExtension(t *testing.T) {
 	// A tool with a [ui] TOML table links its view via _meta.ui.resourceUri,
 	// making it an MCP Apps tool (ToolIsApp).
 	writeFile(t, filepath.Join(toolsDir, "sales_summary.toml"),
-		[]byte("description = \"Summarize sales\"\n[ui]\nresourceUri = \"ui://sales.html\"\n"))
+		[]byte("description = \"Summarize sales\"\n[ui]\nresourceUri = \"ui://sales.html\"\n\n[[icons]]\nsrc = \"data:image/svg+xml;base64,AAA\"\nmimeType = \"image/svg+xml\"\n"))
 	writeFile(t, filepath.Join(toolsDir, "sales_summary.py"),
 		[]byte("import scriptling.mcp.tool as tool\ntool.return_string('region=all')\n"))
 	manager.handleToolCreate("sales_summary")
@@ -673,6 +673,9 @@ func TestUIResourcesViaDirFlagsDeclareAppsExtension(t *testing.T) {
 	ui, ok := appTool.Meta["ui"].(map[string]any)
 	if !ok || ui["resourceUri"] != "ui://sales.html" {
 		t.Fatalf("ui link = %+v", appTool.Meta)
+	}
+	if len(appTool.Icons) != 1 || !strings.HasPrefix(appTool.Icons[0].Src, "data:image/svg+xml;base64,") {
+		t.Fatalf("app icon not carried on tools/list: %+v", appTool.Icons)
 	}
 
 	// The extension reaches clients in initialize: assert it via the raw

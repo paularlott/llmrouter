@@ -11,3 +11,11 @@ required = false
 # ui://sales.html view when this tool is invoked instead of showing raw text.
 [ui]
 resourceUri = "ui://sales.html"
+
+# The icons convention: src may be an https:// URL or a base64 data: URI
+# (below). Generate the block for your own icon file with the scriptling
+# toolchain helper: scriptling tools/make_icon/make_icon.py icon.svg
+[[icons]]
+src = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA0OCA0OCI+PHJlY3Qgd2lkdGg9IjQ4IiBoZWlnaHQ9IjQ4IiByeD0iMTAiIGZpbGw9IiMwZjE3MmEiLz48cmVjdCB4PSI4IiB5PSIyNCIgd2lkdGg9IjYiIGhlaWdodD0iMTQiIHJ4PSIxLjUiIGZpbGw9IiMzOGJkZjgiLz48cmVjdCB4PSIxOCIgeT0iMTYiIHdpZHRoPSI2IiBoZWlnaHQ9IjIyIiByeD0iMS41IiBmaWxsPSIjMzhiZGY4Ii8+PHJlY3QgeD0iMjgiIHk9IjIwIiB3aWR0aD0iNiIgaGVpZ2h0PSIxOCIgcng9IjEuNSIgZmlsbD0iIzM4YmRmOCIgb3BhY2l0eT0iMC42Ii8+PHJlY3QgeD0iMzgiIHk9IjEyIiB3aWR0aD0iNiIgaGVpZ2h0PSIyNiIgcng9IjEuNSIgZmlsbD0iIzM4YmRmOCIvPjwvc3ZnPg=="
+mimeType = "image/svg+xml"
+sizes = ["any"]
