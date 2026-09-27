@@ -84,6 +84,11 @@ func ServerFlags() []cli.Flag {
 			Usage:      "Directory containing MCP skills (.md files, one skill per file)",
 			ConfigPath: []string{"scripting.skills_dir"},
 		},
+		&cli.StringFlag{
+			Name:       "app-dir",
+			Usage:      "Unpacked MCP app package directory, served from disk (manifest.toml with serve including \"mcp\"): its tools/, resources/, prompts/ and skills/ dirs are served and watched; packed .zip apps are served by scriptling --package",
+			ConfigPath: []string{"scripting.app_dir"},
+		},
 		&cli.StringSliceFlag{
 			Name:       "plugin-dir",
 			Usage:      "Directory containing scriptling plugin executables (can be repeated)",

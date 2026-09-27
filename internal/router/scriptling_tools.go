@@ -20,6 +20,7 @@ import (
 	"github.com/paularlott/scriptling/extlibs/secretprovider"
 	scriptlingplugin "github.com/paularlott/scriptling/plugin"
 	mcpcli "github.com/paularlott/scriptling/scriptling-cli/mcp"
+	"github.com/paularlott/scriptling/scriptling-cli/pack"
 	"github.com/paularlott/scriptling/scriptling-cli/setup"
 )
 
@@ -47,6 +48,8 @@ type scriptlingToolManager struct {
 	toolTimers       map[string]*time.Timer // per-name debounce for tool reloads
 	resourceTimer    *time.Timer            // single debounce timer for full resources reload
 	promptTimer      *time.Timer            // single debounce timer for full prompts reload
+	skillTimer       *time.Timer            // single debounce timer for full skills reload
+	skillNames       []string               // skills currently registered, for unregister on reload
 	done             chan struct{}
 	wg               sync.WaitGroup
 	servers          []*mcp_lib.Server // every server that should serve the scriptling content: the chat-side server and the public /mcp endpoint server
@@ -89,6 +92,64 @@ func NewScriptlingToolManager(config types.ScriptingConfig, logger Logger, serve
 		debounceDuration: 500 * time.Millisecond,
 		done:             make(chan struct{}),
 		toolTimers:       make(map[string]*time.Timer),
+	}
+
+	// An unpacked MCP app package (manifest.toml declaring serve=["mcp"])
+	// provides its convention dirs; an explicitly configured dir wins over
+	// the package's. The app's ui:// resources carry the MCP Apps MIME type
+	// via the shared scan, and the UI Apps extension is advertised so
+	// capable clients offer the UI.
+	appServesMCP := false
+	if config.AppDir != "" {
+		// llmrouter serves app packages from disk only: the watcher needs
+		// real directories to hot-reload. Packed .zip artifacts are
+		// scriptling's job (scriptling --package serves zips, dirs and URLs).
+		if strings.HasSuffix(config.AppDir, ".zip") {
+			return nil, fmt.Errorf("app_dir must be an unpacked app directory, got %s: serve packed .zip app packages with scriptling --package", config.AppDir)
+		}
+		if info, err := os.Stat(config.AppDir); err == nil && !info.IsDir() {
+			return nil, fmt.Errorf("app_dir must be an unpacked app directory, got file %s: serve packed .zip app packages with scriptling --package", config.AppDir)
+		}
+		bundle, err := pack.OpenBundleDir(config.AppDir)
+		if err != nil {
+			return nil, fmt.Errorf("failed to open MCP app package %s: %w", config.AppDir, err)
+		}
+		for _, proto := range bundle.Manifest.Serve {
+			if proto == "mcp" {
+				appServesMCP = true
+			}
+		}
+		if !appServesMCP {
+			return nil, fmt.Errorf("MCP app package %s does not serve mcp (manifest serve: %v)", config.AppDir, bundle.Manifest.Serve)
+		}
+		if config.ToolsDir == "" {
+			if fileExists(filepath.Join(config.AppDir, "tools")) {
+				config.ToolsDir = filepath.Join(config.AppDir, "tools")
+			}
+		}
+		if config.ResourcesDir == "" {
+			if fileExists(filepath.Join(config.AppDir, "resources")) {
+				config.ResourcesDir = filepath.Join(config.AppDir, "resources")
+			}
+		}
+		if config.PromptsDir == "" {
+			if fileExists(filepath.Join(config.AppDir, "prompts")) {
+				config.PromptsDir = filepath.Join(config.AppDir, "prompts")
+			}
+		}
+		if config.SkillsDir == "" {
+			if fileExists(filepath.Join(config.AppDir, "skills")) {
+				config.SkillsDir = filepath.Join(config.AppDir, "skills")
+			}
+		}
+		logger.Info("Serving MCP app package", "path", config.AppDir, "name", bundle.Manifest.Name, "version", bundle.Manifest.Version)
+	}
+	if appServesMCP {
+		for _, s := range servers {
+			s.DeclareExtension(mcp_lib.UIAppsExtensionID, map[string]any{
+				"mimeTypes": []string{mcp_lib.UIAppMimeType},
+			})
+		}
 	}
 
 	// Resolve absolute paths for each configured source folder.
@@ -146,12 +207,14 @@ func NewScriptlingToolManager(config types.ScriptingConfig, logger Logger, serve
 	}
 
 	if stm.skillsDirAbs != "" {
-		if err := stm.registerSkills(); err != nil {
+		names, err := stm.registerSkills()
+		stm.skillNames = names
+		if err != nil {
 			return nil, err
 		}
 	}
 
-	if stm.toolsDirAbs != "" || stm.resourcesDirAbs != "" || stm.promptsDirAbs != "" {
+	if stm.toolsDirAbs != "" || stm.resourcesDirAbs != "" || stm.promptsDirAbs != "" || stm.skillsDirAbs != "" {
 		if err := stm.startWatching(); err != nil {
 			logger.Warn("Failed to start source-folder watcher, auto-reload disabled", "error", err)
 		}
@@ -296,14 +359,16 @@ func (stm *scriptlingToolManager) startWatching() error {
 		}
 	}
 
-	// Resources + prompts: recursive watch (subdirectories are part of
-	// the URI scheme / namespace structure).
+	// Resources, prompts and skills: recursive watch. Resource and prompt
+	// subdirectories are part of the URI scheme / namespace structure;
+	// skills are whole directories of files by definition.
 	for _, pair := range []struct {
 		dir  string
 		kind string
 	}{
 		{stm.resourcesDirAbs, "resources"},
 		{stm.promptsDirAbs, "prompts"},
+		{stm.skillsDirAbs, "skills"},
 	} {
 		if pair.dir == "" {
 			continue
@@ -395,6 +460,11 @@ func (stm *scriptlingToolManager) dispatchEvent(event fsnotify.Event) {
 			return
 		}
 		stm.schedulePromptsReload()
+
+	case stm.skillsDirAbs != "" && strings.HasPrefix(event.Name, stm.skillsDirAbs):
+		// Skills are directories of arbitrary files (SKILL.md plus
+		// supporting material), so any event in the tree reloads.
+		stm.scheduleSkillsReload()
 	}
 }
 
@@ -675,10 +745,11 @@ func fileExists(path string) bool {
 // in the directory becomes a skill resource, and the SKILL.md frontmatter's
 // description seeds the skill's frontmatter. Registered on every server
 // the manager serves.
-func (stm *scriptlingToolManager) registerSkills() error {
+func (stm *scriptlingToolManager) registerSkills() ([]string, error) {
+	var registered []string
 	entries, err := os.ReadDir(stm.skillsDirAbs)
 	if err != nil {
-		return fmt.Errorf("failed to read skills directory: %w", err)
+		return nil, fmt.Errorf("failed to read skills directory: %w", err)
 	}
 	for _, e := range entries {
 		if !e.IsDir() {
@@ -710,7 +781,7 @@ func (stm *scriptlingToolManager) registerSkills() error {
 			return nil
 		})
 		if err != nil {
-			return fmt.Errorf("failed to read skill %s: %w", e.Name(), err)
+			return registered, fmt.Errorf("failed to read skill %s: %w", e.Name(), err)
 		}
 		// One bad skill directory (missing SKILL.md pieces, frontmatter name
 		// not matching the directory name) is skipped with a warning on
@@ -728,8 +799,9 @@ func (stm *scriptlingToolManager) registerSkills() error {
 			continue
 		}
 		stm.logger.Info("Registered MCP skill", "name", e.Name())
+		registered = append(registered, e.Name())
 	}
-	return nil
+	return registered, nil
 }
 
 // frontmatterValue pulls one top-level value out of a SKILL.md's YAML
@@ -764,4 +836,41 @@ func firstContentLine(s string) string {
 		return line
 	}
 	return ""
+}
+
+// scheduleSkillsReload debounces a full skills reload, mirroring the
+// resources pattern: unregister every previously-registered skill, rescan
+// the folder, re-register.
+func (stm *scriptlingToolManager) scheduleSkillsReload() {
+	stm.debounceMu.Lock()
+	defer stm.debounceMu.Unlock()
+
+	if stm.skillTimer != nil {
+		stm.skillTimer.Stop()
+	}
+	stm.skillTimer = time.AfterFunc(stm.debounceDuration, stm.reloadSkills)
+}
+
+func (stm *scriptlingToolManager) reloadSkills() {
+	stm.logger.Info("Reloading scriptling skills", "old", len(stm.skillNames))
+
+	// Unregister everything we previously registered. Skills have no
+	// listChanged notification (SEP-2640), so clients pick the new set up
+	// on their next skills/list — no restart needed.
+	for _, name := range stm.skillNames {
+		for _, s := range stm.servers {
+			s.UnregisterSkill(name)
+		}
+	}
+	stm.skillNames = nil
+
+	names, err := stm.registerSkills()
+	stm.skillNames = names
+	if err != nil {
+		stm.logger.Error("Failed to reload scriptling skills", "error", err)
+	}
+	stm.logger.Info("Skills reloaded", "new", len(names))
+	if stm.eventBroadcaster != nil {
+		stm.eventBroadcaster.Broadcast(lmchatkit.ServerEvent{Type: "skills_changed"})
+	}
 }

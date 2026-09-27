@@ -345,3 +345,210 @@ func TestScriptlingSkillsServed(t *testing.T) {
 		}
 	}
 }
+
+// Skills changes are picked up without a restart: the skills tree is
+// watched recursively, so adding a skill directory, editing files inside an
+// existing skill, and removing a skill all reach the live servers before
+// the next client skills/list.
+func TestScriptlingSkillsReloadOnDiskChange(t *testing.T) {
+	dir := t.TempDir()
+	firstDir := filepath.Join(dir, "first-skill")
+	os.MkdirAll(firstDir, 0o755)
+	writeFile(t, filepath.Join(firstDir, "SKILL.md"), []byte("---\nname: first-skill\ndescription: First\n---\n\nOriginal body."))
+
+	mainServer := mcp_lib.NewServer("test", "1.0")
+	manager, err := NewScriptlingToolManager(types.ScriptingConfig{
+		SkillsDir: dir,
+	}, &testLogger{}, mainServer)
+	if err != nil {
+		t.Fatalf("manager: %v", err)
+	}
+	defer manager.Shutdown()
+
+	skillURIs := func() []string {
+		var uris []string
+		for _, sk := range mainServer.ListSkills() {
+			uris = append(uris, sk.URI)
+		}
+		return uris
+	}
+	waitForSkills := func(t *testing.T, want int, contains, missing string) {
+		t.Helper()
+		deadline := time.Now().Add(5 * time.Second)
+		for time.Now().Before(deadline) {
+			uris := skillURIs()
+			ok := len(uris) == want
+			for _, u := range uris {
+				if missing != "" && u == missing {
+					ok = false
+				}
+			}
+			if contains != "" {
+				found := false
+				for _, u := range uris {
+					if u == contains {
+						found = true
+					}
+				}
+				ok = ok && found
+			}
+			if ok {
+				return
+			}
+			time.Sleep(25 * time.Millisecond)
+		}
+		t.Fatalf("skills never reached want=%d contains=%q missing=%q, got %v", want, contains, missing, skillURIs())
+	}
+
+	waitForSkills(t, 1, "skill://first-skill/SKILL.md", "")
+
+	// Add a second skill (a whole new directory of files) and edit the
+	// first skill's SKILL.md in place — both must reload.
+	secondDir := filepath.Join(dir, "second-skill")
+	os.MkdirAll(secondDir, 0o755)
+	writeFile(t, filepath.Join(secondDir, "SKILL.md"), []byte("---\nname: second-skill\ndescription: Second\n---\n\nSecond body."))
+	writeFile(t, filepath.Join(firstDir, "SKILL.md"), []byte("---\nname: first-skill\ndescription: First\n---\n\nEdited body."))
+	waitForSkills(t, 2, "skill://second-skill/SKILL.md", "")
+
+	// The edited SKILL.md content is what clients read now.
+	res, err := mainServer.ReadResource(context.Background(), "skill://first-skill/SKILL.md")
+	if err != nil || !strings.Contains(res.Contents[0].Text, "Edited body.") {
+		t.Fatalf("edited SKILL.md not served: (%+v, %v)", res, err)
+	}
+
+	// Removing a skill directory drops it from the listing on reload.
+	if err := os.RemoveAll(secondDir); err != nil {
+		t.Fatal(err)
+	}
+	waitForSkills(t, 1, "skill://first-skill/SKILL.md", "skill://second-skill/SKILL.md")
+}
+
+// An unpacked MCP app package (manifest.toml serve=["mcp"]) is served in
+// full: tools, resources (including ui:// app views with the MCP Apps MIME
+// type), prompts and skills — with the UI Apps extension advertised.
+func TestScriptlingServesMCAppPackage(t *testing.T) {
+	appDir := t.TempDir()
+	writeFile(t, filepath.Join(appDir, "manifest.toml"),
+		[]byte("name = \"demo-app\"\nversion = \"1.2.3\"\nserve = [\"mcp\"]\n"))
+
+	writeFile(t, filepath.Join(appDir, "tools", "greet.toml"),
+		[]byte("description = \"Greet\"\nkeywords=[\"hi\"]\n[[parameters]]\nname=\"name\"\ntype=\"string\"\ndescription=\"Name\"\nrequired=true\n"))
+	writeFile(t, filepath.Join(appDir, "tools", "greet.py"),
+		[]byte("import scriptling.mcp.tool as tool\ntool.return_string('hi ' + tool.get_string('name'))\n"))
+
+	if err := os.MkdirAll(filepath.Join(appDir, "resources", "ui"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, filepath.Join(appDir, "resources", "ui", "dashboard.html"),
+		[]byte("<html><body>Sales dashboard</body></html>"))
+
+	writeFile(t, filepath.Join(appDir, "prompts", "hint.md"),
+		[]byte("Summarize the sales dashboard."))
+
+	skillDir := filepath.Join(appDir, "skills", "demo-skill")
+	if err := os.MkdirAll(skillDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, filepath.Join(skillDir, "SKILL.md"),
+		[]byte("---\nname: demo-skill\ndescription: Demo app skill\n---\nUse the dashboard."))
+
+	mainServer := mcp_lib.NewServer("llmrouter-app-test", "1.0")
+	manager, err := NewScriptlingToolManager(types.ScriptingConfig{
+		AppDir: appDir,
+	}, &testLogger{}, mainServer)
+	if err != nil {
+		t.Fatalf("manager: %v", err)
+	}
+	defer manager.Shutdown()
+
+	client, cleanup := pipeClientServer(t, mainServer)
+	defer cleanup()
+	ctx := context.Background()
+
+	// Tools from the package.
+	tools, err := client.ListTools(ctx)
+	if err != nil {
+		t.Fatalf("ListTools: %v", err)
+	}
+	if !containsToolName(tools, "greet") {
+		t.Fatalf("expected greet tool, got %+v", toolNames(tools))
+	}
+
+	// The ui:// app view is a resource with the MCP Apps MIME type.
+	resources, err := client.ListResources(ctx)
+	if err != nil {
+		t.Fatalf("ListResources: %v", err)
+	}
+	foundUI := false
+	for _, r := range resources {
+		if r.URI == "ui://dashboard.html" {
+			foundUI = true
+			if r.MimeType != mcp_lib.UIAppMimeType {
+				t.Fatalf("ui resource mime = %q, want %q", r.MimeType, mcp_lib.UIAppMimeType)
+			}
+		}
+	}
+	if !foundUI {
+		t.Fatalf("ui://dashboard.html not listed: %+v", resources)
+	}
+	uiRes, err := client.ReadResource(ctx, "ui://dashboard.html")
+	if err != nil || len(uiRes.Contents) == 0 || !strings.Contains(uiRes.Contents[0].Text, "Sales dashboard") {
+		t.Fatalf("ui read = (%+v, %v)", uiRes, err)
+	}
+	if uiRes.Contents[0].MimeType != mcp_lib.UIAppMimeType {
+		t.Fatalf("ui read mime = %q, want %q", uiRes.Contents[0].MimeType, mcp_lib.UIAppMimeType)
+	}
+
+	// Prompts and skills from the package.
+	prompts, err := client.ListPrompts(ctx)
+	if err != nil {
+		t.Fatalf("ListPrompts: %v", err)
+	}
+	foundPrompt := false
+	for _, p := range prompts {
+		if p.Name == "hint" {
+			foundPrompt = true
+		}
+	}
+	if !foundPrompt {
+		t.Fatalf("hint prompt not listed: %+v", prompts)
+	}
+	skills := mainServer.ListSkills()
+	if len(skills) != 1 || skills[0].URI != "skill://demo-skill/SKILL.md" {
+		t.Fatalf("skills = %+v", skills)
+	}
+}
+
+// A package whose manifest does not serve "mcp" is rejected at startup.
+func TestScriptlingRejectsNonMCPAppPackage(t *testing.T) {
+	appDir := t.TempDir()
+	writeFile(t, filepath.Join(appDir, "manifest.toml"),
+		[]byte("name = \"web-only\"\nversion = \"0.1.0\"\nserve = [\"http\"]\n"))
+	writeFile(t, filepath.Join(appDir, "webroot", "index.html"), []byte("<html></html>"))
+
+	mainServer := mcp_lib.NewServer("llmrouter-app-test", "1.0")
+	_, err := NewScriptlingToolManager(types.ScriptingConfig{
+		AppDir: appDir,
+	}, &testLogger{}, mainServer)
+	if err == nil {
+		t.Fatal("expected error for app package that does not serve mcp")
+	}
+	if !strings.Contains(err.Error(), "does not serve") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+// A packed .zip is scriptling's to serve: llmrouter's app_dir is
+// disk-served directories only (the watcher needs real directories).
+func TestScriptlingRejectsZipAppPackage(t *testing.T) {
+	mainServer := mcp_lib.NewServer("llmrouter-app-test", "1.0")
+	_, err := NewScriptlingToolManager(types.ScriptingConfig{
+		AppDir: "/tmp/some-app.zip",
+	}, &testLogger{}, mainServer)
+	if err == nil {
+		t.Fatal("expected error for zip app_dir")
+	}
+	if !strings.Contains(err.Error(), "scriptling --package") {
+		t.Fatalf("error should point at scriptling for packed apps: %v", err)
+	}
+}

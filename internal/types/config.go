@@ -101,6 +101,7 @@ type ScriptingConfig struct {
 	ResourcesDir string   `json:"resources_dir,omitempty"`  // Directory containing static files and resource templates (first segment = URI scheme)
 	PromptsDir   string   `json:"prompts_dir,omitempty"`    // Directory containing .toml+.py dynamic prompts or static .md/.txt prompts
 	SkillsDir    string   `json:"skills_dir,omitempty"`      // Directory containing MCP skills (.md files, one skill per file)
+	AppDir       string   `json:"app_dir,omitempty"`        // Unpacked MCP app package (manifest.toml with serve including "mcp"); its tools/, resources/, prompts/ and skills/ convention dirs are served and watched. Explicit dirs above take precedence.
 	PluginDirs   []string `json:"plugin_dirs,omitempty"`    // Directories containing plugin executables
 	LibPaths     []string `json:"lib_paths,omitempty"`      // Additional directories to search for libraries
 	ExecScript   bool     `json:"exec_script,omitempty"`    // Register the built-in execute_script MCP tool
