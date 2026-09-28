@@ -88,7 +88,64 @@ func NewMCPServer(config *types.Config, logger Logger) (*MCPServer, error) {
 
 	mcpServer.pendingStaticEntries = entries
 
+	// get_skill / list_skills as regular tools, on the public /mcp endpoint
+	// only: a stopgap for MCP clients (e.g. Claude Desktop) that don't yet
+	// implement the skills extension (SEP-2640) client-side and would
+	// otherwise never see these skills at all. The chat-side server
+	// (mcpServer.server) is deliberately left alone — the web chat already
+	// gets the full skills listing injected into its system prompt by
+	// lmchatkit (lmchatkit__get_skill), so an equivalent tool there would
+	// only add tokens with no discovery benefit.
+	registerSkillTools(mcpServer.endpointServer)
+
 	return mcpServer, nil
+}
+
+// registerSkillTools adds get_skill and list_skills to server, backed by the
+// same ListSkillsWithContext/GetSkillWithContext/ReadResource calls the
+// library uses to answer the wire-level skills/list, skills/get and
+// resources/read requests — so the tool-based fallback and the native
+// skills extension always agree, including federated skills from any
+// remote server registered on server with FederateSkills set.
+func registerSkillTools(server *mcp.Server) {
+	server.RegisterTool(
+		mcp.NewTool("list_skills", "List the available skills: curated step-by-step procedures for specific tasks. Returns each skill's name, description, and URI — pass the URI to get_skill to retrieve its full instructions."),
+		func(ctx context.Context, _ *mcp.ToolRequest) (*mcp.ToolResponse, error) {
+			type entry struct {
+				Name        string `json:"name"`
+				Description string `json:"description"`
+				URI         string `json:"uri"`
+			}
+			skills := server.ListSkillsWithContext(ctx)
+			out := make([]entry, 0, len(skills))
+			for _, skill := range skills {
+				name, _ := skill.Frontmatter["name"].(string)
+				description, _ := skill.Frontmatter["description"].(string)
+				out = append(out, entry{Name: name, Description: description, URI: skill.URI})
+			}
+			return mcp.NewToolResponseJSON(out), nil
+		},
+	)
+
+	server.RegisterTool(
+		mcp.NewTool("get_skill", "Retrieve a skill's detailed instructions by URI. Pass the skill URI (e.g. 'skill://golang/SKILL.md'). Returns the skill content as text.",
+			mcp.String("uri", "The skill URI to retrieve (e.g. skill://golang/SKILL.md)", mcp.Required()),
+		),
+		func(ctx context.Context, req *mcp.ToolRequest) (*mcp.ToolResponse, error) {
+			uri, err := req.String("uri")
+			if err != nil || uri == "" {
+				return mcp.NewToolResponseText("Error: skill URI is required"), nil
+			}
+			if _, ok := server.GetSkillWithContext(ctx, uri); !ok {
+				return mcp.NewToolResponseText("Error: skill not found: " + uri), nil
+			}
+			resp, err := server.ReadResource(ctx, uri)
+			if err != nil || resp == nil || len(resp.Contents) == 0 {
+				return mcp.NewToolResponseText("Error: skill not found: " + uri), nil
+			}
+			return mcp.NewToolResponseText(resp.Contents[0].Text), nil
+		},
+	)
 }
 
 // createRemoteServerEntry creates a RemoteServerEntry and remoteServerClient for a server config
