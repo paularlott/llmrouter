@@ -4,14 +4,14 @@ go 1.27.1
 
 require (
 	github.com/BurntSushi/toml v1.6.0
-	github.com/crgimenes/glaze v0.0.54
+	github.com/crgimenes/glaze v0.0.62
 	github.com/fsnotify/fsnotify v1.10.1
 	github.com/google/uuid v1.6.0
 	github.com/paularlott/cli v0.9.1
 	github.com/paularlott/lmchatkit v0.11.0
 	github.com/paularlott/logger v0.3.0
-	github.com/paularlott/mcp v0.29.1
-	github.com/paularlott/scriptling v0.27.0
+	github.com/paularlott/mcp v0.30.1
+	github.com/paularlott/scriptling v0.27.1
 	github.com/paularlott/snapshotkv v0.6.0
 )
 
@@ -35,7 +35,7 @@ require (
 	github.com/klauspost/compress v1.20.1 // indirect
 	github.com/lufia/plan9stats v0.0.0-20260802145828-341c2f0c90b5 // indirect
 	github.com/mattn/go-isatty v0.0.24 // indirect
-	github.com/ncruces/go-strftime v1.0.0 // indirect
+	github.com/ncruces/go-strftime v1.1.0 // indirect
 	github.com/paularlott/gossip v0.22.0 // indirect
 	github.com/paularlott/jsonrpc v0.2.0 // indirect
 	github.com/power-devops/perfstat v0.0.0-20260916203055-22a1a467d9f0 // indirect
@@ -63,5 +63,5 @@ require (
 	modernc.org/libc v1.77.1 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.12.1 // indirect
-	modernc.org/sqlite v1.59.0 // indirect
+	modernc.org/sqlite v1.60.1 // indirect
 )
