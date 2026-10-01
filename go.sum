@@ -10,6 +10,8 @@ github.com/crgimenes/glaze v0.0.54 h1:7Sc1v3ouhOudPH3fzFcNbOjmGRmH/UoKZdObjRavFJ
 github.com/crgimenes/glaze v0.0.54/go.mod h1:cppy7Il8j9Gf7Y223OMkMqk9cRZ97QNN2QijBhRmjA0=
 github.com/crgimenes/glaze v0.0.62 h1:FPx9AD/Ve8DH4UNAPIDYmh0Fzbaz+xDWW79eIctOKdU=
 github.com/crgimenes/glaze v0.0.62/go.mod h1:NRW4zIYUZeJgkfzdYQkSY+psZhudhlbZw6SvEhrziWw=
+github.com/crgimenes/glaze v0.0.67 h1:T8YxWgtVKFF6Akw7f2KB8MU/IOP+dTiYG/XFQ4BNZCA=
+github.com/crgimenes/glaze v0.0.67/go.mod h1:6entg9bLZvTDjEuVBX/tO2c4I1HlMPuerkpnVwIVFZo=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/dgraph-io/badger/v4 v4.9.6 h1:IQqMPVGLNCQr1b4Mu8lHkYm/xyqFRsyKaFEtyLi9CCQ=
 github.com/dgraph-io/badger/v4 v4.9.6/go.mod h1:Xa9dAupjbwAacupWFCpa6YEn9E1PjBXkfZYr2I/8aWg=
@@ -95,6 +97,8 @@ github.com/paularlott/scriptling v0.27.0 h1:s+BwVKBTYhSsMU4cjmeHrjEggjpIgNWTJYST
 github.com/paularlott/scriptling v0.27.0/go.mod h1:g0SzU+7/FCRwJMw/wTWJsNP7F2Mf+D15DJ9UOGELMAw=
 github.com/paularlott/scriptling v0.27.1 h1:qHagynqbcI+jaeM6LChU38K/hDGu9fQRsHHl9tCTuN4=
 github.com/paularlott/scriptling v0.27.1/go.mod h1:aFCbFh5s7lmYJuS0lVL006KeGA2Tl1T2Q8Ysd2fzOJk=
+github.com/paularlott/scriptling v0.27.2 h1:cyWR5ROXTos7K2X295UhPHZqo44tJz9wSQFt4c4iIvU=
+github.com/paularlott/scriptling v0.27.2/go.mod h1:aFCbFh5s7lmYJuS0lVL006KeGA2Tl1T2Q8Ysd2fzOJk=
 github.com/paularlott/snapshotkv v0.6.0 h1:bGUVANfPg7+2fsVnnnCWQvkuDrBWPg3mchGoEgel28Q=
 github.com/paularlott/snapshotkv v0.6.0/go.mod h1:TAiDx8gWhRS5cy1i8iKpxCQsWWpmQ0zA4IBEwLX58Ow=
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=

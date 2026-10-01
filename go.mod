@@ -4,14 +4,14 @@ go 1.27.1
 
 require (
 	github.com/BurntSushi/toml v1.6.0
-	github.com/crgimenes/glaze v0.0.62
+	github.com/crgimenes/glaze v0.0.67
 	github.com/fsnotify/fsnotify v1.10.1
 	github.com/google/uuid v1.6.0
 	github.com/paularlott/cli v0.9.1
 	github.com/paularlott/lmchatkit v0.11.0
 	github.com/paularlott/logger v0.3.0
 	github.com/paularlott/mcp v0.30.1
-	github.com/paularlott/scriptling v0.27.1
+	github.com/paularlott/scriptling v0.27.2
 	github.com/paularlott/snapshotkv v0.6.0
 )
 
