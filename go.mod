@@ -4,14 +4,14 @@ go 1.27.1
 
 require (
 	github.com/BurntSushi/toml v1.6.0
-	github.com/crgimenes/glaze v0.0.67
+	github.com/crgimenes/glaze v0.0.72
 	github.com/fsnotify/fsnotify v1.10.1
 	github.com/google/uuid v1.6.0
-	github.com/paularlott/cli v0.9.1
+	github.com/paularlott/cli v0.9.2
 	github.com/paularlott/lmchatkit v0.11.0
 	github.com/paularlott/logger v0.3.0
-	github.com/paularlott/mcp v0.30.1
-	github.com/paularlott/scriptling v0.27.2
+	github.com/paularlott/mcp v0.30.2
+	github.com/paularlott/scriptling v0.28.0
 	github.com/paularlott/snapshotkv v0.6.0
 )
 
@@ -36,22 +36,23 @@ require (
 	github.com/lufia/plan9stats v0.0.0-20260802145828-341c2f0c90b5 // indirect
 	github.com/mattn/go-isatty v0.0.24 // indirect
 	github.com/ncruces/go-strftime v1.1.0 // indirect
-	github.com/paularlott/gossip v0.22.0 // indirect
+	github.com/paularlott/gossip v0.23.0 // indirect
 	github.com/paularlott/jsonrpc v0.2.0 // indirect
 	github.com/power-devops/perfstat v0.0.0-20260916203055-22a1a467d9f0 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	github.com/shamaton/msgpack/v3 v3.2.3 // indirect
 	github.com/shirou/gopsutil/v3 v3.24.5 // indirect
-	github.com/shoenig/go-m1cpu v0.2.2 // indirect
+	github.com/shoenig/go-m1cpu v0.2.3 // indirect
 	github.com/tklauser/go-sysconf v0.4.0 // indirect
 	github.com/tklauser/numcpus v0.12.0 // indirect
 	github.com/valkey-io/valkey-go v1.0.78 // indirect
 	github.com/yuin/goldmark v1.8.6 // indirect
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
-	go.opentelemetry.io/otel v1.46.0 // indirect
-	go.opentelemetry.io/otel/metric v1.46.0 // indirect
-	go.opentelemetry.io/otel/trace v1.46.0 // indirect
+	go.opentelemetry.io/otel v1.47.0 // indirect
+	go.opentelemetry.io/otel/log v1.47.0 // indirect
+	go.opentelemetry.io/otel/metric v1.47.0 // indirect
+	go.opentelemetry.io/otel/trace v1.47.0 // indirect
 	golang.org/x/net v0.59.0 // indirect
 	golang.org/x/oauth2 v0.37.0 // indirect
 	golang.org/x/sync v0.23.0 // indirect
