@@ -6,6 +6,8 @@ import (
 	"math/rand"
 
 	"github.com/paularlott/mcp/ai/openai"
+	"github.com/paularlott/scriptling/errors"
+	scriptlingai "github.com/paularlott/scriptling/extlibs/ai"
 	"github.com/paularlott/scriptling/evaluator"
 	"github.com/paularlott/scriptling/object"
 )
@@ -56,6 +58,21 @@ func buildRouterLibrary(r *Router) *object.Library {
 			env.Set("output_provider", object.NewString(hint))
 		}
 	}, "set_model(model_id, hint=provider) - Set the model to route to; hint optionally suggests a provider")
+
+	b.FunctionWithHelp("ai", func(ctx context.Context) object.Object {
+		client, err := r.scriptAI()
+		if err != nil {
+			return errors.NewError("router.ai: %v", err)
+		}
+		return scriptlingai.WrapClient(client)
+	}, `ai() - Returns an AI client that calls this router in-process (no endpoint, port or token needed).
+
+Supports chat (completion, ask, ...) and decision models (decide). A request for a smart router
+model from inside a script uses that router's default_model instead of running its script.
+
+Example:
+  client = router.ai()
+  r = client.decide("clef-flash:latest", router.last_message(), questions={...})`)
 
 	b.FunctionWithHelp("get_request", func(ctx context.Context) map[string]interface{} {
 		return reqData(ctx)

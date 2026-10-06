@@ -355,7 +355,7 @@ Every routing script has access to all Scriptling standard libraries (`json`, `r
 | `yaml`                     | YAML parsing                                  |
 | `toml`                     | TOML parsing                                  |
 | `sys`                      | System parameters                             |
-| `scriptling.ai`            | AI/LLM client for OpenAI-compatible APIs      |
+| `scriptling.ai`            | AI/LLM client for OpenAI-compatible APIs (or use `router.ai()` for a pre-configured in-process client) |
 | `scriptling.ai.agent`      | Agentic AI loop with automatic tool execution |
 | `scriptling.mcp`           | MCP tool interaction                          |
 | `scriptling.toon`          | TOON encoding/decoding                        |
@@ -383,10 +383,12 @@ import scriptling.ai as ai
 
 client = ai.Client("", api_key=vars.openai_key)   # attribute access
 key = vars.get("openai_key")                       # or dynamic lookup
-key = vars.get("missing", "")                      # with a default
+key = vars.get("missing", default="")                      # with a default
 ```
 
 All values are strings. `vars` is always available (even with no vars defined), so `vars.get(name, default="")` is always callable.
+
+Routing scripts can call models to decide, including [decision models](#decision-models) such as `clef-flash`, which classify a request in a single fast call. See [examples/routers/triage.py](examples/routers/triage.py) and [docs/scriptling-router-library.md](docs/scriptling-router-library.md#calling-models-from-a-script).
 
 ### Weight-Based Load Balancing
 
@@ -556,10 +558,25 @@ POST /v1/chat/completions          # OpenAI format, streaming supported
 POST /v1/messages                  # Anthropic Messages format
 POST /v1/messages/count_tokens     # Anthropic token counting (emulated)
 POST /v1/embeddings
+POST /v1/systemone                 # Decision models (Ollama System One)
 GET  /health
 ```
 
 OpenAI chat completion requests preserve provider-specific top-level fields when forwarding upstream, including fields produced by client-side `extra_body` options such as ZAi thinking-mode settings.
+
+### Decision Models
+
+`POST /v1/systemone` runs Ollama's [decision model](https://docs.ollama.com/capabilities/decision) API: it scores a `state` against 1–64 named `questions` (`choice`, `noul` or `score`) in one non-streaming response. The request is routed by `model`, exactly like chat, but only to providers that support decision models — currently Ollama providers. Use the model id as listed in `/v1/models` (e.g. `clef-flash:latest`) or a configured alias. If no matching provider supports decisions the gateway returns 404.
+
+```bash
+curl http://localhost:12345/v1/systemone -d '{
+  "model": "clef-flash:latest",
+  "state": "I love this product",
+  "questions": {"sentiment": {"type": "choice", "instructions": "Sentiment?", "criteria": {"pos": "positive", "neg": "negative"}}}
+}'
+```
+
+Scriptling's `ai.Client(url, provider=ai.OLLAMA).decide(...)` works against the gateway unchanged.
 
 ### Ollama Compatible
 

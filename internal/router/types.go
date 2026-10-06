@@ -85,6 +85,9 @@ type Router struct {
 	mcpServer            *MCPServer
 	skillCache           mcplib.SkillsListingCache // chat prompt skills listings, short TTL (zero value ready)
 	mux                  *http.ServeMux
+	scriptAIOnce         sync.Once // guards scriptAIClient (see script_ai.go)
+	scriptAIClient       ai.Client
+	scriptAIErr          error
 	sharedStore          *storage.Store
 	responsesService     *responses.Service
 	conversationsService *conversations.Service

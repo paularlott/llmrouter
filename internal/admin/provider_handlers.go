@@ -311,9 +311,10 @@ func (a *Admin) HandleUpdateProvider(w http.ResponseWriter, r *http.Request) {
 		provider.Weight = req.Weight
 	}
 	// Only overwrite list/map fields when the request actually includes
-	// them. The UI edit form doesn't send model_allowlist, model_denylist,
-	// model_aliases, model_tags, or tags — without these guards, editing
-	// any field (e.g. weight) would silently wipe them.
+	// them. The UI edit form doesn't send model_denylist, model_aliases,
+	// model_tags, or tags — without these guards, editing any field (e.g.
+	// weight) would silently wipe them. (It does always send model_allowlist,
+	// so an empty list clears it.)
 	if req.Models != nil {
 		provider.Models = req.Models
 	}

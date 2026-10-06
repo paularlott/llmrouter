@@ -24,6 +24,10 @@ const (
 	reqTypeResponses = "responses"
 
 	vmPoolSize = 5
+
+	// routeScriptTimeout bounds a routing script run. It is generous enough for
+	// a script to call a decision or chat model to make its choice.
+	routeScriptTimeout = 30 * time.Second
 )
 
 // SmartRouter runs a single routing script using a pool of pre-warmed VMs.
@@ -183,6 +187,13 @@ func (sr *SmartRouter) RouteResponse(ctx context.Context, req *CreateResponseReq
 }
 
 func (sr *SmartRouter) route(ctx context.Context, chatReq *ChatCompletionRequest, respReq *CreateResponseRequest) RouteResult {
+	// A routing script requested a virtual model: don't run another script
+	// (it could recurse), use this router's default model instead.
+	if ctx.Value(inRoutingScriptKey{}) != nil {
+		sr.logger.Warn("routing script requested a smart router model, using its default", "router", sr.name, "model", sr.defaultModel)
+		return RouteResult{Model: sr.defaultModel}
+	}
+
 	sr.mu.RLock()
 	src := sr.scriptSrc
 	pool := sr.pool
@@ -221,7 +232,7 @@ func (sr *SmartRouter) route(ctx context.Context, chatReq *ChatCompletionRequest
 	// Inject per-request data as variables
 	_ = vm.SetVar("request_json", string(reqJSON))
 
-	timeoutCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	timeoutCtx, cancel := context.WithTimeout(context.WithValue(ctx, inRoutingScriptKey{}, true), routeScriptTimeout)
 	defer cancel()
 
 	_, evalErr := vm.EvalWithContext(timeoutCtx, src)

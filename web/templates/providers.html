@@ -554,6 +554,22 @@
             >
               Context sizes are auto-discovered per model for Gemini providers.
             </div>
+            <div>
+              <label
+                class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1"
+                >Allowed Models
+                <span class="text-slate-400 font-normal"
+                  >(one per line; only these models are used from this
+                  provider, empty = all)</span
+                ></label
+              >
+              <textarea
+                x-model="form.model_allowlist_str"
+                rows="3"
+                placeholder="clef-flash:latest&#10;nomic-embed-text:latest"
+                class="input-field font-mono text-sm"
+              ></textarea>
+            </div>
             <div class="flex items-center gap-3">
               <label class="flex items-center cursor-pointer">
                 <input
@@ -832,6 +848,17 @@
         }
         return out;
       }
+      // model_allowlist_str <-> list helpers: one model id per line.
+      function modelListToText(list) {
+        return (list || []).join("\n");
+      }
+      function modelListFromText(text) {
+        if (!text) return [];
+        return text
+          .split(/\r?\n/)
+          .map((l) => l.trim())
+          .filter(Boolean);
+      }
       function providersPage() {
         return {
           providers: [],
@@ -927,6 +954,7 @@
               models_str: "",
               default_context_size: null,
               model_context_str: "",
+              model_allowlist_str: "",
               enabled: true,
             };
             this.showModal = true;
@@ -949,6 +977,7 @@
                   models_str: (data.models || []).join(", "),
                   default_context_size: data.default_context_size || null,
                   model_context_str: modelContextToText(data.model_context),
+                  model_allowlist_str: modelListToText(data.model_allowlist),
                   enabled: data.enabled,
                 };
                 this.showModal = true;
@@ -971,6 +1000,8 @@
                 : [],
               default_context_size: this.form.default_context_size || 0,
               model_context: modelContextFromText(this.form.model_context_str),
+              // Always sent (even when empty) so clearing the box clears the list
+              model_allowlist: modelListFromText(this.form.model_allowlist_str),
               enabled: this.form.enabled,
             };
             try {

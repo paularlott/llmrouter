@@ -1,0 +1,16 @@
+# Smart router "triage".
+# A client requesting model "triage" triggers triage.py, which asks a decision
+# model (clef-flash) to classify the request, then routes to a matching model.
+# Requires an Ollama provider serving the decision model (see docs/scriptling-router-library.md).
+
+enabled = true
+default_model = "ornith-1.5:9b"   # used if the decision call fails or times out
+context_size = 32000
+
+[vars]
+decision_model = "clef-flash:latest"   # any decision model served by an Ollama provider
+
+# Where each classification is sent
+simple_model = "ornith-1.5:9b"
+code_model = "ornith-1.5:35b"
+reasoning_model = "ornith-1.5:35b"

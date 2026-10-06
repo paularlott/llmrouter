@@ -123,6 +123,7 @@ func NewRouter(config *types.Config, logger Logger) (*Router, error) {
 	router.mux.HandleFunc("POST /v1/messages", auth(router.HandleMessages))
 	router.mux.HandleFunc("POST /v1/messages/count_tokens", auth(router.HandleCountTokens))
 	router.mux.HandleFunc("POST /v1/embeddings", auth(router.HandleEmbeddings))
+	router.mux.HandleFunc("POST /v1/systemone", auth(router.HandleSystemOne))
 	router.mux.HandleFunc("GET /ollama/v1/models", auth(router.HandleModels))
 	router.mux.HandleFunc("POST /ollama/v1/chat/completions", auth(router.HandleChatCompletions))
 	router.mux.HandleFunc("POST /ollama/v1/messages", auth(router.HandleMessages))
@@ -623,12 +624,37 @@ func (r *Router) resolveAliasForProvider(model, providerName string) string {
 }
 
 func (r *Router) GetProviderForModel(model string, hint string) (string, error) {
+	return r.getProviderForModelFiltered(model, hint, nil)
+}
+
+// getProviderForModelFiltered is GetProviderForModel restricted to providers
+// accepted by filter (nil accepts all), e.g. those supporting decision models.
+func (r *Router) getProviderForModelFiltered(model string, hint string, filter func(*Provider) bool) (string, error) {
 	r.ModelMapMu.RLock()
 	providers, exists := r.ModelMap[model]
 	r.ModelMapMu.RUnlock()
 
 	if !exists {
 		return "", fmt.Errorf("model %s not found in any provider", model)
+	}
+
+	if filter != nil {
+		accepted := make([]string, 0, len(providers))
+		for _, name := range providers {
+			if p, ok := r.Providers[name]; ok && filter(p) {
+				accepted = append(accepted, name)
+			}
+		}
+		if len(accepted) == 0 {
+			serving := make([]string, 0, len(providers))
+			for _, name := range providers {
+				if p, ok := r.Providers[name]; ok {
+					serving = append(serving, fmt.Sprintf("%s (%s)", name, p.ProviderType))
+				}
+			}
+			return "", fmt.Errorf("no provider supporting this request type found for model %s; it is served by: %s", model, strings.Join(serving, ", "))
+		}
+		providers = accepted
 	}
 
 	if len(providers) == 1 {

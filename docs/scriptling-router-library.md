@@ -28,7 +28,7 @@ my_endpoint = "https://api.example.com"
 | `<model>.py`                  | Optional routing script. Absent → the router is a pure alias to `default_model`. |
 | `<name>.py` (no matching .toml) | Just an importable library, shared by every router in the folder.             |
 
-`default_model` is used when the script returns nothing, errors, or times out (5 s limit). Every router model is injected into `/v1/models` so clients can discover it. Router names must be a single path segment (no `/`); a name colliding with a real provider model is skipped.
+`default_model` is used when the script returns nothing, errors, or times out (30 s limit). Every router model is injected into `/v1/models` so clients can discover it. Router names must be a single path segment (no `/`); a name colliding with a real provider model is skipped.
 
 `vars` is an optional table of key-value string pairs made available to the script as the `vars` library (see [Script Variables](#script-variables)).
 
@@ -144,10 +144,62 @@ import vars
 
 key = vars.openai_key            # attribute access
 key = vars.get("openai_key")     # dynamic lookup
-key = vars.get("missing", "")    # with a default
+key = vars.get("missing", default="")    # with a default
 ```
 
 All values are strings. `vars` is always registered (even when no vars are defined), so `vars.get()` is always callable. Use this to pass tokens, endpoints, or other configuration to the script without hard-coding them.
+
+### Calling Models From a Script
+
+Scripts can call models to help make a routing decision. `router.ai()` returns a pre-configured AI client that calls this router **in-process**: no endpoint, port or token to configure, and the call is routed, load-balanced and health-checked like any other request.
+
+```python
+import router
+
+client = router.ai()
+answer = client.completion("some-fast-model", [{"role": "user", "content": "..."}], max_tokens=50)
+```
+
+Notes:
+
+- **Runtime limit.** A script has 30 seconds in total, including any model calls. On timeout or error the router uses `default_model`.
+- **Chat and decision calls both work.** The client supports `completion`, `ask`, `embedding`, `models` and `decide`.
+- **No recursion.** If a script requests a smart-router model (its own or another), that router's `default_model` is used instead of running its script.
+- **Responses are buffered.** Streaming calls return once the model has finished.
+- **Server token.** If `[server] token` is set it is applied automatically.
+- **Errors fall back silently** to `default_model`; check the router log for `smart routing script error` while developing.
+- **External endpoints.** To call something other than this router, create a client yourself with `scriptling.ai` (`ai.Client(url, api_key=...)`). Use `provider=ai.OLLAMA` for decision models; the default client type rejects `decide()`.
+
+#### Decision models
+
+A [decision model](https://docs.ollama.com/capabilities/decision) such as `clef-flash` scores a piece of state against named questions in one fast, non-streaming call, which makes it a good fit for routing. The router serves it at `POST /v1/systemone` and sends the request to an Ollama provider that serves the model; the model must be listed in `/v1/models` (for example `clef-flash:latest`) or aliased.
+
+```python
+result = client.decide(
+    "clef-flash:latest",
+    router.last_message(),
+    questions={
+        "kind": {
+            "type": "choice",
+            "instructions": "Classify the request.",
+            "criteria": {"simple": "Chit-chat or short answers", "code": "Writing or debugging code"},
+        },
+    },
+)
+answer = result["answers"]["kind"]   # {"type", "choice", "probabilities", "confidence"}
+```
+
+Question types:
+
+| Type     | Criteria                                              | Answer fields                              |
+| -------- | ----------------------------------------------------- | ------------------------------------------ |
+| `choice` | dict of 2-26 option names to descriptions             | `choice`, `probabilities`, `confidence`    |
+| `noul`   | optional dict with `"false"` / `"true"` descriptions  | `noul` (probability of true, 0-1)          |
+| `score`  | ordered list of 2-26 descriptions, lowest to highest  | `score`, `legend`, `probabilities`, `confidence` |
+
+**Keep the input short.** A decision model rejects input longer than its context (Ollama returns a 400; it never truncates) and its latency grows with input length, which matters most on CPU-only servers. Truncate long messages before calling `decide`, as [triage.py](../examples/routers/triage.py) does, and consider a smaller model (for example `tev1:0.8b` instead of 4b) if routing latency matters more than the last few points of accuracy.
+
+`confidence` is 0 for a flat distribution and approaches 1 when one option dominates, so it is useful for falling back to a safe default when the classifier is unsure. `decide` also accepts `images=[...]` (vision-capable decision models) and `keep_alive=`. See the [scriptling client reference](https://scriptling.dev/reference/libraries/ai/client/) for details.
 
 ---
 
@@ -155,6 +207,7 @@ All values are strings. `vars` is always registered (even when no vars are defin
 
 | Function                       | Signature                             | Returns      | Description                                                                                       |
 | ------------------------------ | ------------------------------------- | ------------ | ------------------------------------------------------------------------------------------------- |
+| `router.ai`                    | `ai()`                                | `Client`     | AI client that calls this router in-process; supports chat and `decide` (decision models)         |
 | `router.set_model`             | `set_model(model_id, hint=provider)`  | —            | Set the model to route to; `hint` optionally suggests a provider (ignored if overloaded)          |
 | `router.get_request`           | `get_request()`                       | `dict`       | Current routing request (`type`, `messages`, `tools`)                                             |
 | `router.is_chat_completion`    | `is_chat_completion()`                | `bool`       | True if this is a `/v1/chat/completions` request                                                  |
@@ -278,6 +331,22 @@ Libraries are hot-reloaded alongside the routing script — any change to a file
 ---
 
 ## Example Scripts
+
+### Classify with a decision model (clef-flash)
+
+A complete example lives in [examples/routers/triage.toml](../examples/routers/triage.toml) and [triage.py](../examples/routers/triage.py). It asks `clef-flash` to classify each request as `simple`, `code` or `reasoning`, routes to the model configured for that class, and falls back to the capable model when the classifier's confidence is low:
+
+```python
+answer = router.ai().decide(vars.decision_model, router.last_message(), questions={
+    "kind": {"type": "choice", "instructions": "Classify the request.",
+             "criteria": {"simple": "...", "code": "...", "reasoning": "..."}},
+})["answers"]["kind"]
+
+kind = answer["choice"]
+if answer["confidence"] < 0.3:
+    kind = "reasoning"
+router.set_model({"simple": vars.simple_model, "code": vars.code_model, "reasoning": vars.reasoning_model}[kind])
+```
 
 ### Route vision requests to a capable model
 
@@ -470,6 +539,6 @@ if models:
 | Script calls `router.set_model(model_id)` with a valid model | Route to that model; hint provider used if not overloaded |
 | Script sets `output_model` variable                          | Route to that model (provider auto-selected)              |
 | Script returns without setting a model                       | Use `default_model`                                       |
-| Script errors or times out (5s limit)                        | Use `default_model`                                       |
+| Script errors or times out (30s limit)                       | Use `default_model`                                       |
 | Model not found in any provider                              | Use `default_model`                                       |
 | `default_model` also not found                               | Return error to client                                    |
