@@ -82,7 +82,6 @@ func (r *Router) addStoredProvider(sp *storage.StoredProviderConfig, logger Logg
 		Enabled:            sp.Enabled,
 		Client:             client,
 		Models:             sp.Models,
-		ModelAllowlist:     sp.ModelAllowlist,
 		ModelDenylist:      sp.ModelDenylist,
 		Weight:             weight,
 		Tags:               sp.Tags,
@@ -197,9 +196,9 @@ func (r *Router) reloadProviders() {
 // fields that determine the client and its model set. Two configs with the
 // same signature need no reload; a difference forces a rebuild + model refetch.
 func storedProviderSig(sp *storage.StoredProviderConfig) string {
-	return fmt.Sprintf("%s\x1f%s\x1f%s\x1f%v\x1f%v\x1f%v\x1f%v\x1f%v\x1f%v\x1f%v\x1f%v\x1f%v",
+	return fmt.Sprintf("%s\x1f%s\x1f%s\x1f%v\x1f%v\x1f%v\x1f%v\x1f%v\x1f%v\x1f%v\x1f%v",
 		sp.Provider, sp.BaseURL, sp.Token, sp.Weight,
-		sp.Models, sp.ModelAllowlist, sp.ModelDenylist,
+		sp.Models, sp.ModelDenylist,
 		sp.Tags, sp.ModelTags, sp.ModelAliases,
 		sp.DefaultContextSize, sp.ModelContext,
 	)

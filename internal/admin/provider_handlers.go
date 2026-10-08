@@ -20,7 +20,6 @@ type ProviderDetail struct {
 	Weight             float64             `json:"weight"`
 	ModelCount         int                 `json:"model_count"`
 	Models             []string            `json:"models,omitempty"`
-	ModelAllowlist     []string            `json:"model_allowlist,omitempty"`
 	Tags               []string            `json:"tags,omitempty"`
 	ModelDenylist      []string            `json:"model_denylist,omitempty"`
 	ModelAliases       map[string]string   `json:"model_aliases,omitempty"`
@@ -84,7 +83,6 @@ func (a *Admin) HandleListProviders(w http.ResponseWriter, r *http.Request) {
 					Enabled:            sp.Enabled,
 					Weight:             weight,
 					Models:             sp.Models,
-					ModelAllowlist:     sp.ModelAllowlist,
 					Tags:               sp.Tags,
 					ModelDenylist:      sp.ModelDenylist,
 					ModelAliases:       sp.ModelAliases,
@@ -135,7 +133,6 @@ func (a *Admin) HandleGetProvider(w http.ResponseWriter, r *http.Request) {
 				Enabled:            sp.Enabled,
 				Weight:             weight,
 				Models:             sp.Models,
-				ModelAllowlist:     sp.ModelAllowlist,
 				Tags:               sp.Tags,
 				ModelDenylist:      sp.ModelDenylist,
 				ModelAliases:       sp.ModelAliases,
@@ -184,7 +181,6 @@ func (a *Admin) HandleCreateProvider(w http.ResponseWriter, r *http.Request) {
 		Enabled            bool                `json:"enabled"`
 		Weight             float64             `json:"weight"`
 		Models             []string            `json:"models"`
-		ModelAllowlist     []string            `json:"model_allowlist"`
 		Tags               []string            `json:"tags"`
 		ModelDenylist      []string            `json:"model_denylist"`
 		ModelAliases       map[string]string   `json:"model_aliases"`
@@ -217,7 +213,6 @@ func (a *Admin) HandleCreateProvider(w http.ResponseWriter, r *http.Request) {
 		Enabled:            req.Enabled,
 		Weight:             req.Weight,
 		Models:             req.Models,
-		ModelAllowlist:     req.ModelAllowlist,
 		Tags:               req.Tags,
 		ModelDenylist:      req.ModelDenylist,
 		ModelAliases:       req.ModelAliases,
@@ -272,7 +267,6 @@ func (a *Admin) HandleUpdateProvider(w http.ResponseWriter, r *http.Request) {
 		Enabled            bool                `json:"enabled"`
 		Weight             float64             `json:"weight"`
 		Models             []string            `json:"models"`
-		ModelAllowlist     []string            `json:"model_allowlist"`
 		Tags               []string            `json:"tags"`
 		ModelDenylist      []string            `json:"model_denylist"`
 		ModelAliases       map[string]string   `json:"model_aliases"`
@@ -313,13 +307,10 @@ func (a *Admin) HandleUpdateProvider(w http.ResponseWriter, r *http.Request) {
 	// Only overwrite list/map fields when the request actually includes
 	// them. The UI edit form doesn't send model_denylist, model_aliases,
 	// model_tags, or tags — without these guards, editing any field (e.g.
-	// weight) would silently wipe them. (It does always send model_allowlist,
-	// so an empty list clears it.)
+	// weight) would silently wipe them. (It does always send models, so an
+	// empty list clears it.)
 	if req.Models != nil {
 		provider.Models = req.Models
-	}
-	if req.ModelAllowlist != nil {
-		provider.ModelAllowlist = req.ModelAllowlist
 	}
 	if req.Tags != nil {
 		provider.Tags = req.Tags

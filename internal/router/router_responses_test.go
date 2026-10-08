@@ -5,11 +5,15 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/paularlott/llmrouter/internal/responses"
+	"github.com/paularlott/llmrouter/internal/types"
 	"github.com/paularlott/mcp/ai"
 	"github.com/paularlott/mcp/ai/openai"
 )
@@ -23,12 +27,17 @@ type respMockClient struct {
 	getErr        error
 	deleteErr     error
 	cancelResp    *openai.ResponseObject
-	compactResp   *openai.ResponseObject
+	compactResp   *ai.CompactedResponse
 	createCalls   int
 	getCalls      int
 	deleteCalls   int
 	cancelCalls   int
 	compactCalls  int
+	lastCompact   ai.CompactResponseRequest
+	streamEvents  []openai.ResponseStreamEvent
+	streamErr     error
+	streamCalls   int
+	lastStreamReq openai.CreateResponseRequest
 	lastCreateReq openai.CreateResponseRequest
 }
 
@@ -47,8 +56,20 @@ func (m *respMockClient) StreamChatCompletion(context.Context, openai.ChatComple
 func (m *respMockClient) CreateEmbedding(context.Context, openai.EmbeddingRequest) (*openai.EmbeddingResponse, error) {
 	return nil, nil
 }
-func (m *respMockClient) StreamResponse(context.Context, openai.CreateResponseRequest) *ai.ResponseStream {
-	return nil
+func (m *respMockClient) StreamResponse(ctx context.Context, req openai.CreateResponseRequest) *ai.ResponseStream {
+	m.streamCalls++
+	m.lastStreamReq = req
+	events := make(chan openai.ResponseStreamEvent, len(m.streamEvents))
+	errs := make(chan error, 1)
+	for _, e := range m.streamEvents {
+		events <- e
+	}
+	close(events)
+	if m.streamErr != nil {
+		errs <- m.streamErr
+	}
+	close(errs)
+	return openai.NewResponseStream(ctx, events, errs)
 }
 func (m *respMockClient) CreateResponse(_ context.Context, req openai.CreateResponseRequest) (*openai.ResponseObject, error) {
 	m.createCalls++
@@ -82,12 +103,13 @@ func (m *respMockClient) DeleteResponse(_ context.Context, _ string) error {
 	m.deleteCalls++
 	return m.deleteErr
 }
-func (m *respMockClient) CompactResponse(_ context.Context, _ string) (*openai.ResponseObject, error) {
+func (m *respMockClient) CompactResponse(_ context.Context, req ai.CompactResponseRequest) (*ai.CompactedResponse, error) {
 	m.compactCalls++
+	m.lastCompact = req
 	if m.compactResp != nil {
 		return m.compactResp, nil
 	}
-	return &openai.ResponseObject{ID: "resp_test", Object: "response", Status: "completed"}, nil
+	return &ai.CompactedResponse{ID: "cmp_test", Object: "response.compaction"}, nil
 }
 
 // newResponsesRouter builds a Router wired with a real responses service and a
@@ -409,5 +431,198 @@ func TestHandleCountInputTokens_InvalidJSON(t *testing.T) {
 	r.HandleCountInputTokens(w, req)
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d, want 400", w.Code)
+	}
+}
+
+// newTwoProviderResponsesRouter serves m1 from provider p1 and m2 from p2.
+func newTwoProviderResponsesRouter(c1, c2 ai.Client) *Router {
+	r := newResponsesRouter("m1", c1)
+	p := &Provider{Name: "p2", ProviderType: "openai", Client: c2, Enabled: true, Weight: 1.0}
+	p.Healthy.Store(true)
+	r.Providers["p2"] = p
+	r.ModelMap["m2"] = []string{"p2"}
+	return r
+}
+
+func postJSON(r *Router, handler func(http.ResponseWriter, *http.Request), path, body string) *httptest.ResponseRecorder {
+	req := httptest.NewRequest("POST", path, bytes.NewReader([]byte(body)))
+	w := httptest.NewRecorder()
+	handler(w, req)
+	return w
+}
+
+func TestHandleCompactResponse(t *testing.T) {
+	c1 := &respMockClient{provider: "p1", createResp: &openai.ResponseObject{ID: "resp_p1", Object: "response", Status: "completed", Model: "m1"}}
+	c2 := &respMockClient{provider: "p2"}
+	r := newTwoProviderResponsesRouter(c1, c2)
+	id := seedResponse(t, r, "m1")
+
+	// Compacts with the model's provider, which created the response
+	w := postJSON(r, r.HandleCompactResponse, "/v1/responses/compact", `{"model":"m1","previous_response_id":"`+id+`"}`)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", w.Code, w.Body.String())
+	}
+	var got ai.CompactedResponse
+	json.Unmarshal(w.Body.Bytes(), &got)
+	if got.Object != "response.compaction" || c1.compactCalls != 1 || c1.lastCompact.PreviousResponseID != id || c1.lastCompact.Model != "m1" {
+		t.Errorf("compaction = %+v, calls = %d, request = %+v", got, c1.compactCalls, c1.lastCompact)
+	}
+
+	// Input only: any provider
+	if w := postJSON(r, r.HandleCompactResponse, "/v1/responses/compact", `{"model":"m2","input":[{"role":"user","content":"hi"}]}`); w.Code != http.StatusOK || c2.compactCalls != 1 {
+		t.Errorf("input-only compact: status = %d, p2 calls = %d", w.Code, c2.compactCalls)
+	}
+
+	for name, tc := range map[string]struct {
+		body string
+		want int
+	}{
+		"another provider's response": {`{"model":"m2","previous_response_id":"` + id + `"}`, http.StatusBadRequest},
+		"no model":                    {`{"previous_response_id":"` + id + `"}`, http.StatusBadRequest},
+		"nothing to compact":          {`{"model":"m1"}`, http.StatusBadRequest},
+		"unknown model":               {`{"model":"nope","input":[{"role":"user","content":"hi"}]}`, http.StatusNotFound},
+	} {
+		if w := postJSON(r, r.HandleCompactResponse, "/v1/responses/compact", tc.body); w.Code != tc.want {
+			t.Errorf("%s: status = %d, want %d (%s)", name, w.Code, tc.want, w.Body.String())
+		}
+	}
+}
+
+func TestHandleCreateResponse_PreviousResponseErrors(t *testing.T) {
+	c1 := &respMockClient{provider: "p1", createResp: &openai.ResponseObject{ID: "resp_p1", Object: "response", Status: "completed", Model: "m1"}}
+	c2 := &respMockClient{provider: "p2", createErr: fmt.Errorf("previous %w: resp_gone", ai.ErrResponseNotFound)}
+	r := newTwoProviderResponsesRouter(c1, c2)
+	id := seedResponse(t, r, "m1")
+
+	// Continuing with another provider's model is a client error, not a 500
+	w := postJSON(r, r.HandleCreateResponse, "/v1/responses", `{"model":"m2","previous_response_id":"`+id+`","input":"again"}`)
+	if w.Code != http.StatusBadRequest || c2.createCalls != 0 {
+		t.Errorf("other provider: status = %d (%s), p2 calls = %d", w.Code, w.Body.String(), c2.createCalls)
+	}
+	// A previous response the client doesn't know is a 404
+	w = postJSON(r, r.HandleCreateResponse, "/v1/responses", `{"model":"m2","previous_response_id":"resp_gone","input":"again"}`)
+	if w.Code != http.StatusNotFound {
+		t.Errorf("unknown previous: status = %d (%s), want 404", w.Code, w.Body.String())
+	}
+}
+
+func streamEvent(typ string, fields map[string]any) openai.ResponseStreamEvent {
+	fields["type"] = typ
+	data, _ := json.Marshal(fields)
+	return openai.ResponseStreamEvent{Type: typ, Data: data}
+}
+
+func TestHandleCreateResponse_Stream(t *testing.T) {
+	completed := map[string]any{"id": "resp_stream", "object": "response", "status": "completed", "model": "m1"}
+	c := &respMockClient{provider: "p1", streamEvents: []openai.ResponseStreamEvent{
+		streamEvent("response.created", map[string]any{"response": map[string]any{"id": "resp_stream", "status": "in_progress"}}),
+		streamEvent("response.output_text.delta", map[string]any{"delta": "Hel"}),
+		streamEvent("response.output_text.delta", map[string]any{"delta": "lo"}),
+		streamEvent("response.completed", map[string]any{"response": completed}),
+	}}
+	r := newResponsesRouter("m1", c)
+
+	w := postJSON(r, r.HandleCreateResponse, "/v1/responses", `{"model":"m1","input":"hi","stream":true}`)
+	if w.Code != http.StatusOK || w.Header().Get("Content-Type") != "text/event-stream" {
+		t.Fatalf("status = %d, content type = %q, body = %s", w.Code, w.Header().Get("Content-Type"), w.Body.String())
+	}
+	body := w.Body.String()
+	for _, want := range []string{"event: response.created\ndata: ", "event: response.output_text.delta\ndata: {\"delta\":\"Hel\"", "event: response.completed\ndata: "} {
+		if !strings.Contains(body, want) {
+			t.Errorf("SSE body missing %q:\n%s", want, body)
+		}
+	}
+	if c.streamCalls != 1 || c.createCalls != 0 {
+		t.Errorf("stream calls = %d, create calls = %d", c.streamCalls, c.createCalls)
+	}
+	if _, sent := c.lastStreamReq.ExtraBody["stream"]; sent {
+		t.Error("stream flag forwarded upstream")
+	}
+
+	// The completed response is tracked: it can be fetched and continued
+	req := httptest.NewRequest("GET", "/v1/responses/resp_stream", nil)
+	req.SetPathValue("id", "resp_stream")
+	gw := httptest.NewRecorder()
+	r.HandleGetResponse(gw, req)
+	if gw.Code != http.StatusOK {
+		t.Errorf("get streamed response: status = %d", gw.Code)
+	}
+}
+
+func TestHandleCreateResponse_StreamFlagNotForwardedWhenFalse(t *testing.T) {
+	c := &respMockClient{provider: "p1"}
+	r := newResponsesRouter("m1", c)
+	if w := postJSON(r, r.HandleCreateResponse, "/v1/responses", `{"model":"m1","input":"hi","stream":false}`); w.Code != http.StatusOK {
+		t.Fatalf("status = %d", w.Code)
+	}
+	if _, sent := c.lastCreateReq.ExtraBody["stream"]; sent || c.streamCalls != 0 {
+		t.Errorf("stream flag forwarded (%v) or streamed (%d)", c.lastCreateReq.ExtraBody, c.streamCalls)
+	}
+}
+
+func TestHandleCreateResponse_StreamErrors(t *testing.T) {
+	// Failing before any event: a proper HTTP status, not an SSE stream
+	notFound := &respMockClient{provider: "p1", streamErr: fmt.Errorf("previous %w: resp_gone", ai.ErrResponseNotFound)}
+	r := newResponsesRouter("m1", notFound)
+	w := postJSON(r, r.HandleCreateResponse, "/v1/responses", `{"model":"m1","previous_response_id":"resp_gone","input":"hi","stream":true}`)
+	if w.Code != http.StatusNotFound || w.Header().Get("Content-Type") == "text/event-stream" {
+		t.Errorf("early error: status = %d, content type = %q", w.Code, w.Header().Get("Content-Type"))
+	}
+
+	// Failing mid-stream: the stream ends with an error event
+	mid := &respMockClient{provider: "p1", streamErr: fmt.Errorf("upstream broke"), streamEvents: []openai.ResponseStreamEvent{
+		streamEvent("response.created", map[string]any{"response": map[string]any{"id": "resp_mid"}}),
+	}}
+	r = newResponsesRouter("m1", mid)
+	w = postJSON(r, r.HandleCreateResponse, "/v1/responses", `{"model":"m1","input":"hi","stream":true}`)
+	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "event: error\ndata: ") || !strings.Contains(w.Body.String(), "upstream broke") {
+		t.Errorf("mid-stream error: status = %d, body = %s", w.Code, w.Body.String())
+	}
+
+	// Continuing another provider's response: 400 before streaming
+	c1 := &respMockClient{provider: "p1", createResp: &openai.ResponseObject{ID: "resp_p1", Object: "response", Status: "completed", Model: "m1"}}
+	c2 := &respMockClient{provider: "p2"}
+	r = newTwoProviderResponsesRouter(c1, c2)
+	id := seedResponse(t, r, "m1")
+	w = postJSON(r, r.HandleCreateResponse, "/v1/responses", `{"model":"m2","previous_response_id":"`+id+`","input":"hi","stream":true}`)
+	if w.Code != http.StatusBadRequest || c2.streamCalls != 0 {
+		t.Errorf("other provider: status = %d, p2 stream calls = %d", w.Code, c2.streamCalls)
+	}
+}
+
+// The shared response store takes its expiry and limits from [responses].
+func TestSetResponseStore_UsesResponsesConfig(t *testing.T) {
+	defer setResponseStore(types.ResponsesConfig{})
+	setResponseStore(types.ResponsesConfig{MaxResponses: 2})
+	store, ok := currentResponseStore().(*openai.MemoryResponseStore)
+	if !ok {
+		t.Fatalf("store = %T", currentResponseStore())
+	}
+	ctx := context.Background()
+	for _, id := range []string{"a", "b", "c"} {
+		if err := store.Save(ctx, &openai.StoredResponse{ID: id, Status: openai.StatusCompleted}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if store.Len() != 2 {
+		t.Errorf("store holds %d responses, want max_responses = 2", store.Len())
+	}
+
+	setResponseStore(types.ResponsesConfig{MaxMemoryMB: -1, MaxResponses: -1})
+	big := currentResponseStore().(*openai.MemoryResponseStore)
+	for i := 0; i < 20; i++ {
+		big.Save(ctx, &openai.StoredResponse{ID: fmt.Sprint(i), Status: openai.StatusCompleted})
+	}
+	if big.Len() != 20 {
+		t.Errorf("unlimited store holds %d, want 20", big.Len())
+	}
+}
+
+func TestResponsesConfig_TTL(t *testing.T) {
+	if got := (types.ResponsesConfig{}).TTL(); got != 30*24*time.Hour {
+		t.Errorf("default = %v", got)
+	}
+	if got := (types.ResponsesConfig{TTLDays: 2}).TTL(); got != 48*time.Hour {
+		t.Errorf("2 days = %v", got)
 	}
 }

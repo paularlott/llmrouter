@@ -8,7 +8,7 @@ A unified gateway that aggregates multiple LLM providers behind a single endpoin
 
 ## Features
 
-- **Multi-Provider**: OpenAI, Claude, Gemini, Ollama, Mistral, ZAi — configure once, route by model name
+- **Multi-Provider**: OpenAI, Claude, Gemini, Ollama, Mistral, ZAi, Grok (xAI) — configure once, route by model name
 - **Protocol Translation**: Clients speak OpenAI, Anthropic Messages, or Ollama; the gateway translates as needed in both directions — an Ollama request can be served by an OpenAI/Claude/Gemini/Ollama backend, and vice versa
 - **Context-Window Aware**: Each model's context size is auto-discovered from Ollama (`/api/show`) and Gemini, or set per-model / per-provider / globally; surfaced through `/ollama/api/show`, `/ollama/api/tags`, and `/v1/models`
 - **Weight-Based Load Balancing**: Distribute load across providers with configurable weights
@@ -17,7 +17,7 @@ A unified gateway that aggregates multiple LLM providers behind a single endpoin
 - **Chat UI**: Built-in interface at `/chat` with personas, conversation history, slash commands, `@prompt` / `@resource` menus, live MCP tool calling, [MCP Apps](https://github.com/modelcontextprotocol/ext-apps) rendering (interactive tool UIs in a sandboxed, auto-resizing iframe — for both native and federated tools), markdown rendering, and `skill://` resources auto-surfaced to the model
 - **Personas**: System prompts, default models, and generation parameters — defined in the config file or managed through the admin UI
 - **Admin UI**: Optional web interface at `/admin` to manage providers, personas, and MCP servers (create / edit / delete, enable / disable), browse models (with rescan) and tools, and test-run MCP tools directly from the browser
-- **Responses API**: OpenAI-compatible responses storage (emulated for all providers)
+- **Responses API**: OpenAI-compatible Responses API — native for OpenAI and Grok, emulated for every other provider
 - **Conversations API**: n8n-compatible conversation management
 - **Optional Auth**: Bearer token protection for all endpoints
 
@@ -123,14 +123,16 @@ level = "info"    # trace | debug | info | warn | error
 format = "console" # console | json
 
 [responses]
-ttl_days = 30
+ttl_days = 30         # Kept this long after last use
+max_responses = 10000 # Emulated responses kept in memory (negative = no limit)
+max_memory_mb = 256   # Memory for emulated responses (negative = no limit)
 
 [conversations]
 ttl_days = 30
 
 [[providers]]
 name = "openai"
-provider = "openai"           # openai | claude | gemini | ollama | mistral | zai
+provider = "openai"           # openai | claude | gemini | ollama | mistral | zai | grok
 token = "sk-..."
 enabled = true
 weight = 1.0                  # 0.0-2.0, default 1.0; higher = preferred
@@ -149,7 +151,7 @@ name = "anthropic"
 provider = "claude"
 token = "sk-ant-..."
 enabled = true
-model_allowlist = ["claude-opus-4-5", "claude-sonnet-4-5"]  # Required for Claude
+models = ["claude-opus-4-5", "claude-sonnet-4-5"]  # Required for Claude
 tags = ["capable"]
 
 [providers.model_aliases]     # same alias "fast", different real model on this provider
@@ -164,8 +166,7 @@ name = "google"
 provider = "gemini"
 token = "your-google-key"
 enabled = true
-model_allowlist = ["gemini-2.5-flash-lite"]  # Optional: restrict to specific models
-models = ["gemini-2.5-flash-lite"]           # Optional: override model list entirely (still health-checks the API)
+models = ["gemini-2.5-flash-lite"]  # Optional: use only these models (still health-checks the API)
 
 [[providers]]
 name = "local"
@@ -211,6 +212,7 @@ federate = true                       # Optional: expose this server's (non-app)
 | `ollama`  | https://ollama.com/                          | Yes        | Auto             | Auto (from `/api/show`)                    |
 | `mistral` | https://api.mistral.ai/v1                     | Yes        | Auto             | Configure (`model_context` / `default_context_size`) |
 | `zai`     | https://api.z.ai/api/paas/v4/                 | Yes        | Auto             | Configure (`model_context` / `default_context_size`) |
+| `grok`    | https://api.x.ai/v1                           | No         | Auto             | Configure (`model_context` / `default_context_size`) |
 
 `base_url` is optional — each provider has a built-in default. Set it to override (e.g. local LM Studio).
 
@@ -251,11 +253,9 @@ The resolved size is surfaced back to clients in three places: `/api/show` and `
 
 For Ollama providers, discovery is done by the native Ollama client in `mcp/ai/ollama` — it queries `/api/tags` and `/api/show` directly. A `base_url` configured for the OpenAI shim (ending in `/v1`) works, since the client strips the `/v1` to reach the native API; the default is `https://ollama.com`.
 
-`model_allowlist` restricts the provider to only the listed models. For Claude this is required (no discovery API). For other providers it is optional.
+`models` restricts the provider to the listed models, overriding discovery — the provider's `/models` API is still called (for health checks and context sizes) but the configured list is used instead. Required for Claude; optional elsewhere, e.g. to use only some of a provider's models, or for providers that return no models or an incomplete list. (`model_allowlist` from earlier versions did the same and is still read as `models`.)
 
-`model_denylist` excludes specific models from auto-discovery. Ignored when `model_allowlist` is set.
-
-`models` overrides the model list entirely — the provider's `/models` API is still called (for health checks) but its response is discarded and the configured list is used instead. Useful for providers that return no models or an incomplete list.
+`model_denylist` excludes specific models, whether discovered or listed in `models`.
 
 `model_aliases` maps short or friendly names to real model IDs. Aliases appear in `/v1/models` alongside real models and support the same weight-based load balancing and round-robin behaviour. When multiple providers define the same alias, each provider maps it to its own real model — requests via that alias are distributed across all of them, and each provider receives its own real model name.
 
@@ -607,8 +607,15 @@ GET    /v1/responses/{id}
 DELETE /v1/responses/{id}
 GET    /v1/responses
 POST   /v1/responses/{id}/cancel
-POST   /v1/responses/compact
+POST   /v1/responses/compact          # {"model", "previous_response_id" and/or "input"}, as OpenAI's API
+POST   /v1/responses/{id}/compact     # legacy: compacts that response's conversation with its own model
+GET    /v1/responses/{id}/input_items
+POST   /v1/responses/input_tokens
 ```
+
+OpenAI and Grok providers use the provider's own Responses API, which stores responses at the provider; every other provider emulates it, storing responses in the router's memory for `[responses] ttl_days` after last use (lost on restart). Past `max_responses` or `max_memory_mb` the least recently used responses are dropped, ending any conversation that still needed them, so size these for your traffic. A response can only be continued (`previous_response_id`) or compacted with a model on the provider that created it: using another provider's model returns 400. The compacted `output` can be sent as `input` to any model.
+
+Pass `"stream": true` to `POST /v1/responses` to receive the response as server-sent events (`event: <type>` / `data: <json>`), in OpenAI's Responses streaming format: `response.created`, `response.output_text.delta`, `function_call` items for tool calls, and a final `response.completed` carrying the full response, which the router then tracks like any other. An error before the first event returns a normal HTTP error; one mid-stream ends the stream with an `error` event.
 
 ### Conversations API
 

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/paularlott/mcp/ai"
 	"github.com/paularlott/mcp/ai/openai"
@@ -26,7 +27,7 @@ type mockClient struct {
 	createResp    *openai.ResponseObject
 	getResp       *openai.ResponseObject
 	cancelResp    *openai.ResponseObject
-	compactResp   *openai.ResponseObject
+	compactResp   *ai.CompactedResponse
 	createCalls   int
 	getCalls      []string
 	deleteCalls   []string
@@ -97,17 +98,17 @@ func (m *mockClient) DeleteResponse(_ context.Context, id string) error {
 	m.deleteCalls = append(m.deleteCalls, id)
 	return m.deleteErr
 }
-func (m *mockClient) CompactResponse(_ context.Context, id string) (*openai.ResponseObject, error) {
+func (m *mockClient) CompactResponse(_ context.Context, req ai.CompactResponseRequest) (*ai.CompactedResponse, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.compactCalls = append(m.compactCalls, id)
+	m.compactCalls = append(m.compactCalls, req.PreviousResponseID)
 	if m.compactErr != nil {
 		return nil, m.compactErr
 	}
 	if m.compactResp != nil {
 		return m.compactResp, nil
 	}
-	return &openai.ResponseObject{ID: id, Object: "response", Status: "completed"}, nil
+	return &ai.CompactedResponse{ID: "cmp_1", Object: "response.compaction"}, nil
 }
 
 func newTestService() *Service {
@@ -212,8 +213,8 @@ func TestService_CompactResponse_Delegates(t *testing.T) {
 	c := &mockClient{}
 	s.CreateResponse(context.Background(), c, &openai.CreateResponseRequest{Model: "m1"})
 
-	if _, err := s.CompactResponse(context.Background(), "resp_123"); err != nil {
-		t.Fatalf("CompactResponse: %v", err)
+	if _, err := s.CompactResponseByID(context.Background(), "resp_123"); err != nil {
+		t.Fatalf("CompactResponseByID: %v", err)
 	}
 	if len(c.compactCalls) != 1 || c.compactCalls[0] != "resp_123" {
 		t.Errorf("compact calls = %v", c.compactCalls)
@@ -229,8 +230,42 @@ func TestService_CancelResponse_NotFound(t *testing.T) {
 
 func TestService_CompactResponse_NotFound(t *testing.T) {
 	s := newTestService()
-	if _, err := s.CompactResponse(context.Background(), "nope"); err == nil {
-		t.Fatal("expected error for missing response")
+	if _, err := s.CompactResponseByID(context.Background(), "nope"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("error = %v, want ErrNotFound", err)
+	}
+}
+
+func TestService_CompactResponse_WithClient(t *testing.T) {
+	s := newTestService()
+	c := &mockClient{}
+	s.CreateResponse(context.Background(), c, &openai.CreateResponseRequest{Model: "m1"})
+
+	if _, err := s.CompactResponse(context.Background(), c, ai.CompactResponseRequest{Model: "m1", PreviousResponseID: "resp_123"}); err != nil {
+		t.Fatalf("CompactResponse: %v", err)
+	}
+	if len(c.compactCalls) != 1 || c.compactCalls[0] != "resp_123" {
+		t.Errorf("compact calls = %v", c.compactCalls)
+	}
+	if _, err := s.CompactResponse(context.Background(), &mockClient{}, ai.CompactResponseRequest{Model: "m2", PreviousResponseID: "resp_123"}); !errors.Is(err, ErrOtherProvider) {
+		t.Errorf("compact with another provider's client error = %v, want ErrOtherProvider", err)
+	}
+}
+
+// A request continuing a response created through another provider is
+// rejected before reaching any client; unknown IDs are left to the client.
+func TestService_CreateResponse_PreviousResponseFromOtherProvider(t *testing.T) {
+	s := newTestService()
+	first, other := &mockClient{}, &mockClient{}
+	s.CreateResponse(context.Background(), first, &openai.CreateResponseRequest{Model: "m1"})
+
+	if _, err := s.CreateResponse(context.Background(), other, &openai.CreateResponseRequest{Model: "m2", PreviousResponseID: "resp_123"}); !errors.Is(err, ErrOtherProvider) {
+		t.Errorf("error = %v, want ErrOtherProvider", err)
+	}
+	if _, err := s.CreateResponse(context.Background(), first, &openai.CreateResponseRequest{Model: "m1", PreviousResponseID: "resp_123"}); err != nil {
+		t.Errorf("same provider continue: %v", err)
+	}
+	if _, err := s.CreateResponse(context.Background(), other, &openai.CreateResponseRequest{Model: "m2", PreviousResponseID: "resp_unknown"}); err != nil {
+		t.Errorf("unknown previous id should reach the client: %v", err)
 	}
 }
 
@@ -239,5 +274,46 @@ func TestService_CreateResponse_PropagatesClientError(t *testing.T) {
 	c := &mockClient{createErr: errors.New("nope")}
 	if _, err := s.CreateResponse(context.Background(), c, &openai.CreateResponseRequest{Model: "m1"}); err == nil {
 		t.Fatal("expected client error to propagate")
+	}
+}
+
+// The index keeps responses for the TTL after their last use, as the store
+// does: using one (get, continue, compact, cancel, delete) restarts its expiry.
+func TestService_ExpirySlidesOnUse(t *testing.T) {
+	s := NewService(time.Hour)
+	c := &mockClient{}
+	s.CreateResponse(context.Background(), c, &openai.CreateResponseRequest{Model: "m1"})
+
+	expiry := func() time.Time {
+		s.mu.RLock()
+		defer s.mu.RUnlock()
+		return s.entries["resp_123"].expiresAt
+	}
+	setExpiry := func(t time.Time) {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		s.entries["resp_123"].expiresAt = t
+	}
+
+	soon := time.Now().Add(time.Minute)
+	for name, use := range map[string]func(){
+		"get": func() { s.GetResponse(context.Background(), "resp_123") },
+		"continue": func() {
+			s.CreateResponse(context.Background(), c, &openai.CreateResponseRequest{Model: "m1", PreviousResponseID: "resp_123"})
+		},
+		"compact": func() { s.CompactResponseByID(context.Background(), "resp_123") },
+		"cancel":  func() { s.CancelResponse(context.Background(), "resp_123") },
+	} {
+		setExpiry(soon)
+		use()
+		if got := expiry(); !got.After(soon.Add(30 * time.Minute)) {
+			t.Errorf("%s: expiry %v not restarted (was %v)", name, got, soon)
+		}
+	}
+}
+
+func TestNewService_DefaultTTL(t *testing.T) {
+	if s := NewService(0); s.ttl != 30*24*time.Hour {
+		t.Errorf("default ttl = %v, want 30 days", s.ttl)
 	}
 }

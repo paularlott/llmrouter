@@ -85,11 +85,11 @@ func TestSystemOneProviderRejectionIsBadRequest(t *testing.T) {
 	}
 }
 
-// TestAllowlistLetsOpenAIAndOllamaShareAServer covers one server registered as
-// both an openai provider (chat) and an ollama provider limited by
-// model_allowlist to the decision model: decisions must land on the ollama
-// provider while chat for other models stays on the openai one.
-func TestAllowlistLetsOpenAIAndOllamaShareAServer(t *testing.T) {
+// TestStaticModelsLetOpenAIAndOllamaShareAServer covers one server registered
+// as both an openai provider (chat) and an ollama provider limited by static
+// models to the decision model: decisions must land on the ollama provider
+// while chat for other models stays on the openai one.
+func TestStaticModelsLetOpenAIAndOllamaShareAServer(t *testing.T) {
 	dec := &decisionClient{}
 	r := newOllamaHandlerTestRouter(&mockProviderClient{})
 	oai := r.Providers["mock-provider"]
@@ -100,20 +100,21 @@ func TestAllowlistLetsOpenAIAndOllamaShareAServer(t *testing.T) {
 	r.ModelContext = map[string]int{}
 
 	ol := &Provider{Name: "srv-ollama", ProviderType: "ollama", Client: dec, Enabled: true, Weight: 1,
-		ModelAllowlist: []string{"clef-flash:latest"}}
+		Models: []string{"clef-flash:latest"}}
 	ol.Healthy.Store(true)
 	r.Providers["srv-ollama"] = ol
 
-	// Both providers discover the same server's models.
+	// The openai provider discovers the server's models; the ollama one uses
+	// its static models instead, as fetchProviderModels does.
 	discovered := []string{"clef-flash:latest", "qwen3.8:27b", "ornith-1.5:9b"}
 	r.addProviderModels("srv-openai", discovered, oai, nil)
-	r.addProviderModels("srv-ollama", discovered, ol, nil)
+	r.addProviderModels("srv-ollama", ol.Models, ol, nil)
 
 	if got := r.ModelMap["qwen3.8:27b"]; len(got) != 1 || got[0] != "srv-openai" {
-		t.Fatalf("non-allowlisted model should only be on the openai provider, got %v", got)
+		t.Fatalf("a model outside the static list should only be on the openai provider, got %v", got)
 	}
 	if got := r.ModelMap["clef-flash:latest"]; len(got) != 2 {
-		t.Fatalf("allowlisted model should be on both providers, got %v", got)
+		t.Fatalf("the static model should be on both providers, got %v", got)
 	}
 
 	// The openai provider can't run decisions, so the ollama one must take it.

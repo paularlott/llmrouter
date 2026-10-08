@@ -54,6 +54,18 @@ func ServerFlags() []cli.Flag {
 			DefaultValue: 30,
 		},
 		&cli.IntFlag{
+			Name:         "responses-max",
+			Usage:        "Maximum number of emulated responses kept in memory, least recently used dropped first (negative = no limit)",
+			ConfigPath:   []string{"responses.max_responses"},
+			DefaultValue: 10000,
+		},
+		&cli.IntFlag{
+			Name:         "responses-max-mb",
+			Usage:        "Maximum memory for emulated responses in MiB, least recently used dropped first (negative = no limit)",
+			ConfigPath:   []string{"responses.max_memory_mb"},
+			DefaultValue: 256,
+		},
+		&cli.IntFlag{
 			Name:         "conversations-ttl",
 			Usage:        "Maximum age of a conversation in days",
 			ConfigPath:   []string{"conversations.ttl_days"},

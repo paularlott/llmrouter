@@ -2,12 +2,22 @@ package responses
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"sync"
 	"time"
 
+	"github.com/paularlott/llmrouter/internal/types"
 	"github.com/paularlott/mcp/ai"
 	"github.com/paularlott/mcp/ai/openai"
+)
+
+var (
+	// ErrNotFound is returned for a response this router doesn't know.
+	ErrNotFound = errors.New("response not found")
+	// ErrOtherProvider is returned when a request refers to a response
+	// created through another provider than the one its model routes to:
+	// responses are stored per provider, so it can't be continued there.
+	ErrOtherProvider = errors.New("previous_response_id belongs to a response from another provider; continue it with a model on the same provider")
 )
 
 // entry tracks enough metadata for ListResponses without re-querying the client.
@@ -27,10 +37,11 @@ type Service struct {
 	ttl     time.Duration
 }
 
-func NewService(ttlDays int) *Service {
-	ttl := time.Duration(ttlDays) * 24 * time.Hour
+// NewService creates the responses index. Entries expire ttl after their
+// last use, as the shared response store's do (see types.ResponsesConfig.TTL).
+func NewService(ttl time.Duration) *Service {
 	if ttl <= 0 {
-		ttl = 30 * 24 * time.Hour
+		ttl = types.ResponsesConfig{}.TTL()
 	}
 	s := &Service{entries: make(map[string]*entry), ttl: ttl}
 	go s.cleanup()
@@ -53,14 +64,36 @@ func (s *Service) cleanup() {
 }
 
 func (s *Service) CreateResponse(ctx context.Context, client ai.Client, req *openai.CreateResponseRequest) (*openai.ResponseObject, error) {
+	if err := s.checkPrevious(client, req.PreviousResponseID); err != nil {
+		return nil, err
+	}
 	resp, err := client.CreateResponse(ctx, *req)
 	if err != nil {
 		return nil, err
 	}
-	s.mu.Lock()
-	s.entries[resp.ID] = &entry{client: client, model: resp.Model, input: req.Input, createdAt: resp.CreatedAt, expiresAt: time.Now().Add(s.ttl)}
-	s.mu.Unlock()
+	s.Track(client, resp, req.Input)
 	return resp, nil
+}
+
+// StreamResponse starts streaming a response from client. Pass the
+// response from its response.completed event to Track, so the router can
+// serve it afterwards.
+func (s *Service) StreamResponse(ctx context.Context, client ai.Client, req *openai.CreateResponseRequest) (*ai.ResponseStream, error) {
+	if err := s.checkPrevious(client, req.PreviousResponseID); err != nil {
+		return nil, err
+	}
+	return client.StreamResponse(ctx, *req), nil
+}
+
+// Track records a response created through client, so it can be fetched,
+// continued, compacted, cancelled and deleted through the router.
+func (s *Service) Track(client ai.Client, resp *openai.ResponseObject, input []any) {
+	if resp == nil || resp.ID == "" {
+		return
+	}
+	s.mu.Lock()
+	s.entries[resp.ID] = &entry{client: client, model: resp.Model, input: input, createdAt: resp.CreatedAt, expiresAt: time.Now().Add(s.ttl)}
+	s.mu.Unlock()
 }
 
 func (s *Service) GetResponse(ctx context.Context, id string) (*openai.ResponseObject, error) {
@@ -93,12 +126,57 @@ func (s *Service) CancelResponse(ctx context.Context, id string) (*openai.Respon
 	return client.CancelResponse(ctx, id)
 }
 
-func (s *Service) CompactResponse(ctx context.Context, id string) (*openai.ResponseObject, error) {
-	client, err := s.clientFor(id)
-	if err != nil {
+// CompactResponse compacts a conversation with client, which must be the
+// client of req.PreviousResponseID when that is a response this router
+// created.
+func (s *Service) CompactResponse(ctx context.Context, client ai.Client, req ai.CompactResponseRequest) (*ai.CompactedResponse, error) {
+	if err := s.checkPrevious(client, req.PreviousResponseID); err != nil {
 		return nil, err
 	}
-	return client.CompactResponse(ctx, id)
+	return client.CompactResponse(ctx, req)
+}
+
+// CompactResponseByID compacts the conversation of response id with its own
+// client and model (the legacy POST /responses/{id}/compact form).
+func (s *Service) CompactResponseByID(ctx context.Context, id string) (*ai.CompactedResponse, error) {
+	e, ok := s.use(id)
+	if !ok {
+		return nil, ErrNotFound
+	}
+	return e.client.CompactResponse(ctx, ai.CompactResponseRequest{Model: e.model, PreviousResponseID: id})
+}
+
+// ClientFor returns the client that created response id.
+func (s *Service) ClientFor(id string) (ai.Client, error) {
+	return s.clientFor(id)
+}
+
+// checkPrevious rejects continuing a response this router created through
+// a different client. Unknown IDs are left to the client, which reports
+// them as not found.
+func (s *Service) checkPrevious(client ai.Client, previousID string) error {
+	if previousID == "" {
+		return nil
+	}
+	e, ok := s.use(previousID)
+	if ok && e.client != client {
+		return ErrOtherProvider
+	}
+	return nil
+}
+
+// use returns the entry for id, restarting its expiry: like the response
+// store, the index keeps responses for the TTL after their last use. (The
+// store also refreshes the earlier responses of a continued conversation;
+// the index only refreshes the ones requests name.)
+func (s *Service) use(id string) (*entry, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	e, ok := s.entries[id]
+	if ok {
+		e.expiresAt = time.Now().Add(s.ttl)
+	}
+	return e, ok
 }
 
 // ListResponses returns a summary list from the in-RAM index.
@@ -119,11 +197,9 @@ func (s *Service) ListResponses(ctx context.Context) (*openai.ResponseListRespon
 }
 
 func (s *Service) clientFor(id string) (ai.Client, error) {
-	s.mu.RLock()
-	e, ok := s.entries[id]
-	s.mu.RUnlock()
+	e, ok := s.use(id)
 	if !ok {
-		return nil, fmt.Errorf("response not found")
+		return nil, ErrNotFound
 	}
 	return e.client, nil
 }
@@ -135,7 +211,7 @@ func (s *Service) GetInputItems(_ context.Context, id string) ([]any, error) {
 	defer s.mu.RUnlock()
 	e, ok := s.entries[id]
 	if !ok {
-		return nil, fmt.Errorf("response not found")
+		return nil, ErrNotFound
 	}
 	if e.input == nil {
 		return []any{}, nil
@@ -145,4 +221,3 @@ func (s *Service) GetInputItems(_ context.Context, id string) ([]any, error) {
 
 // Close is a no-op; cleanup is handled by the ai.Client instances.
 func (s *Service) Close() {}
-

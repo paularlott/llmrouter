@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/fsnotify/fsnotify"
@@ -63,19 +64,25 @@ type scriptlingToolManager struct {
 	// "resources_changed" / "prompts_changed" events
 	// so all connected browser tabs refresh their cached lists without
 	// polling.
-	eventBroadcaster *lmchatkit.EventBroadcaster
+	// Set after the watcher may already be reloading, hence atomic.
+	eventBroadcaster atomic.Pointer[lmchatkit.EventBroadcaster]
+
+	// reloadMu serialises reloads: stopping a debounce timer doesn't stop a
+	// callback already running, so the next reload of the same kind (or a
+	// tool reload) could otherwise overlap it and race on the tracking lists.
+	reloadMu sync.Mutex
 }
 
 // SetEventBroadcaster wires the SSE push notifier. When set, tool/resource/
 // prompt reloads broadcast change events so all connected browser tabs
 // refresh their cached lists without polling.
 func (stm *scriptlingToolManager) SetEventBroadcaster(b *lmchatkit.EventBroadcaster) {
-	stm.eventBroadcaster = b
+	stm.eventBroadcaster.Store(b)
 }
 
 func (stm *scriptlingToolManager) broadcast(eventType string) {
-	if stm.eventBroadcaster != nil {
-		stm.eventBroadcaster.Broadcast(lmchatkit.ServerEvent{Type: eventType})
+	if b := stm.eventBroadcaster.Load(); b != nil {
+		b.Broadcast(lmchatkit.ServerEvent{Type: eventType})
 	}
 }
 
@@ -434,6 +441,9 @@ func (stm *scriptlingToolManager) scheduleToolReload(toolName string, isDelete b
 }
 
 func (stm *scriptlingToolManager) handleToolDelete(toolName string) {
+	stm.reloadMu.Lock()
+	defer stm.reloadMu.Unlock()
+
 	tomlPath := filepath.Join(stm.toolsDirAbs, toolName+".toml")
 	pyPath := filepath.Join(stm.toolsDirAbs, toolName+".py")
 
@@ -453,6 +463,9 @@ func (stm *scriptlingToolManager) handleToolDelete(toolName string) {
 }
 
 func (stm *scriptlingToolManager) handleToolCreate(toolName string) {
+	stm.reloadMu.Lock()
+	defer stm.reloadMu.Unlock()
+
 	tomlPath := filepath.Join(stm.toolsDirAbs, toolName+".toml")
 	pyPath := filepath.Join(stm.toolsDirAbs, toolName+".py")
 
@@ -510,6 +523,9 @@ func (stm *scriptlingToolManager) scheduleResourcesReload() {
 }
 
 func (stm *scriptlingToolManager) reloadResources() {
+	stm.reloadMu.Lock()
+	defer stm.reloadMu.Unlock()
+
 	stm.logger.Info("Reloading scriptling resources",
 		"old_static", len(stm.resourceStaticURIs), "old_templates", len(stm.resourceTemplates))
 
@@ -542,9 +558,7 @@ func (stm *scriptlingToolManager) reloadResources() {
 	for _, s := range stm.servers {
 		s.NotifyResourcesChanged()
 	}
-	if stm.eventBroadcaster != nil {
-		stm.eventBroadcaster.Broadcast(lmchatkit.ServerEvent{Type: "resources_changed"})
-	}
+	stm.broadcast("resources_changed")
 }
 
 // registerResources scans the resources folder and registers every static
@@ -610,6 +624,9 @@ func (stm *scriptlingToolManager) schedulePromptsReload() {
 }
 
 func (stm *scriptlingToolManager) reloadPrompts() {
+	stm.reloadMu.Lock()
+	defer stm.reloadMu.Unlock()
+
 	for _, name := range stm.promptNames {
 		for _, s := range stm.servers {
 			s.UnregisterPrompt(name)
@@ -624,9 +641,7 @@ func (stm *scriptlingToolManager) reloadPrompts() {
 	for _, s := range stm.servers {
 		s.NotifyPromptsChanged()
 	}
-	if stm.eventBroadcaster != nil {
-		stm.eventBroadcaster.Broadcast(lmchatkit.ServerEvent{Type: "prompts_changed"})
-	}
+	stm.broadcast("prompts_changed")
 }
 
 // registerPrompts scans the prompts folder and registers every prompt on the
@@ -682,6 +697,9 @@ func (stm *scriptlingToolManager) Shutdown() {
 	}
 	if stm.promptTimer != nil {
 		stm.promptTimer.Stop()
+	}
+	if stm.skillTimer != nil {
+		stm.skillTimer.Stop()
 	}
 	stm.debounceMu.Unlock()
 	if stm.plugins != nil {
@@ -807,6 +825,9 @@ func (stm *scriptlingToolManager) scheduleSkillsReload() {
 }
 
 func (stm *scriptlingToolManager) reloadSkills() {
+	stm.reloadMu.Lock()
+	defer stm.reloadMu.Unlock()
+
 	stm.logger.Info("Reloading scriptling skills", "old", len(stm.skillNames))
 
 	// Unregister everything we previously registered. Skills have no
@@ -825,7 +846,5 @@ func (stm *scriptlingToolManager) reloadSkills() {
 		stm.logger.Error("Failed to reload scriptling skills", "error", err)
 	}
 	stm.logger.Info("Skills reloaded", "new", len(names))
-	if stm.eventBroadcaster != nil {
-		stm.eventBroadcaster.Broadcast(lmchatkit.ServerEvent{Type: "skills_changed"})
-	}
+	stm.broadcast("skills_changed")
 }

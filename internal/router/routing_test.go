@@ -39,7 +39,7 @@ func (m *mockClient) CancelResponse(_ context.Context, _ string) (*openai.Respon
 	return nil, nil
 }
 func (m *mockClient) DeleteResponse(_ context.Context, _ string) error { return nil }
-func (m *mockClient) CompactResponse(_ context.Context, _ string) (*openai.ResponseObject, error) {
+func (m *mockClient) CompactResponse(_ context.Context, _ ai.CompactResponseRequest) (*ai.CompactedResponse, error) {
 	return nil, nil
 }
 
@@ -795,9 +795,9 @@ if req["type"] == "chat" and len(req["tools"]) == 1:
 	}
 }
 
-// --- Model allowlist / denylist tests ---
+// --- Model denylist tests ---
 
-func newRouterWithModels(models []string, allowlist []string, denylist []string) *Router {
+func newRouterWithModels(models []string, denylist []string) *Router {
 	r := &Router{
 		Providers: make(map[string]*Provider),
 		ModelMap:  make(map[string][]string),
@@ -807,8 +807,7 @@ func newRouterWithModels(models []string, allowlist []string, denylist []string)
 	p := &Provider{
 		Name: "p1", ProviderType: "openai",
 		Client: &mockClient{"p1"}, Enabled: true, Weight: 1.0,
-		ModelAllowlist: allowlist,
-		ModelDenylist:  denylist,
+		ModelDenylist: denylist,
 	}
 	p.Healthy.Store(true)
 	r.Providers["p1"] = p
@@ -816,24 +815,8 @@ func newRouterWithModels(models []string, allowlist []string, denylist []string)
 	return r
 }
 
-func TestModelAllowlist_AllowsListed(t *testing.T) {
-	r := newRouterWithModels([]string{"gpt-4o", "gpt-4o-mini", "gpt-3.5"}, []string{"gpt-4o"}, nil)
-	if _, ok := r.ModelMap["gpt-4o"]; !ok {
-		t.Fatal("gpt-4o should be in model map")
-	}
-}
-
-func TestModelAllowlist_BlocksUnlisted(t *testing.T) {
-	r := newRouterWithModels([]string{"gpt-4o", "gpt-4o-mini", "gpt-3.5"}, []string{"gpt-4o"}, nil)
-	for _, blocked := range []string{"gpt-4o-mini", "gpt-3.5"} {
-		if _, ok := r.ModelMap[blocked]; ok {
-			t.Errorf("%s should be blocked by allowlist", blocked)
-		}
-	}
-}
-
 func TestModelDenylist_AllowsUnlisted(t *testing.T) {
-	r := newRouterWithModels([]string{"gpt-4o", "gpt-4o-mini", "gpt-3.5"}, nil, []string{"gpt-3.5"})
+	r := newRouterWithModels([]string{"gpt-4o", "gpt-4o-mini", "gpt-3.5"}, []string{"gpt-3.5"})
 	for _, allowed := range []string{"gpt-4o", "gpt-4o-mini"} {
 		if _, ok := r.ModelMap[allowed]; !ok {
 			t.Errorf("%s should be visible (not in denylist)", allowed)
@@ -842,14 +825,14 @@ func TestModelDenylist_AllowsUnlisted(t *testing.T) {
 }
 
 func TestModelDenylist_BlocksListed(t *testing.T) {
-	r := newRouterWithModels([]string{"gpt-4o", "gpt-4o-mini", "gpt-3.5"}, nil, []string{"gpt-3.5"})
+	r := newRouterWithModels([]string{"gpt-4o", "gpt-4o-mini", "gpt-3.5"}, []string{"gpt-3.5"})
 	if _, ok := r.ModelMap["gpt-3.5"]; ok {
 		t.Fatal("gpt-3.5 should be blocked by denylist")
 	}
 }
 
 func TestModelNoFilter_AllVisible(t *testing.T) {
-	r := newRouterWithModels([]string{"gpt-4o", "gpt-4o-mini"}, nil, nil)
+	r := newRouterWithModels([]string{"gpt-4o", "gpt-4o-mini"}, nil)
 	for _, m := range []string{"gpt-4o", "gpt-4o-mini"} {
 		if _, ok := r.ModelMap[m]; !ok {
 			t.Errorf("%s should be visible with no filter", m)

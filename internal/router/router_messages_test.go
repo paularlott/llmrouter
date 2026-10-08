@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/paularlott/llmrouter/internal/types"
+	"github.com/paularlott/mcp/ai"
 	"github.com/paularlott/mcp/ai/claude"
 	"github.com/paularlott/mcp/ai/openai"
 )
@@ -48,7 +49,7 @@ func (m *mockProviderClient) CancelResponse(ctx context.Context, id string) (*op
 	return nil, nil
 }
 func (m *mockProviderClient) DeleteResponse(ctx context.Context, id string) error { return nil }
-func (m *mockProviderClient) CompactResponse(ctx context.Context, id string) (*openai.ResponseObject, error) {
+func (m *mockProviderClient) CompactResponse(ctx context.Context, req ai.CompactResponseRequest) (*ai.CompactedResponse, error) {
 	return nil, nil
 }
 func (m *mockProviderClient) Close() error { return nil }

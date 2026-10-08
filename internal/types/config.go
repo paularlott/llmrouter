@@ -1,5 +1,7 @@
 package types
 
+import "time"
+
 // Configuration types
 
 type Config struct {
@@ -19,7 +21,7 @@ type ServerConfig struct {
 	Host               string `json:"host" toml:"host"`
 	Port               int    `json:"port" toml:"port"`
 	Token              string `json:"token,omitempty" toml:"token"`
-	AdminPassword      string `json:"admin_password,omitempty" toml:"admin_password"` // If set, enables admin UI + chat
+	AdminPassword      string `json:"admin_password,omitempty" toml:"admin_password"`             // If set, enables admin UI + chat
 	DefaultContextSize int    `json:"default_context_size,omitempty" toml:"default_context_size"` // Fallback context window (tokens) when neither the model nor its provider exposes one. 0 = use built-in 4096 floor.
 }
 
@@ -34,15 +36,14 @@ type ProviderConfig struct {
 	BaseURL            string              `json:"base_url,omitempty" toml:"base_url"` // optional override
 	Token              string              `json:"token" toml:"token"`
 	Enabled            bool                `json:"enabled" toml:"enabled"`
-	Weight             float64             `json:"weight,omitempty" toml:"weight"`                   // 0.0-2.0, default 1.0; higher = preferred
-	Models             []string            `json:"models,omitempty" toml:"models"`                   // if set, use these models instead of querying the provider
-	ModelAllowlist     []string            `json:"model_allowlist,omitempty" toml:"model_allowlist"` // if set, only these models are used from auto-discovery
-	Tags               []string            `json:"tags,omitempty" toml:"tags"`                       // arbitrary tags for routing scripts
-	ModelTags          map[string][]string `json:"model_tags,omitempty" toml:"model_tags"`           // model_id -> tags
-	ModelDenylist      []string            `json:"model_denylist,omitempty" toml:"model_denylist"`   // models to exclude from auto-discovery
-	ModelAliases       map[string]string   `json:"model_aliases,omitempty" toml:"model_aliases"`     // alias -> real model name
+	Weight             float64             `json:"weight,omitempty" toml:"weight"`                             // 0.0-2.0, default 1.0; higher = preferred
+	Models             []string            `json:"models,omitempty" toml:"models"`                             // if set, use these models instead of querying the provider
+	Tags               []string            `json:"tags,omitempty" toml:"tags"`                                 // arbitrary tags for routing scripts
+	ModelTags          map[string][]string `json:"model_tags,omitempty" toml:"model_tags"`                     // model_id -> tags
+	ModelDenylist      []string            `json:"model_denylist,omitempty" toml:"model_denylist"`             // models to exclude from auto-discovery
+	ModelAliases       map[string]string   `json:"model_aliases,omitempty" toml:"model_aliases"`               // alias -> real model name
 	DefaultContextSize int                 `json:"default_context_size,omitempty" toml:"default_context_size"` // Per-provider fallback context window (tokens); used when a model has no explicit size and no API discovery
-	ModelContext       map[string]int      `json:"model_context,omitempty" toml:"model_context"`                 // model_id -> explicit context window (tokens); overrides discovery
+	ModelContext       map[string]int      `json:"model_context,omitempty" toml:"model_context"`               // model_id -> explicit context window (tokens); overrides discovery
 }
 
 type MCPConfig struct {
@@ -66,9 +67,9 @@ type MCPRemoteServerConfig struct {
 	ToolAllowlist     []string `json:"tool_allowlist,omitempty" toml:"tool_allowlist"`   // If set, only these tools are enabled
 	ToolDenylist      []string `json:"tool_denylist,omitempty" toml:"tool_denylist"`     // If set, these tools are disabled
 	StaticServer      bool     `json:"static_server,omitempty" toml:"static_server"`     // If true, server is defined in config (read-only in UI)
-	RemoteSearch      bool     `json:"remote_search,omitempty" toml:"remote_search"`   // Delegate tool_search to this remote server
-	Notifications     bool     `json:"notifications,omitempty" toml:"notifications"`   // Accept listChanged notifications from this server and propagate them
-	Federate          bool     `json:"federate,omitempty" toml:"federate"`             // Expose this server's (non-app) tools through the public /mcp endpoint; the chat always sees every remote server
+	RemoteSearch      bool     `json:"remote_search,omitempty" toml:"remote_search"`     // Delegate tool_search to this remote server
+	Notifications     bool     `json:"notifications,omitempty" toml:"notifications"`     // Accept listChanged notifications from this server and propagate them
+	Federate          bool     `json:"federate,omitempty" toml:"federate"`               // Expose this server's (non-app) tools through the public /mcp endpoint; the chat always sees every remote server
 }
 
 type StorageConfig struct {
@@ -76,7 +77,18 @@ type StorageConfig struct {
 }
 
 type ResponsesConfig struct {
-	TTLDays int `json:"ttl_days,omitempty"`
+	TTLDays      int `json:"ttl_days,omitempty"`
+	MaxResponses int `json:"max_responses,omitempty"` // emulated responses kept in memory (0 = 10,000, negative = no limit)
+	MaxMemoryMB  int `json:"max_memory_mb,omitempty"` // memory for emulated responses in MiB (0 = 256, negative = no limit)
+}
+
+// TTL returns how long responses are kept after their last use: TTLDays,
+// or 30 days when unset.
+func (c ResponsesConfig) TTL() time.Duration {
+	if c.TTLDays <= 0 {
+		return 30 * 24 * time.Hour
+	}
+	return time.Duration(c.TTLDays) * 24 * time.Hour
 }
 
 type ConversationsConfig struct {
@@ -97,13 +109,13 @@ type RouterFileConfig struct {
 // Tools, resources and prompts are all optional — set the dir for the kinds
 // you want to serve; leave blank to skip.
 type ScriptingConfig struct {
-	ToolsDir     string   `json:"tools_dir,omitempty"`      // Directory containing .toml/.py tool pairs
-	ResourcesDir string   `json:"resources_dir,omitempty"`  // Directory containing static files and resource templates (first segment = URI scheme)
-	PromptsDir   string   `json:"prompts_dir,omitempty"`    // Directory containing .toml+.py dynamic prompts or static .md/.txt prompts
-	SkillsDir    string   `json:"skills_dir,omitempty"`      // Directory containing MCP skills (.md files, one skill per file)
-	PluginDirs   []string `json:"plugin_dirs,omitempty"`    // Directories containing plugin executables
-	LibPaths     []string `json:"lib_paths,omitempty"`      // Additional directories to search for libraries
-	ExecScript   bool     `json:"exec_script,omitempty"`    // Register the built-in execute_script MCP tool
+	ToolsDir     string   `json:"tools_dir,omitempty"`     // Directory containing .toml/.py tool pairs
+	ResourcesDir string   `json:"resources_dir,omitempty"` // Directory containing static files and resource templates (first segment = URI scheme)
+	PromptsDir   string   `json:"prompts_dir,omitempty"`   // Directory containing .toml+.py dynamic prompts or static .md/.txt prompts
+	SkillsDir    string   `json:"skills_dir,omitempty"`    // Directory containing MCP skills (.md files, one skill per file)
+	PluginDirs   []string `json:"plugin_dirs,omitempty"`   // Directories containing plugin executables
+	LibPaths     []string `json:"lib_paths,omitempty"`     // Additional directories to search for libraries
+	ExecScript   bool     `json:"exec_script,omitempty"`   // Register the built-in execute_script MCP tool
 }
 
 // ChatConfig configures the /chat UI. When PersonasDir or CommandsDir is

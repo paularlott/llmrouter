@@ -20,7 +20,6 @@ type StoredProviderConfig struct {
 	Enabled            bool                `json:"enabled"`
 	Weight             float64             `json:"weight,omitempty"`
 	Models             []string            `json:"models,omitempty"`
-	ModelAllowlist     []string            `json:"model_allowlist,omitempty"`
 	Tags               []string            `json:"tags,omitempty"`
 	ModelTags          map[string][]string `json:"model_tags,omitempty"`
 	ModelDenylist      []string            `json:"model_denylist,omitempty"`
@@ -164,7 +163,6 @@ func (s *SnapshotProviderStorage) saveProvider(key string, provider *StoredProvi
 		"enabled":             provider.Enabled,
 		"weight":              provider.Weight,
 		"models":              provider.Models,
-		"model_allowlist":     provider.ModelAllowlist,
 		"tags":                provider.Tags,
 		"model_tags":          provider.ModelTags,
 		"model_denylist":      provider.ModelDenylist,
@@ -198,7 +196,11 @@ func parseProviderConfig(m map[string]any) (*StoredProviderConfig, error) {
 		p.Weight = v
 	}
 	p.Models = toStringSlice(m["models"])
-	p.ModelAllowlist = toStringSlice(m["model_allowlist"])
+	// model_allowlist was a duplicate of models (static models); fold in
+	// providers stored with it
+	if len(p.Models) == 0 {
+		p.Models = toStringSlice(m["model_allowlist"])
+	}
 	p.Tags = toStringSlice(m["tags"])
 	p.ModelDenylist = toStringSlice(m["model_denylist"])
 	if v, ok := m["default_context_size"].(float64); ok {

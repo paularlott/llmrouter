@@ -28,7 +28,6 @@ type Provider struct {
 	ActiveCompletions  atomic.Int64
 	Fetching           atomic.Bool
 	Models             []string // static model list; if set, overrides provider API discovery
-	ModelAllowlist     []string
 	ModelDenylist      []string
 	Weight             float64
 	Tags               []string                   // provider-level tags

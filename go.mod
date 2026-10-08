@@ -8,10 +8,10 @@ require (
 	github.com/fsnotify/fsnotify v1.10.1
 	github.com/google/uuid v1.6.0
 	github.com/paularlott/cli v0.9.2
-	github.com/paularlott/lmchatkit v0.11.0
+	github.com/paularlott/lmchatkit v0.12.0
 	github.com/paularlott/logger v0.3.0
-	github.com/paularlott/mcp v0.31.0
-	github.com/paularlott/scriptling v0.29.0
+	github.com/paularlott/mcp v0.32.0
+	github.com/paularlott/scriptling v0.30.0
 	github.com/paularlott/snapshotkv v0.6.0
 )
 
@@ -53,7 +53,7 @@ require (
 	go.opentelemetry.io/otel/log v1.47.0 // indirect
 	go.opentelemetry.io/otel/metric v1.47.0 // indirect
 	go.opentelemetry.io/otel/trace v1.47.0 // indirect
-	golang.org/x/net v0.59.0 // indirect
+	golang.org/x/net v0.60.0 // indirect
 	golang.org/x/oauth2 v0.37.0 // indirect
 	golang.org/x/sync v0.23.0 // indirect
 	golang.org/x/sys v0.48.0 // indirect

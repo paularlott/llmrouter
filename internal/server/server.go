@@ -56,7 +56,9 @@ func buildServer(cmd *cli.Command, desktopMode bool) (*router.Router, *types.Con
 			Path: cmd.GetString("storage-path"),
 		},
 		Responses: types.ResponsesConfig{
-			TTLDays: cmd.GetInt("responses-ttl"),
+			TTLDays:      cmd.GetInt("responses-ttl"),
+			MaxResponses: cmd.GetInt("responses-max"),
+			MaxMemoryMB:  cmd.GetInt("responses-max-mb"),
 		},
 		Conversations: types.ConversationsConfig{
 			TTLDays: cmd.GetInt("conversations-ttl"),
@@ -99,10 +101,17 @@ func buildServer(cmd *cli.Command, desktopMode bool) (*router.Router, *types.Con
 				Enabled:            pc.GetBool("enabled"),
 				Weight:             pc.GetFloat64("weight"),
 				Models:             pc.GetStringSlice("models"),
-				ModelAllowlist:     pc.GetStringSlice("model_allowlist"),
 				ModelDenylist:      pc.GetStringSlice("model_denylist"),
 				Tags:               pc.GetStringSlice("tags"),
 				DefaultContextSize: pc.GetInt("default_context_size"),
+			}
+			// model_allowlist was a duplicate of models (static models);
+			// keep configs that still use it working
+			if legacy := pc.GetStringSlice("model_allowlist"); len(legacy) > 0 {
+				log.GetLogger().Warn("provider option model_allowlist is deprecated; use models", "provider", providerCfg.Name)
+				if len(providerCfg.Models) == 0 {
+					providerCfg.Models = legacy
+				}
 			}
 			if mtObj := pc.GetObject("model_tags"); mtObj != nil {
 				providerCfg.ModelTags = make(map[string][]string)

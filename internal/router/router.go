@@ -20,6 +20,7 @@ import (
 	"github.com/paularlott/llmrouter/middleware"
 	"github.com/paularlott/lmchatkit"
 	mcplib "github.com/paularlott/mcp"
+	"github.com/paularlott/mcp/ai"
 	"github.com/paularlott/mcp/ai/claude"
 	"github.com/paularlott/mcp/ai/openai"
 )
@@ -36,6 +37,9 @@ func NewRouter(config *types.Config, logger Logger) (*Router, error) {
 		shutdownChan:   make(chan struct{}),
 		requestWatcher: NewRequestWatcher(),
 	}
+
+	// Store emulated responses for as long as the responses index keeps them
+	setResponseStore(config.Responses)
 
 	// Initialize providers
 	for _, providerConfig := range config.Providers {
@@ -64,7 +68,6 @@ func NewRouter(config *types.Config, logger Logger) (*Router, error) {
 			Enabled:            providerConfig.Enabled,
 			Client:             client,
 			Models:             providerConfig.Models,
-			ModelAllowlist:     providerConfig.ModelAllowlist,
 			ModelDenylist:      providerConfig.ModelDenylist,
 			Weight:             weight,
 			Tags:               providerConfig.Tags,
@@ -103,7 +106,7 @@ func NewRouter(config *types.Config, logger Logger) (*Router, error) {
 	router.sharedStore = sharedStore
 
 	// Initialize responses service
-	router.responsesService = responses.NewService(config.Responses.TTLDays)
+	router.responsesService = responses.NewService(config.Responses.TTL())
 	logger.Info("initialized responses service")
 
 	// Initialize conversations service
@@ -170,6 +173,7 @@ func NewRouter(config *types.Config, logger Logger) (*Router, error) {
 		router.mux.HandleFunc("DELETE /v1/responses/{id}", auth(router.HandleDeleteResponse))
 		router.mux.HandleFunc("GET /v1/responses", auth(router.HandleListResponses))
 		router.mux.HandleFunc("POST /v1/responses/{id}/cancel", auth(router.HandleCancelResponse))
+		router.mux.HandleFunc("POST /v1/responses/compact", auth(router.HandleCompactResponse))
 		router.mux.HandleFunc("POST /v1/responses/{id}/compact", auth(router.HandleCompactResponses))
 		router.mux.HandleFunc("GET /v1/responses/{id}/input_items", auth(router.HandleListResponseInputItems))
 		router.mux.HandleFunc("POST /v1/responses/input_tokens", auth(router.HandleCountInputTokens))
@@ -178,6 +182,7 @@ func NewRouter(config *types.Config, logger Logger) (*Router, error) {
 		router.mux.HandleFunc("DELETE /ollama/v1/responses/{id}", auth(router.HandleDeleteResponse))
 		router.mux.HandleFunc("GET /ollama/v1/responses", auth(router.HandleListResponses))
 		router.mux.HandleFunc("POST /ollama/v1/responses/{id}/cancel", auth(router.HandleCancelResponse))
+		router.mux.HandleFunc("POST /ollama/v1/responses/compact", auth(router.HandleCompactResponse))
 		router.mux.HandleFunc("POST /ollama/v1/responses/{id}/compact", auth(router.HandleCompactResponses))
 		router.mux.HandleFunc("GET /ollama/v1/responses/{id}/input_items", auth(router.HandleListResponseInputItems))
 		router.mux.HandleFunc("POST /ollama/v1/responses/input_tokens", auth(router.HandleCountInputTokens))
@@ -475,9 +480,6 @@ func (r *Router) addProviderModels(providerName string, modelIDs []string, p *Pr
 
 	for _, modelID := range modelIDs {
 		if !shouldIncludeModel(modelID) {
-			continue
-		}
-		if len(p.ModelAllowlist) > 0 && !inSlice(modelID, p.ModelAllowlist) {
 			continue
 		}
 		if len(p.ModelDenylist) > 0 && inSlice(modelID, p.ModelDenylist) {
@@ -1983,10 +1985,19 @@ func (r *Router) HandleCreateResponse(w http.ResponseWriter, req *http.Request) 
 	}
 
 	createReq.Model = r.resolveAliasForProvider(createReq.Model, providerName)
+
+	// "stream" isn't a request field, so it arrives in ExtraBody; never
+	// forward it upstream
+	stream, _ := createReq.ExtraBody["stream"].(bool)
+	delete(createReq.ExtraBody, "stream")
+	if stream {
+		r.streamResponse(w, req, providerName, &createReq)
+		return
+	}
+
 	resp, err := r.responsesService.CreateResponse(req.Context(), r.Providers[providerName].Client, &createReq)
 	if err != nil {
-		r.logger.WithError(err).Error("failed to create response")
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		r.writeResponsesError(w, err, "create response")
 		return
 	}
 
@@ -1994,6 +2005,80 @@ func (r *Router) HandleCreateResponse(w http.ResponseWriter, req *http.Request) 
 	w.WriteHeader(openai.CreateStatusCode)
 	if err := writeJSON(w, resp); err != nil {
 		r.logger.WithError(err).Error("failed to write response")
+	}
+}
+
+// streamResponse streams a Responses API response as server-sent events
+// ("event: <type>" and "data: <json>" per event), as OpenAI does, and tracks
+// the completed response so it can be fetched and continued afterwards.
+func (r *Router) streamResponse(w http.ResponseWriter, req *http.Request, providerName string, createReq *CreateResponseRequest) {
+	client := r.Providers[providerName].Client
+	stream, err := r.responsesService.StreamResponse(req.Context(), client, createReq)
+	if err != nil {
+		r.writeResponsesError(w, err, "stream response")
+		return
+	}
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		for stream.Next() {
+		}
+		if err := stream.Err(); err != nil {
+			r.logger.WithError(err).Error("responses streaming error (non-flushable writer)", "model", createReq.Model, "provider", providerName)
+			if r.isConnectionError(err) {
+				r.DisableProvider(providerName, fmt.Sprintf("connection error: %v", err))
+			}
+		}
+		return
+	}
+
+	// Peek at the first event before committing HTTP 200, so an upstream
+	// failure before any data (e.g. an unknown previous_response_id) still
+	// gets a proper status
+	if !stream.Next() {
+		err := stream.Err()
+		if err == nil {
+			err = errors.New("stream ended without any events")
+		}
+		if errors.Is(err, ai.ErrResponseNotFound) || errors.Is(err, responses.ErrOtherProvider) {
+			r.writeResponsesError(w, err, "stream response") // the client's mistake: not logged
+			return
+		}
+		r.logger.WithError(err).Error("responses streaming error", "model", createReq.Model, "provider", providerName)
+		if r.isConnectionError(err) {
+			r.DisableProvider(providerName, fmt.Sprintf("connection error: %v", err))
+		}
+		writeUpstreamStreamError(w, err)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.WriteHeader(http.StatusOK)
+
+	writeEvent := func(event openai.ResponseStreamEvent) {
+		if event.Type == "response.completed" {
+			r.responsesService.Track(client, event.Response(), createReq.Input)
+		}
+		fmt.Fprintf(w, "event: %s\ndata: %s\n\n", event.Type, event.Data)
+		flusher.Flush()
+	}
+	writeEvent(stream.Current()) // the peeked first event
+	for stream.Next() {
+		writeEvent(stream.Current())
+	}
+
+	// A mid-stream failure ends the stream with an error event
+	if err := stream.Err(); err != nil {
+		r.logger.WithError(err).Error("responses streaming error", "model", createReq.Model, "provider", providerName)
+		if r.isConnectionError(err) {
+			r.DisableProvider(providerName, fmt.Sprintf("connection error: %v", err))
+		}
+		payload := upstreamErrorPayload(err)
+		data, _ := json.Marshal(map[string]any{"type": "error", "code": payload["code"], "message": payload["message"], "param": nil})
+		fmt.Fprintf(w, "event: error\ndata: %s\n\n", data)
+		flusher.Flush()
 	}
 }
 
@@ -2013,12 +2098,7 @@ func (r *Router) HandleGetResponse(w http.ResponseWriter, req *http.Request) {
 
 	resp, err := r.responsesService.GetResponse(req.Context(), id)
 	if err != nil {
-		if err.Error() == "response not found" {
-			http.Error(w, "Response not found", http.StatusNotFound)
-		} else {
-			r.logger.WithError(err).Error("failed to get response")
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
-		}
+		r.writeResponsesError(w, err, "get response")
 		return
 	}
 
@@ -2043,12 +2123,7 @@ func (r *Router) HandleDeleteResponse(w http.ResponseWriter, req *http.Request) 
 	}
 
 	if err := r.responsesService.DeleteResponse(req.Context(), id); err != nil {
-		if err.Error() == "response not found" {
-			http.Error(w, "Response not found", http.StatusNotFound)
-		} else {
-			r.logger.WithError(err).Error("failed to delete response")
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
-		}
+		r.writeResponsesError(w, err, "delete response")
 		return
 	}
 
@@ -2093,16 +2168,69 @@ func (r *Router) HandleCancelResponse(w http.ResponseWriter, req *http.Request) 
 
 	resp, err := r.responsesService.CancelResponse(req.Context(), id)
 	if err != nil {
-		if err.Error() == "response not found" {
-			http.Error(w, "Response not found", http.StatusNotFound)
-		} else {
-			r.logger.WithError(err).Error("failed to cancel response")
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
-		}
+		r.writeResponsesError(w, err, "cancel response")
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
+	if err := writeJSON(w, resp); err != nil {
+		r.logger.WithError(err).Error("failed to write response")
+	}
+}
+
+// writeResponsesError writes a Responses API error: 404 for an unknown
+// response, 400 for continuing another provider's response, else 500.
+func (r *Router) writeResponsesError(w http.ResponseWriter, err error, action string) {
+	switch {
+	case errors.Is(err, responses.ErrNotFound) || errors.Is(err, ai.ErrResponseNotFound):
+		http.Error(w, err.Error(), http.StatusNotFound)
+	case errors.Is(err, responses.ErrOtherProvider):
+		http.Error(w, err.Error(), http.StatusBadRequest)
+	default:
+		r.logger.WithError(err).Error("failed to " + action)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+	}
+}
+
+// HandleCompactResponse compacts a conversation: POST /v1/responses/compact
+// with a model and previous_response_id and/or input, as OpenAI's API. A
+// previous_response_id from this router must be compacted with a model on
+// the provider that created it.
+func (r *Router) HandleCompactResponse(w http.ResponseWriter, req *http.Request) {
+	if r.responsesService == nil {
+		http.Error(w, "Responses service not available", http.StatusServiceUnavailable)
+		return
+	}
+
+	var compactReq ai.CompactResponseRequest
+	if err := readJSON(req, &compactReq); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+	if compactReq.Model == "" {
+		http.Error(w, "model is required", http.StatusBadRequest)
+		return
+	}
+	if compactReq.PreviousResponseID == "" && len(compactReq.Input) == 0 {
+		http.Error(w, "previous_response_id or input is required", http.StatusBadRequest)
+		return
+	}
+
+	providerName, err := r.GetProviderForModel(compactReq.Model, "")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+	compactReq.Model = r.resolveAliasForProvider(compactReq.Model, providerName)
+
+	resp, err := r.responsesService.CompactResponse(req.Context(), r.Providers[providerName].Client, compactReq)
+	if err != nil {
+		r.writeResponsesError(w, err, "compact response")
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(openai.CompactStatusCode)
 	if err := writeJSON(w, resp); err != nil {
 		r.logger.WithError(err).Error("failed to write response")
 	}
@@ -2120,14 +2248,9 @@ func (r *Router) HandleCompactResponses(w http.ResponseWriter, req *http.Request
 		return
 	}
 
-	resp, err := r.responsesService.CompactResponse(req.Context(), id)
+	resp, err := r.responsesService.CompactResponseByID(req.Context(), id)
 	if err != nil {
-		if err.Error() == "response not found" {
-			http.Error(w, "Response not found", http.StatusNotFound)
-		} else {
-			r.logger.WithError(err).Error("failed to compact response")
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
-		}
+		r.writeResponsesError(w, err, "compact response")
 		return
 	}
 
@@ -2153,12 +2276,7 @@ func (r *Router) HandleListResponseInputItems(w http.ResponseWriter, req *http.R
 
 	items, err := r.responsesService.GetInputItems(req.Context(), id)
 	if err != nil {
-		if err.Error() == "response not found" {
-			http.Error(w, "Response not found", http.StatusNotFound)
-		} else {
-			r.logger.WithError(err).Error("failed to get input items")
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
-		}
+		r.writeResponsesError(w, err, "get input items")
 		return
 	}
 
