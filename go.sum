@@ -79,8 +79,8 @@ github.com/paularlott/logger v0.3.0 h1:QwVUoxmlEFkfHI25y5dn56OJvK4Bpe3OvoJu4GZM7
 github.com/paularlott/logger v0.3.0/go.mod h1:vjAOY1vUvYigmJxxQ0eMclryIjDS6VWNK6FprtTMce0=
 github.com/paularlott/mcp v0.32.2 h1:DcLjC4h5EQG7eDypRqUKLNGr3xkGhy5lmY4Dli8hhog=
 github.com/paularlott/mcp v0.32.2/go.mod h1:R5UYcRkS817rbFmQj1kA+di7+BGZpHMgjwnLx0RlMak=
-github.com/paularlott/scriptling v0.30.0 h1:bIgmgkN8fybruRfdn8ysJXeLBvGN7XgxhGrT/dcoJds=
-github.com/paularlott/scriptling v0.30.0/go.mod h1:DJc4sLHWdqrvFFHLU6hnXBQRWJEq862grXt2+13lmjA=
+github.com/paularlott/scriptling v0.30.1 h1:1B4yLrdk1FXeAxqgwCNCdBMfPCQtMYRTLV4Pqy10O64=
+github.com/paularlott/scriptling v0.30.1/go.mod h1:t9uvZIj7yV///ACTuprGzel2yfsPWYOJxZYRuYQtmwg=
 github.com/paularlott/snapshotkv v0.6.0 h1:bGUVANfPg7+2fsVnnnCWQvkuDrBWPg3mchGoEgel28Q=
 github.com/paularlott/snapshotkv v0.6.0/go.mod h1:TAiDx8gWhRS5cy1i8iKpxCQsWWpmQ0zA4IBEwLX58Ow=
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
@@ -94,8 +94,8 @@ github.com/shamaton/msgpack/v3 v3.2.3 h1:0r0aZtrXDFOPpwWJTEOpFq+Ih/JmMLm0pqLN5mS
 github.com/shamaton/msgpack/v3 v3.2.3/go.mod h1:sgBYvEiyz8JR1NC3yGRoPVME9xXovpnh3l/plW1nfRo=
 github.com/shirou/gopsutil/v3 v3.24.5 h1:i0t8kL+kQTvpAYToeuiVk3TgDeKOFioZO3Ztz/iZ9pI=
 github.com/shirou/gopsutil/v3 v3.24.5/go.mod h1:bsoOS1aStSs9ErQ1WWfxllSeS1K5D+U30r2NfcubMVk=
-github.com/shoenig/go-m1cpu v0.2.3 h1:srqcACMKqJblLvPAN61ylvMaylv/bl+g703XKgeAXZ8=
-github.com/shoenig/go-m1cpu v0.2.3/go.mod h1:38ReYghj5Sqaa2nPBh2aJAHyFSi2vpTQJLM7TFJRxNM=
+github.com/shoenig/go-m1cpu v0.2.4 h1:F5esY3x6L2iIxmqHnMZ5afJwXBy573/fwkPgvatExgE=
+github.com/shoenig/go-m1cpu v0.2.4/go.mod h1:38ReYghj5Sqaa2nPBh2aJAHyFSi2vpTQJLM7TFJRxNM=
 github.com/shoenig/test v1.13.2 h1:SaGxHxg7xkRuKuNtuFmHf0LgNGaAgcBT7HN4WHCKfqU=
 github.com/shoenig/test v1.13.2/go.mod h1:MKmiRyEeuFl8y9PCoThaRDgYQZeWBhRQlH99poXz5LI=
 github.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=
