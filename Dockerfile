@@ -7,7 +7,7 @@ ARG TARGETPLATFORM
 ARG TARGETARCH
 
 RUN apk update \
-  && apk add --no-cache bash nodejs npm \
+  && apk add --no-cache bash nodejs npm git \
   && GO_TASK_VERSION=3.44.1 \
   && case ${TARGETPLATFORM} in \
     'linux/amd64') url="https://github.com/go-task/task/releases/download/v${GO_TASK_VERSION}/task_linux_amd64.tar.gz" ;; \
