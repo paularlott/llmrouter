@@ -77,8 +77,8 @@ github.com/paularlott/lmchatkit v0.12.0 h1:TFr+5DXstZMjvgpkUtVkWQfKfgPk0ddQrznuT
 github.com/paularlott/lmchatkit v0.12.0/go.mod h1:DkMQEeC26LOaW23v84Lg77ujhZsgSnvYWVQzBfK4kNg=
 github.com/paularlott/logger v0.3.0 h1:QwVUoxmlEFkfHI25y5dn56OJvK4Bpe3OvoJu4GZM7ng=
 github.com/paularlott/logger v0.3.0/go.mod h1:vjAOY1vUvYigmJxxQ0eMclryIjDS6VWNK6FprtTMce0=
-github.com/paularlott/mcp v0.32.0 h1:aLZj2rYL9uOyde+FxpAJ9Tcrudd8Q0s8zsxl4pHsDSw=
-github.com/paularlott/mcp v0.32.0/go.mod h1:R5UYcRkS817rbFmQj1kA+di7+BGZpHMgjwnLx0RlMak=
+github.com/paularlott/mcp v0.32.2 h1:DcLjC4h5EQG7eDypRqUKLNGr3xkGhy5lmY4Dli8hhog=
+github.com/paularlott/mcp v0.32.2/go.mod h1:R5UYcRkS817rbFmQj1kA+di7+BGZpHMgjwnLx0RlMak=
 github.com/paularlott/scriptling v0.30.0 h1:bIgmgkN8fybruRfdn8ysJXeLBvGN7XgxhGrT/dcoJds=
 github.com/paularlott/scriptling v0.30.0/go.mod h1:DJc4sLHWdqrvFFHLU6hnXBQRWJEq862grXt2+13lmjA=
 github.com/paularlott/snapshotkv v0.6.0 h1:bGUVANfPg7+2fsVnnnCWQvkuDrBWPg3mchGoEgel28Q=

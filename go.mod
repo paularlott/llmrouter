@@ -1,6 +1,6 @@
 module github.com/paularlott/llmrouter
 
-go 1.27.1
+go 1.27.2
 
 require (
 	github.com/BurntSushi/toml v1.6.0
@@ -10,8 +10,8 @@ require (
 	github.com/paularlott/cli v0.9.2
 	github.com/paularlott/lmchatkit v0.12.0
 	github.com/paularlott/logger v0.3.0
-	github.com/paularlott/mcp v0.32.0
-	github.com/paularlott/scriptling v0.30.0
+	github.com/paularlott/mcp v0.32.2
+	github.com/paularlott/scriptling v0.30.1
 	github.com/paularlott/snapshotkv v0.6.0
 )
 
