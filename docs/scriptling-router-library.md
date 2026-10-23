@@ -107,7 +107,7 @@ All Scriptling standard libraries are available without any configuration:
 
 ### Extended Libraries
 
-The following extended libraries are enabled. Filesystem access (`os`, `os.path`, `pathlib`, `glob`), subprocess execution (`subprocess`), and async resource waiting (`wait_for`) are **not** available.
+The following extended libraries are enabled. Filesystem access (`os`, `os.path`, `pathlib`, `glob`), process execution (`subprocess`, `scriptling.container`), and async resource waiting (`wait_for`) are **not** available.
 
 | Library       | Description                             |
 | ------------- | --------------------------------------- |

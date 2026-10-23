@@ -365,7 +365,7 @@ Every routing script has access to all Scriptling standard libraries (`json`, `r
 | `scriptling.template.text` | Text template rendering                       |
 | `scriptling.runtime`       | Background tasks, KV store, sync primitives   |
 
-Filesystem access (`os`, `pathlib`, `glob`), subprocess execution, and `wait_for` are not available in routing scripts.
+Filesystem access (`os`, `pathlib`, `glob`), process execution (`subprocess`, `scriptling.container`), and `wait_for` are not available in routing scripts.
 
 #### Script Variables
 

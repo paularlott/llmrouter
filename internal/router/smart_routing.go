@@ -72,8 +72,12 @@ func newSmartRouter(name, scriptPath, defaultModel string, vars map[string]strin
 func (sr *SmartRouter) newVM() *scriptling.Scriptling {
 	vm := scriptling.New()
 
-	// Register the full scriptling library set (all standard + extended libraries).
-	scriptlingsetup.Scriptling(vm, sr.libDirs, false, nil, nil, nil, sr.logger, "", "")
+	// Register the scriptling library set. Routing scripts get no filesystem
+	// access, no process execution (subprocess, and containers, which run
+	// processes elsewhere) and no resource waiting, as docs/scriptling-router-library.md
+	// states; disabling subprocess also refuses stdio MCP clients and executable
+	// plugin loads, which would start processes too.
+	scriptlingsetup.Scriptling(vm, sr.libDirs, false, nil, routingDisabledLibs, nil, sr.logger, "", "", false)
 
 	// Re-register resolve with llmrouter's DNS resolver (setup uses a default).
 	resolve.Register(vm, dnsResolver{timeout: 2 * time.Second})
@@ -625,3 +629,8 @@ func validRouterName(name string) bool {
 	}
 	return !strings.ContainsAny(name, `/\`)
 }
+
+// routingDisabledLibs are the libraries routing scripts may not import: the
+// filesystem, process execution and resource-waiting libraries that
+// docs/scriptling-router-library.md lists as unavailable.
+var routingDisabledLibs = []string{"os", "pathlib", "glob", "subprocess", "scriptling.wait_for", "scriptling.container"}

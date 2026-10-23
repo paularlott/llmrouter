@@ -211,7 +211,7 @@ func (stm *scriptlingToolManager) registerAll() error {
 // outside any fixed script directory.
 func (stm *scriptlingToolManager) newScriptling() *scriptling.Scriptling {
 	p := scriptling.New()
-	setup.Scriptling(p, stm.config.LibPaths, false, nil, nil, secretprovider.NewRegistry(), scriptlinglog.NewNullLogger(), "", "")
+	setup.Scriptling(p, stm.config.LibPaths, false, nil, nil, secretprovider.NewRegistry(), scriptlinglog.NewNullLogger(), "", "", false)
 	if stm.plugins != nil {
 		scriptlingplugin.RegisterLibraries(p, stm.plugins)
 	}
