@@ -211,6 +211,7 @@ tasks:
     cmds:
       - >-
         CGO_ENABLED=0 go run . server
+        --allow-insecure
         --personas-dir ./examples/personas
         --commands-dir ./examples/commands
         --tools-dir ./examples/mcp-tools

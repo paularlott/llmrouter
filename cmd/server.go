@@ -37,6 +37,12 @@ func ServerFlags() []cli.Flag {
 			Usage:      "Password for admin UI (if set, enables admin UI at /admin)",
 			ConfigPath: []string{"server.admin_password"},
 		},
+		&cli.BoolFlag{
+			Name: "allow-insecure",
+			Usage: "Skip TLS certificate checks on outgoing requests (MCP servers, their OAuth sign-in, providers). " +
+				"Development only: for servers with self-signed certificates",
+			ConfigPath: []string{"server.allow_insecure"},
+		},
 		&cli.StringFlag{
 			Name:       "storage-path",
 			Usage:      "Path for persistent storage (omit for memory-only)",

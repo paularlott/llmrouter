@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"net/http"
 	"os"
@@ -83,12 +84,17 @@ func buildServer(cmd *cli.Command, desktopMode bool) (*router.Router, *types.Con
 	logger := log.GetLogger()
 	logger.Info("starting LLM router", "version", build.Version)
 
+	allowInsecure := cmd.GetBool("allow-insecure")
 	pool.SetPoolConfig(&pool.PoolConfig{
 		MaxIdleConns:        100,
 		MaxIdleConnsPerHost: 10,
 		IdleConnTimeout:     90 * time.Second,
-		InsecureSkipVerify:  false,
+		InsecureSkipVerify:  allowInsecure,
 	})
+	if allowInsecure {
+		allowInsecureDefaultClient()
+		logger.Warn("TLS certificate checks are off for outgoing requests (--allow-insecure): development only")
+	}
 
 	if cmd.ConfigFile != nil {
 		typedConfig := cli.NewTypedConfigFile(cmd.ConfigFile)
@@ -221,4 +227,21 @@ func RunServer(ctx context.Context, cmd *cli.Command) error {
 	r.Shutdown()
 	logger.Info("server stopped")
 	return nil
+}
+
+// allowInsecureDefaultClient turns certificate checks off for http.DefaultClient
+// too (--allow-insecure), as the pool's setting does for the pooled clients:
+// discovering and signing in to an MCP server's OAuth authorization server, and
+// refreshing its tokens, go through http.DefaultClient.
+func allowInsecureDefaultClient() {
+	t, ok := http.DefaultTransport.(*http.Transport)
+	if !ok {
+		return
+	}
+	t = t.Clone()
+	if t.TLSClientConfig == nil {
+		t.TLSClientConfig = &tls.Config{}
+	}
+	t.TLSClientConfig.InsecureSkipVerify = true // #nosec G402 -- opt-in, development only
+	http.DefaultTransport = t
 }

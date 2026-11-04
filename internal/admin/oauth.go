@@ -26,10 +26,13 @@ type pendingOAuth struct {
 	RemoteSearch   bool
 	ClientID       string
 	TokenURL       string
-	CodeVerifier   string
-	SessionToken   string
-	Reauth         bool
-	CreatedAt      time.Time
+	// Resource is the MCP server's resource identifier (RFC 9728) when its authorization server is elsewhere: sent as
+	// the resource parameter (RFC 8707) so the token is issued for this server. Empty when it needs none.
+	Resource     string
+	CodeVerifier string
+	SessionToken string
+	Reauth       bool
+	CreatedAt    time.Time
 }
 
 var (
@@ -121,6 +124,7 @@ func (a *Admin) HandleOAuthStart(w http.ResponseWriter, r *http.Request) {
 		RemoteSearch:   req.RemoteSearch,
 		ClientID:       clientID,
 		TokenURL:       meta.TokenEndpoint,
+		Resource:       meta.Resource,
 		CodeVerifier:   verifier,
 		SessionToken:   a.getSessionFromCookie(r),
 		Reauth:         req.Reauth,
@@ -145,6 +149,9 @@ func (a *Admin) HandleOAuthStart(w http.ResponseWriter, r *http.Request) {
 	q.Set("state", state)
 	q.Set("code_challenge", challenge)
 	q.Set("code_challenge_method", "S256")
+	if meta.Resource != "" {
+		q.Set("resource", meta.Resource)
+	}
 	authURL.RawQuery = q.Encode()
 
 	writeJSON(w, http.StatusOK, map[string]string{"auth_url": authURL.String()})
@@ -175,13 +182,17 @@ func (a *Admin) HandleOAuthCallback(w http.ResponseWriter, r *http.Request) {
 	callbackURL := fmt.Sprintf("%s://%s/admin/oauth/callback", scheme(r), r.Host)
 
 	// Exchange code for tokens
-	resp, err := http.PostForm(pending.TokenURL, url.Values{
+	form := url.Values{
 		"grant_type":    {"authorization_code"},
 		"code":          {code},
 		"redirect_uri":  {callbackURL},
 		"client_id":     {pending.ClientID},
 		"code_verifier": {pending.CodeVerifier},
-	})
+	}
+	if pending.Resource != "" {
+		form.Set("resource", pending.Resource)
+	}
+	resp, err := http.PostForm(pending.TokenURL, form)
 	if err != nil {
 		http.Error(w, "token exchange failed: "+err.Error(), http.StatusBadGateway)
 		return
