@@ -10,7 +10,7 @@ require (
 	github.com/paularlott/cli v0.10.2
 	github.com/paularlott/lmchatkit v0.12.1
 	github.com/paularlott/logger v0.4.0
-	github.com/paularlott/mcp v0.33.1
+	github.com/paularlott/mcp v0.33.2
 	github.com/paularlott/scriptling v0.33.1
 	github.com/paularlott/snapshotkv v0.6.0
 )
@@ -66,5 +66,3 @@ require (
 	modernc.org/memory v1.12.1 // indirect
 	modernc.org/sqlite v1.61.1 // indirect
 )
-
-replace github.com/paularlott/mcp => ../mcp
