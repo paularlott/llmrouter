@@ -23,6 +23,22 @@ type ServerConfig struct {
 	Token              string `json:"token,omitempty" toml:"token"`
 	AdminPassword      string `json:"admin_password,omitempty" toml:"admin_password"`             // If set, enables admin UI + chat
 	DefaultContextSize int    `json:"default_context_size,omitempty" toml:"default_context_size"` // Fallback context window (tokens) when neither the model nor its provider exposes one. 0 = use built-in 4096 floor.
+	// PublicURL is the externally reachable base URL of this router (e.g.
+	// "https://llm.example.com"), used to derive the MCP endpoint's OAuth
+	// resource identifier (<public_url>/mcp). Empty = http://<host>:<port>.
+	PublicURL string     `json:"public_url,omitempty" toml:"public_url"`
+	OIDC      OIDCConfig `json:"oidc,omitempty" toml:"oidc"` // Optional identity provider whose JWT access tokens are accepted on /mcp
+}
+
+// OIDCConfig configures acceptance of identity-provider-issued JWT access
+// tokens on the MCP endpoint (OAuth 2.1 resource server). Enabled when Issuer
+// is set.
+type OIDCConfig struct {
+	Issuer                 string   `json:"issuer,omitempty" toml:"issuer"`                                       // Authorization server issuer identifier (token iss must match exactly)
+	JWKSURL                string   `json:"jwks_url,omitempty" toml:"jwks_url"`                                   // Empty = discover from the issuer's well-known metadata
+	Audience               []string `json:"audience,omitempty" toml:"audience"`                                   // Extra accepted aud values besides the MCP resource URL
+	RequiredScopes         []string `json:"required_scopes,omitempty" toml:"required_scopes"`                     // Scopes every MCP request must carry
+	RequireAccessTokenType bool     `json:"require_access_token_type,omitempty" toml:"require_access_token_type"` // Require JWT typ "at+jwt" (RFC 9068)
 }
 
 type LoggingConfig struct {
@@ -63,6 +79,7 @@ type MCPRemoteServerConfig struct {
 	OAuthTokenURL     string   `json:"oauth_token_url,omitempty" toml:"oauth_token_url"`
 	OAuthAccessToken  string   `json:"oauth_access_token,omitempty" toml:"oauth_access_token"`
 	OAuthRefreshToken string   `json:"oauth_refresh_token,omitempty" toml:"oauth_refresh_token"`
+	OAuthResource     string   `json:"oauth_resource,omitempty" toml:"oauth_resource"`   // RFC 8707 resource indicator sent on token refresh
 	ToolVisibility    string   `json:"tool_visibility,omitempty" toml:"tool_visibility"` // "native" (default) or "ondemand"
 	ToolAllowlist     []string `json:"tool_allowlist,omitempty" toml:"tool_allowlist"`   // If set, only these tools are enabled
 	ToolDenylist      []string `json:"tool_denylist,omitempty" toml:"tool_denylist"`     // If set, these tools are disabled

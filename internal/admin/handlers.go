@@ -489,6 +489,7 @@ if namespace := r.PathValue("namespace"); namespace == LocalNamespace {
 		server.OAuthTokenURL = ""
 		server.OAuthAccessToken = ""
 		server.OAuthRefreshToken = ""
+		server.OAuthResource = ""
 	}
 	server.Enabled = req.Enabled
 	if req.ToolVisibility != "" {

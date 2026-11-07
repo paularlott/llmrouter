@@ -268,7 +268,9 @@ RETURNING RESULTS:
 			if response != "" {
 				if exitCode != 0 {
 					stm.logger.Debug("MCP execute_script returned error response", "exit_code", exitCode)
-					return nil, mcp_lib.NewToolErrorInternal(response)
+					// The script's own failure (return_error): a tool execution
+					// error the caller can see and correct, not a protocol error.
+					return mcp_lib.NewToolResponseError(response), nil
 				}
 				stm.logger.Trace("MCP execute_script completed", "exit_code", exitCode, "response_len", len(response))
 				return mcp_lib.NewToolResponseText(response), nil
@@ -276,7 +278,7 @@ RETURNING RESULTS:
 
 			if err != nil {
 				stm.logger.Debug("MCP execute_script failed", "exit_code", exitCode, "error", err)
-				return nil, fmt.Errorf("execution error: %w", err)
+				return mcp_lib.NewToolResponseError("execution error: " + err.Error()), nil
 			}
 
 			return mcp_lib.NewToolResponseText(""), nil

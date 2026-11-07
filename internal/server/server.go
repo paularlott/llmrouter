@@ -44,6 +44,14 @@ func buildServer(cmd *cli.Command, desktopMode bool) (*router.Router, *types.Con
 			Token:              cmd.GetString("token"),
 			AdminPassword:      cmd.GetString("admin-password"),
 			DefaultContextSize: cmd.GetInt("default-context-size"),
+			PublicURL:          strings.TrimSuffix(cmd.GetString("public-url"), "/"),
+			OIDC: types.OIDCConfig{
+				Issuer:                 cmd.GetString("oidc-issuer"),
+				JWKSURL:                cmd.GetString("oidc-jwks-url"),
+				Audience:               cmd.GetStringSlice("oidc-audience"),
+				RequiredScopes:         cmd.GetStringSlice("oidc-required-scope"),
+				RequireAccessTokenType: cmd.GetBool("oidc-require-access-token-type"),
+			},
 		},
 		Logging: types.LoggingConfig{
 			Level:  cmd.GetString("log-level"),

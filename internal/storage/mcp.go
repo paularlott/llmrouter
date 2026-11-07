@@ -23,8 +23,9 @@ type MCPServerConfig struct {
 	OAuthTokenURL     string   `json:"oauth_token_url,omitempty"`
 	OAuthAccessToken  string   `json:"oauth_access_token,omitempty"`
 	OAuthRefreshToken string   `json:"oauth_refresh_token,omitempty"`
-	Enabled           bool     `json:"enabled"`         // Server is active (default true)
-	ToolVisibility    string   `json:"tool_visibility"` // "native" (default) or "ondemand"
+	OAuthResource     string   `json:"oauth_resource,omitempty"` // RFC 8707 resource indicator sent on token refresh (from discovery)
+	Enabled           bool     `json:"enabled"`                  // Server is active (default true)
+	ToolVisibility    string   `json:"tool_visibility"`          // "native" (default) or "ondemand"
 	ToolAllowlist     []string `json:"tool_allowlist,omitempty"`
 	ToolDenylist      []string `json:"tool_denylist,omitempty"`
 	DisabledTools     []string `json:"disabled_tools,omitempty"` // Tools disabled via UI toggle
@@ -161,6 +162,7 @@ func (s *SnapshotMCPStorage) saveServer(key string, server *MCPServerConfig) err
 		"oauth_token_url":     server.OAuthTokenURL,
 		"oauth_access_token":  server.OAuthAccessToken,
 		"oauth_refresh_token": server.OAuthRefreshToken,
+		"oauth_resource":      server.OAuthResource,
 		"enabled":             server.Enabled,
 		"tool_visibility":     server.ToolVisibility,
 		"tool_allowlist":      server.ToolAllowlist,
@@ -375,6 +377,9 @@ func parseMCPServerConfig(data map[string]any) (*MCPServerConfig, error) {
 	if v, ok := data["oauth_refresh_token"].(string); ok {
 		server.OAuthRefreshToken = v
 	}
+	if v, ok := data["oauth_resource"].(string); ok {
+		server.OAuthResource = v
+	}
 	// Default to true if enabled field is not present (backwards compatibility)
 	server.Enabled = true
 	if v, ok := data["enabled"].(bool); ok {
@@ -448,6 +453,7 @@ func copyMCPServerConfig(server *MCPServerConfig) *MCPServerConfig {
 		OAuthTokenURL:     server.OAuthTokenURL,
 		OAuthAccessToken:  server.OAuthAccessToken,
 		OAuthRefreshToken: server.OAuthRefreshToken,
+		OAuthResource:     server.OAuthResource,
 		ToolVisibility:    server.ToolVisibility,
 		Enabled:           server.Enabled,
 		RemoteSearch:      server.RemoteSearch,
@@ -528,6 +534,7 @@ func (c *MCPServerConfig) ToJSON(includeToken bool) map[string]any {
 		result["oauth_token_url"] = c.OAuthTokenURL
 		result["oauth_access_token"] = c.OAuthAccessToken
 		result["oauth_refresh_token"] = c.OAuthRefreshToken
+		result["oauth_resource"] = c.OAuthResource
 	}
 
 	if len(c.Args) > 0 {

@@ -131,7 +131,11 @@ func (m *MCPServer) createRemoteServerEntry(config types.MCPRemoteServerConfig, 
 
 	var auth mcp.AuthProvider
 	if config.AuthType == "oauth2" {
-		auth = mcp.NewOAuth2RefreshTokenAuth(config.OAuthTokenURL, config.OAuthClientID, config.OAuthAccessToken, config.OAuthRefreshToken)
+		var opts []mcp.OAuth2Option
+		if config.OAuthResource != "" {
+			opts = append(opts, mcp.WithResource(config.OAuthResource))
+		}
+		auth = mcp.NewOAuth2RefreshTokenAuth(config.OAuthTokenURL, config.OAuthClientID, config.OAuthAccessToken, config.OAuthRefreshToken, opts...)
 	} else if config.Token != "" {
 		auth = mcp.NewBearerTokenAuth(config.Token)
 	}
@@ -259,6 +263,7 @@ func (m *MCPServer) ReloadAllServers(storageServers []*storage.MCPServerConfig) 
 			OAuthTokenURL:     server.OAuthTokenURL,
 			OAuthAccessToken:  server.OAuthAccessToken,
 			OAuthRefreshToken: server.OAuthRefreshToken,
+			OAuthResource:     server.OAuthResource,
 			ToolVisibility:    server.ToolVisibility,
 			ToolAllowlist:     server.ToolAllowlist,
 			ToolDenylist:      server.ToolDenylist,

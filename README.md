@@ -117,6 +117,15 @@ token = "your-secret-token"   # Optional bearer token
 admin_password = "admin123"   # Optional: enables admin UI at /admin
 storage_path = "./data"       # Omit for memory-only (desktop defaults to ~/.llmrouter/data)
 default_context_size = 4096   # Optional: fallback context window (tokens) for models that don't expose one
+public_url = "https://llm.example.com"  # Optional: external base URL; the /mcp OAuth resource identifier is <public_url>/mcp
+
+# Optional: accept an identity provider's JWT access tokens on /mcp (OAuth 2.1 resource server)
+[server.oidc]
+issuer = "https://idp.example.com/realms/acme"  # Token iss must match exactly
+# jwks_url = "https://idp.example.com/.../certs" # Default: discovered from the issuer
+# audience = ["llmrouter"]                       # Extra accepted aud values besides <public_url>/mcp
+# required_scopes = ["mcp"]                      # Scopes every /mcp request must carry
+# require_access_token_type = true               # Require typ "at+jwt" (RFC 9068)
 
 [logging]
 level = "info"    # trace | debug | info | warn | error
@@ -633,8 +642,13 @@ DELETE /v1/conversations/{conversation_id}/items/{item_id}
 ### MCP
 
 ```bash
-POST /mcp    # MCP protocol — the router's own tools, plus remote servers opted in with federate = true (apps excluded, skills namespaced)
+POST   /mcp    # MCP protocol — the router's own tools, plus remote servers opted in with federate = true (apps excluded, skills namespaced)
+GET    /mcp    # MCP Streamable HTTP: server-to-client stream (answered per spec)
+DELETE /mcp    # MCP Streamable HTTP: end session
+GET    /.well-known/oauth-protected-resource[/mcp]  # RFC 9728 protected resource metadata (only when /mcp is protected)
 ```
+
+`/mcp` is an OAuth 2.1 protected resource when `server.token` and/or `server.oidc.issuer` is set: it accepts the static token, the issuer's JWT access tokens whose audience is `<public_url>/mcp` (or one of `server.oidc.audience`), or either when both are configured. A missing or invalid token is answered `401` with `WWW-Authenticate: Bearer resource_metadata="…"` (plus `error="invalid_token"` when a token was sent); a token lacking `required_scopes` gets `403` with `error="insufficient_scope"`. With neither configured, `/mcp` is unauthenticated (a warning is logged at startup). Other endpoints still use only `server.token`. Set `public_url` whenever clients reach the router at an address other than `http://<host>:<port>`, so the resource identifier matches what clients and the identity provider use.
 
 ### Admin UI
 

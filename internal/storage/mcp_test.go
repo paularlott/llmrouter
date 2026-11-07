@@ -508,6 +508,7 @@ func TestSnapshotMCPStorage_Persistence(t *testing.T) {
 		Namespace:      "persistent",
 		URL:            "https://example.com/mcp",
 		Token:          "persistent-token",
+		OAuthResource:  "https://example.com/mcp",
 		ToolVisibility: "ondemand",
 		ToolAllowlist:  []string{"tool1", "tool2"},
 	}
@@ -544,6 +545,9 @@ func TestSnapshotMCPStorage_Persistence(t *testing.T) {
 	}
 	if len(retrieved.ToolAllowlist) != 2 {
 		t.Errorf("Expected 2 allowlist items, got %d", len(retrieved.ToolAllowlist))
+	}
+	if retrieved.OAuthResource != "https://example.com/mcp" {
+		t.Errorf("Expected OAuthResource to persist, got %q", retrieved.OAuthResource)
 	}
 }
 

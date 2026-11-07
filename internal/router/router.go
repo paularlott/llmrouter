@@ -227,7 +227,33 @@ func NewRouter(config *types.Config, logger Logger) (*Router, error) {
 
 	// Add MCP endpoints if server is available
 	if router.mcpServer != nil {
-		router.mux.HandleFunc("POST /mcp", auth(router.HandleMCP))
+		// /mcp is an OAuth 2.1 protected resource (MCP authorization spec):
+		// bearer tokens are checked by the resource server, refusals carry a
+		// WWW-Authenticate challenge naming the RFC 9728 metadata document.
+		// GET (SSE stream) and DELETE (session end) are answered by the
+		// library per the transport spec.
+		rs, err := newMCPResourceServer(config.Server)
+		if err != nil {
+			return nil, fmt.Errorf("MCP endpoint authentication: %w", err)
+		}
+		var mcpHandler http.Handler = http.HandlerFunc(router.HandleMCP)
+		if rs != nil {
+			mcpHandler = rs.Protect(mcpHandler)
+			router.mux.Handle(rs.MetadataPath(), rs.MetadataHandler())
+			if rs.MetadataPath() != "/.well-known/oauth-protected-resource" {
+				router.mux.Handle("/.well-known/oauth-protected-resource", rs.MetadataHandler())
+			}
+			logger.Info("MCP endpoint requires a bearer token", "resource", rs.Resource,
+				"static_token", config.Server.Token != "", "oidc_issuer", config.Server.OIDC.Issuer)
+			if config.Server.PublicURL == "" && config.Server.OIDC.Issuer != "" {
+				logger.Warn("server.public_url is not set; the MCP resource identifier is derived from the bind address and may not match the audience of issued tokens", "resource", rs.Resource)
+			}
+		} else {
+			logger.Warn("MCP endpoint /mcp is unauthenticated: set server.token or server.oidc.issuer to protect it")
+		}
+		for _, method := range []string{http.MethodPost, http.MethodGet, http.MethodDelete} {
+			router.mux.Handle(method+" /mcp", mcpHandler)
+		}
 		logger.Info("MCP server endpoint available at /mcp (use X-MCP-Tool-Mode: discovery header for discovery mode)")
 	}
 

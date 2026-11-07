@@ -33,6 +33,36 @@ func ServerFlags() []cli.Flag {
 			ConfigPath: []string{"server.token"},
 		},
 		&cli.StringFlag{
+			Name:       "public-url",
+			Usage:      "Externally reachable base URL of this router (e.g. https://llm.example.com); the MCP endpoint's OAuth resource identifier is <public-url>/mcp",
+			ConfigPath: []string{"server.public_url"},
+		},
+		&cli.StringFlag{
+			Name:       "oidc-issuer",
+			Usage:      "OIDC/OAuth issuer whose JWT access tokens are accepted on /mcp (enables OAuth resource-server mode)",
+			ConfigPath: []string{"server.oidc.issuer"},
+		},
+		&cli.StringFlag{
+			Name:       "oidc-jwks-url",
+			Usage:      "JWKS URL of the OIDC issuer (default: discovered from the issuer's well-known metadata)",
+			ConfigPath: []string{"server.oidc.jwks_url"},
+		},
+		&cli.StringSliceFlag{
+			Name:       "oidc-audience",
+			Usage:      "Additional accepted token audience for /mcp besides the resource URL (can be repeated)",
+			ConfigPath: []string{"server.oidc.audience"},
+		},
+		&cli.StringSliceFlag{
+			Name:       "oidc-required-scope",
+			Usage:      "Scope every /mcp request's token must carry (can be repeated)",
+			ConfigPath: []string{"server.oidc.required_scopes"},
+		},
+		&cli.BoolFlag{
+			Name:       "oidc-require-access-token-type",
+			Usage:      "Require OIDC JWTs to have typ at+jwt (RFC 9068), rejecting ID tokens",
+			ConfigPath: []string{"server.oidc.require_access_token_type"},
+		},
+		&cli.StringFlag{
 			Name:       "admin-password",
 			Usage:      "Password for admin UI (if set, enables admin UI at /admin)",
 			ConfigPath: []string{"server.admin_password"},

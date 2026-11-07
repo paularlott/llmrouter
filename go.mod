@@ -1,17 +1,17 @@
 module github.com/paularlott/llmrouter
 
-go 1.27.2
+go 1.27.3
 
 require (
 	github.com/BurntSushi/toml v1.6.0
-	github.com/crgimenes/glaze v0.0.81
+	github.com/crgimenes/glaze v0.0.83
 	github.com/fsnotify/fsnotify v1.10.1
 	github.com/google/uuid v1.6.0
 	github.com/paularlott/cli v0.10.2
 	github.com/paularlott/lmchatkit v0.12.1
 	github.com/paularlott/logger v0.4.0
-	github.com/paularlott/mcp v0.33.2
-	github.com/paularlott/scriptling v0.33.1
+	github.com/paularlott/mcp v0.34.0
+	github.com/paularlott/scriptling v0.34.0
 	github.com/paularlott/snapshotkv v0.6.0
 )
 
@@ -37,7 +37,7 @@ require (
 	github.com/mattn/go-isatty v0.0.24 // indirect
 	github.com/ncruces/go-strftime v1.1.0 // indirect
 	github.com/paularlott/gossip v0.30.3 // indirect
-	github.com/paularlott/jsonrpc v0.3.0 // indirect
+	github.com/paularlott/jsonrpc v0.4.0 // indirect
 	github.com/power-devops/perfstat v0.0.0-20260916203055-22a1a467d9f0 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	github.com/shamaton/msgpack/v3 v3.2.6 // indirect
@@ -64,5 +64,5 @@ require (
 	modernc.org/libc v1.80.1 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.12.1 // indirect
-	modernc.org/sqlite v1.61.1 // indirect
+	modernc.org/sqlite v1.62.0 // indirect
 )

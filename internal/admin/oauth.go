@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -91,7 +92,13 @@ func (a *Admin) HandleOAuthStart(w http.ResponseWriter, r *http.Request) {
 
 	meta, err := mcp.DiscoverOAuthMeta(ctx, req.URL)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		if errors.Is(err, mcp.ErrPKCENotSupported) {
+			writeError(w, http.StatusBadRequest, "OAuth sign-in is not possible for this MCP server: its authorization server does not "+
+				"advertise PKCE with S256 (code_challenge_methods_supported), which the MCP specification requires. "+
+				"Ask the server operator to enable PKCE, or use bearer-token authentication instead. ("+err.Error()+")")
+			return
+		}
+		writeError(w, http.StatusBadRequest, "OAuth discovery failed: "+err.Error())
 		return
 	}
 
@@ -216,6 +223,7 @@ func (a *Admin) HandleOAuthCallback(w http.ResponseWriter, r *http.Request) {
 		OAuthTokenURL:     pending.TokenURL,
 		OAuthAccessToken:  tokens.AccessToken,
 		OAuthRefreshToken: tokens.RefreshToken,
+		OAuthResource:     pending.Resource,
 		Enabled:           pending.Enabled,
 		ToolVisibility:    pending.ToolVisibility,
 		RemoteSearch:      pending.RemoteSearch,
@@ -234,6 +242,7 @@ func (a *Admin) HandleOAuthCallback(w http.ResponseWriter, r *http.Request) {
 		existing.OAuthTokenURL = pending.TokenURL
 		existing.OAuthAccessToken = tokens.AccessToken
 		existing.OAuthRefreshToken = tokens.RefreshToken
+		existing.OAuthResource = pending.Resource
 		existing.Token = ""
 		saveErr = a.mcpStorage.Update(r.Context(), existing)
 	} else {
