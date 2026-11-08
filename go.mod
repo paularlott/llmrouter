@@ -10,8 +10,8 @@ require (
 	github.com/paularlott/cli v0.10.2
 	github.com/paularlott/lmchatkit v0.12.1
 	github.com/paularlott/logger v0.4.0
-	github.com/paularlott/mcp v0.34.0
-	github.com/paularlott/scriptling v0.34.0
+	github.com/paularlott/mcp v0.35.0
+	github.com/paularlott/scriptling v0.35.0
 	github.com/paularlott/snapshotkv v0.6.0
 )
 
@@ -40,7 +40,7 @@ require (
 	github.com/paularlott/jsonrpc v0.4.0 // indirect
 	github.com/power-devops/perfstat v0.0.0-20260916203055-22a1a467d9f0 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
-	github.com/shamaton/msgpack/v3 v3.2.6 // indirect
+	github.com/shamaton/msgpack/v3 v3.2.7 // indirect
 	github.com/shirou/gopsutil/v3 v3.24.5 // indirect
 	github.com/shoenig/go-m1cpu v0.2.4 // indirect
 	github.com/tklauser/go-sysconf v0.4.0 // indirect

@@ -90,8 +90,8 @@ var ToolCmd = &cli.Command{
 				"params": map[string]interface{}{
 					"name": "execute_tool",
 					"arguments": map[string]interface{}{
-						"name":      toolName,
-						"arguments": toolArgs,
+						"name":       toolName,
+						"parameters": toolArgs,
 					},
 				},
 			}

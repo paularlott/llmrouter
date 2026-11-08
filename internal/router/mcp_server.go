@@ -55,6 +55,7 @@ func declareUIAppsSupport(client *mcp.Client) {
 type MCPServer struct {
 	server               *mcp.Server
 	endpointServer       *mcp.Server // the public /mcp endpoint: llmrouter's own tools plus opt-in federated servers (never their apps)
+	localServer          *mcp.Server // llmrouter's own content only, never a remote server's: what the admin UI shows as "local"
 	config               *types.Config
 	logger               Logger
 	remoteClients        map[string]*remoteServerClient // namespace -> client (for admin UI)
@@ -69,6 +70,7 @@ func NewMCPServer(config *types.Config, logger Logger) (*MCPServer, error) {
 	mcpServer := &MCPServer{
 		server:         server,
 		endpointServer: mcp.NewServer("llmrouter", "1.0.0"),
+		localServer:    mcp.NewServer("llmrouter", "1.0.0"),
 		config:         config,
 		logger:         logger,
 		remoteClients:  make(map[string]*remoteServerClient),
@@ -662,7 +664,7 @@ func NewMCPServerWithScriptling(config *types.Config, logger Logger) (*MCPServer
 	// Registered on both servers: llmrouter's own tools/resources/prompts are
 	// native content on the chat-side server and the public /mcp endpoint.
 	if config.Scripting.ToolsDir != "" || config.Scripting.ResourcesDir != "" || config.Scripting.PromptsDir != "" || config.Scripting.SkillsDir != "" || config.Scripting.ExecScript {
-		manager, err := NewScriptlingToolManager(config.Scripting, logger, mcpServer.server, mcpServer.endpointServer)
+		manager, err := NewScriptlingToolManager(config.Scripting, logger, mcpServer.server, mcpServer.endpointServer, mcpServer.localServer)
 		if err != nil {
 			logger.Warn("Failed to setup scriptling tools", "error", err)
 		} else {

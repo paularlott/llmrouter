@@ -81,8 +81,12 @@ github.com/paularlott/logger v0.4.0 h1:nETpi8oXNRBl0U9f2BgO5VMyprF1k2lvOom9EuTX5
 github.com/paularlott/logger v0.4.0/go.mod h1:vjAOY1vUvYigmJxxQ0eMclryIjDS6VWNK6FprtTMce0=
 github.com/paularlott/mcp v0.34.0 h1:OyUs3JiRS034kmnMZMuN0kib8QqyBT5xOBBxTVpuxAE=
 github.com/paularlott/mcp v0.34.0/go.mod h1:xf5quKoG0/xFcrWMrTGzphKpBwzGDeCz1RqRf2x/MZw=
+github.com/paularlott/mcp v0.35.0 h1:T6uZjhkazSnhb44lmyYdxzheehDlc40FzzU/dCJEHs8=
+github.com/paularlott/mcp v0.35.0/go.mod h1:xf5quKoG0/xFcrWMrTGzphKpBwzGDeCz1RqRf2x/MZw=
 github.com/paularlott/scriptling v0.34.0 h1:mN1u0KznoRvCwZGeEdNChD74r4zHSHgxpSXqqDXhAog=
 github.com/paularlott/scriptling v0.34.0/go.mod h1:G7V5APDKrRLthU0gFDSZPeYVb1dgNs/KSJ5p1XYOxEE=
+github.com/paularlott/scriptling v0.35.0 h1:2c0N9Am437eUnAN1ntYteIxV5p5Qa56+8oHDI56LQh4=
+github.com/paularlott/scriptling v0.35.0/go.mod h1:GhTrg0PNP5NZUj38Q8umqFceiOy47T7f9cRR6KZSqtA=
 github.com/paularlott/snapshotkv v0.6.0 h1:bGUVANfPg7+2fsVnnnCWQvkuDrBWPg3mchGoEgel28Q=
 github.com/paularlott/snapshotkv v0.6.0/go.mod h1:TAiDx8gWhRS5cy1i8iKpxCQsWWpmQ0zA4IBEwLX58Ow=
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
@@ -94,6 +98,8 @@ github.com/rogpeppe/go-internal v1.14.1 h1:UQB4HGPB6osV0SQTLymcB4TgvyWu6ZyliaW0t
 github.com/rogpeppe/go-internal v1.14.1/go.mod h1:MaRKkUm5W0goXpeCfT7UZI6fk/L7L7so1lCWt35ZSgc=
 github.com/shamaton/msgpack/v3 v3.2.6 h1:i8I++0ehiIO8yK4+ZU6j5MIWFz5e8J6EeJvdM/qeyTw=
 github.com/shamaton/msgpack/v3 v3.2.6/go.mod h1:sgBYvEiyz8JR1NC3yGRoPVME9xXovpnh3l/plW1nfRo=
+github.com/shamaton/msgpack/v3 v3.2.7 h1:YuVYjZq5+NLIREdW52txCmEfVGIi4ithcdhOJhAmU5A=
+github.com/shamaton/msgpack/v3 v3.2.7/go.mod h1:sgBYvEiyz8JR1NC3yGRoPVME9xXovpnh3l/plW1nfRo=
 github.com/shirou/gopsutil/v3 v3.24.5 h1:i0t8kL+kQTvpAYToeuiVk3TgDeKOFioZO3Ztz/iZ9pI=
 github.com/shirou/gopsutil/v3 v3.24.5/go.mod h1:bsoOS1aStSs9ErQ1WWfxllSeS1K5D+U30r2NfcubMVk=
 github.com/shoenig/go-m1cpu v0.2.4 h1:F5esY3x6L2iIxmqHnMZ5afJwXBy573/fwkPgvatExgE=

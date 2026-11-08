@@ -2695,10 +2695,11 @@ func (r *Router) localServerInfo() (admin.MCPServerInfo, bool) {
 	}, true
 }
 
-// localTools lists the locally-served tools straight off the in-process
-// server the scriptling manager registers on.
+// localTools lists the locally-served tools from the local-only server the
+// scriptling manager registers on, which never holds a remote server's tools
+// (the chat-side server holds every remote, for the chat).
 func (r *Router) localTools() ([]admin.ToolInfo, error) {
-	tools := r.mcpServer.server.ListToolsWithContext(context.Background())
+	tools := r.mcpServer.localServer.ListToolsWithContext(context.Background())
 	out := make([]admin.ToolInfo, 0, len(tools))
 	for _, t := range tools {
 		info := admin.ToolInfo{
@@ -2724,8 +2725,8 @@ func (r *Router) localTools() ([]admin.ToolInfo, error) {
 }
 
 func (r *Router) localResources() ([]admin.ResourceInfo, error) {
-	resources := r.mcpServer.server.ListResources(context.Background())
-	templates := r.mcpServer.server.ListResourceTemplates(context.Background())
+	resources := r.mcpServer.localServer.ListResources(context.Background())
+	templates := r.mcpServer.localServer.ListResourceTemplates(context.Background())
 	out := make([]admin.ResourceInfo, 0, len(resources)+len(templates))
 	for _, res := range resources {
 		out = append(out, admin.ResourceInfo{
@@ -2749,7 +2750,7 @@ func (r *Router) localResources() ([]admin.ResourceInfo, error) {
 }
 
 func (r *Router) localReadResource(uri string) (*admin.ResourceReadResult, error) {
-	res, err := r.mcpServer.server.ReadResource(context.Background(), uri)
+	res, err := r.mcpServer.localServer.ReadResource(context.Background(), uri)
 	if err != nil {
 		return nil, err
 	}
@@ -2762,7 +2763,7 @@ func (r *Router) localReadResource(uri string) (*admin.ResourceReadResult, error
 }
 
 func (r *Router) localPrompts() ([]admin.PromptInfo, error) {
-	prompts := r.mcpServer.server.ListPrompts(context.Background())
+	prompts := r.mcpServer.localServer.ListPrompts(context.Background())
 	out := make([]admin.PromptInfo, 0, len(prompts))
 	for _, p := range prompts {
 		info := admin.PromptInfo{Name: p.Name, Description: p.Description}
@@ -2779,7 +2780,7 @@ func (r *Router) localPrompts() ([]admin.PromptInfo, error) {
 }
 
 func (r *Router) localCallTool(toolName string, args map[string]any) (*admin.ToolCallResult, error) {
-	resp, err := r.mcpServer.server.CallTool(context.Background(), toolName, args)
+	resp, err := r.mcpServer.localServer.CallTool(context.Background(), toolName, args)
 	if err != nil {
 		return nil, err
 	}
