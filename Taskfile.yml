@@ -154,16 +154,103 @@ tasks:
   # ──────────────────────────────────────────────────────────────────────────
   package-darwin-arch:
     internal: true
+    # MACOS_SIGN_IDENTITY (see .env.example) signs the app for release.
+    dotenv: [".env"]
     cmds:
       - |
         APP="dist/LLM Router.app"
+        rm -rf "$APP"
         mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
         cp "dist/{{.BINARY_NAME}}-darwin-{{.DARWIN_ARCH}}" "$APP/Contents/MacOS/{{.BINARY_NAME}}"
         cp build/darwin/icon.icns "$APP/Contents/Resources/"
         cp build/darwin/Info.plist "$APP/Contents/"
-        codesign --force --deep --sign - "$APP" 2>/dev/null || true
+        if command -v plutil >/dev/null 2>&1; then
+          plutil -replace CFBundleVersion -string "{{.VERSION}}" "$APP/Contents/Info.plist"
+          plutil -replace CFBundleShortVersionString -string "{{.VERSION}}" "$APP/Contents/Info.plist"
+        fi
+        if [ -n "$MACOS_SIGN_IDENTITY" ]; then
+          # Developer ID signature for release: the hardened runtime and a
+          # secure timestamp are required for notarization.
+          codesign --force --timestamp --options runtime \
+            --sign "$MACOS_SIGN_IDENTITY" "$APP" || exit 1
+        else
+          # Ad-hoc signature for local builds without a Developer ID
+          codesign --force --deep --sign - "$APP" 2>/dev/null || true
+        fi
+        rm -f "dist/{{.BINARY_NAME}}-darwin-{{.DARWIN_ARCH}}.zip"
         cd dist && zip -r --symlinks "{{.BINARY_NAME}}-darwin-{{.DARWIN_ARCH}}.zip" "LLM Router.app"
         cd .. && rm -rf "$APP"
+
+  notarize-macos:
+    desc: Notarize the Developer ID signed LLM Router.app zips and staple the ticket to each app (NOTARY_* in .env)
+    dotenv: [".env"]
+    cmds:
+      - |
+        if [ -z "$NOTARY_KEY" ] || [ -z "$NOTARY_KEY_ID" ] || [ -z "$NOTARY_ISSUER" ]; then
+          echo "NOTARY_KEY, NOTARY_KEY_ID and NOTARY_ISSUER must be set: see .env.example" >&2
+          exit 1
+        fi
+        key=$NOTARY_KEY
+        case $key in "~/"*) key="$HOME/${key#\~/}" ;; esac
+        if [ ! -f "$key" ]; then
+          echo "Notary API key not found: $key" >&2
+          exit 1
+        fi
+        notary() {
+          xcrun notarytool "$@" --key "$key" --key-id "$NOTARY_KEY_ID" --issuer "$NOTARY_ISSUER"
+        }
+
+        stage=$(mktemp -d "${TMPDIR:-/tmp}/llmrouter-notarize.XXXXXX") || exit 1
+        trap 'rm -rf "$stage"' EXIT
+        out="$PWD/dist"
+
+        # Unpack each architecture's app and check it carries a Developer ID
+        # signature before anything is sent to Apple.
+        for arch in amd64 arm64; do
+          zip="$out/{{.BINARY_NAME}}-darwin-${arch}.zip"
+          mkdir -p "$stage/submit/$arch" || exit 1
+          ditto -x -k "$zip" "$stage/submit/$arch" || exit 1
+          if ! codesign -dvv "$stage/submit/$arch/LLM Router.app" 2>&1 | grep -q '^Authority=Developer ID Application'; then
+            echo "$zip is not Developer ID signed: set MACOS_SIGN_IDENTITY in .env and rebuild (task build-all)" >&2
+            exit 1
+          fi
+        done
+
+        # One submission covers both apps: notarization is recorded per
+        # binary, so each app's ticket can then be stapled separately.
+        ditto -c -k --keepParent "$stage/submit" "$stage/submit.zip" || exit 1
+        result=$(notary submit "$stage/submit.zip" --wait --output-format json) || true
+        echo "$result"
+        status=$(echo "$result" | jq -r '.status // empty')
+        if [ "$status" != "Accepted" ]; then
+          id=$(echo "$result" | jq -r '.id // empty')
+          echo "Notarization failed (status: ${status:-unknown})" >&2
+          if [ -n "$id" ]; then notary log "$id" >&2; fi
+          exit 1
+        fi
+
+        # Staple the ticket into each app, so Gatekeeper accepts it offline
+        # too, then repack the release zip with the stapled app.
+        for arch in amd64 arm64; do
+          app="$stage/submit/$arch/LLM Router.app"
+          zip="$out/{{.BINARY_NAME}}-darwin-${arch}.zip"
+          stapled=0
+          # A freshly accepted ticket can take a few seconds to be served.
+          for attempt in 1 2 3 4 5 6; do
+            if xcrun stapler staple "$app"; then
+              stapled=1
+              break
+            fi
+            sleep 10
+          done
+          if [ "$stapled" -ne 1 ]; then
+            echo "Could not staple the notarization ticket to the $arch app" >&2
+            exit 1
+          fi
+          spctl --assess --type execute -vv "$app" || exit 1
+          rm -f "$zip"
+          ditto -c -k --keepParent "$app" "$zip" || exit 1
+        done
 
   # ──────────────────────────────────────────────────────────────────────────
   # Zip packaging
@@ -186,6 +273,8 @@ tasks:
     desc: Tag version, build all platforms, create GitHub release + brew formulas
     deps: [build-all]
     cmds:
+      # Before anything is tagged or published, so a rejection stops here.
+      - task: notarize-macos
       - |
         if git tag -l v{{.VERSION}} | grep -q v{{.VERSION}}; then
           echo "Tag v{{.VERSION}} already exists, skipping tag creation"
