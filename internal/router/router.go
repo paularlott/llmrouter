@@ -273,6 +273,9 @@ func NewRouter(config *types.Config, logger Logger) (*Router, error) {
 		personaStorageWritable = !sharedStore.IsMemory()
 	}
 	router.mcpStorage = mcpStorage
+	if router.mcpServer != nil && mcpStorageWritable {
+		router.mcpServer.tokenStore = mcpStorage
+	}
 	router.providerStorage = providerStorage
 
 	// Merged persona source: config-file personas (read-only) + KV-stored

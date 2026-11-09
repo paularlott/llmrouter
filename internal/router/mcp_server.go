@@ -59,6 +59,7 @@ type MCPServer struct {
 	config               *types.Config
 	logger               Logger
 	remoteClients        map[string]*remoteServerClient // namespace -> client (for admin UI)
+	tokenStore           storage.MCPStorage             // where a stored server's refreshed OAuth tokens are saved (nil: not saved)
 	pendingStaticEntries []mcp.RemoteServerEntry
 	scriptlingManager    *scriptlingToolManager // Scriptling-based tool manager (if configured)
 }
@@ -136,6 +137,13 @@ func (m *MCPServer) createRemoteServerEntry(config types.MCPRemoteServerConfig, 
 		var opts []mcp.OAuth2Option
 		if config.OAuthResource != "" {
 			opts = append(opts, mcp.WithResource(config.OAuthResource))
+		}
+		// The authorization server may rotate the refresh token on each refresh and refuse the old one (ending the
+		// grant when it is presented again), so a stored server keeps the tokens it was last given.
+		if store, ns := m.tokenStore, config.Namespace; storageServer != nil && store != nil {
+			opts = append(opts, mcp.WithTokenUpdate(func(access, refresh string) {
+				m.saveOAuthTokens(store, ns, access, refresh)
+			}))
 		}
 		auth = mcp.NewOAuth2RefreshTokenAuth(config.OAuthTokenURL, config.OAuthClientID, config.OAuthAccessToken, config.OAuthRefreshToken, opts...)
 	} else if config.Token != "" {
@@ -732,4 +740,19 @@ func (m *MCPServer) CallPromptForAdmin(namespace, name string, args map[string]s
 		})
 	}
 	return result, nil
+}
+
+// saveOAuthTokens stores the OAuth tokens a stored server's client was last given, in place of the ones it started
+// with, so the next client made for it (after a reload or a restart) uses them.
+func (m *MCPServer) saveOAuthTokens(store storage.MCPStorage, namespace, access, refresh string) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	server, err := store.Get(ctx, namespace)
+	if err == nil {
+		server.OAuthAccessToken, server.OAuthRefreshToken = access, refresh
+		err = store.Update(ctx, server)
+	}
+	if err != nil {
+		m.logger.Warn("failed to save refreshed OAuth tokens for MCP server", "namespace", namespace, "error", err)
+	}
 }
