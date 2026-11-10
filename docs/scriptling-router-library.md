@@ -126,6 +126,7 @@ The following extended libraries are enabled. Filesystem access (`os`, `os.path`
 | `scriptling.ai`           | AI/LLM client for OpenAI-compatible APIs       |
 | `scriptling.ai.agent`     | Agentic AI loop with automatic tool execution  |
 | `scriptling.mcp`          | MCP (Model Context Protocol) tool interaction  |
+| `scriptling.mercure`      | Publish to and subscribe at Mercure hubs       |
 | `scriptling.toon`         | TOON encoding/decoding                         |
 | `scriptling.similarity`       | String matching and similarity utilities        |
 | `scriptling.template.html`   | HTML template rendering                         |
@@ -134,6 +135,16 @@ The following extended libraries are enabled. Filesystem access (`os`, `os.path`
 | `scriptling.runtime.kv`   | Thread-safe key-value store                    |
 | `scriptling.runtime.sync` | Named cross-environment concurrency primitives |
 | `scriptling.net.resolve` | DNS resolution (IP, SRV, srv+http URLs)        |
+
+A Mercure client or subscription a routing script leaves open is closed when the script's run ends, so a script that publishes an update about the routing decision needs no clean-up of its own:
+
+```python
+import scriptling.mercure as mercure
+import vars
+
+hub = mercure.Client(vars.mercure_url, key=vars.mercure_key)
+hub.publish("https://example.com/routing", {"model": "model-a"})
+```
 
 ### Script Variables
 

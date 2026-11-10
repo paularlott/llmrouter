@@ -258,6 +258,8 @@ RETURNING RESULTS:
 			code, _ := req.String("code")
 			stm.logger.Trace("MCP execute_script invoked", "code_len", len(code))
 			p := stm.newScriptling()
+			// Close what the code left open (Mercure clients and the like).
+			defer p.Close()
 
 			response, exitCode, err := scriptlingmcp.RunToolScript(ctx, p, code, map[string]interface{}{})
 

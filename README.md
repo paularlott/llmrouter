@@ -367,6 +367,7 @@ Every routing script has access to all Scriptling standard libraries (`json`, `r
 | `scriptling.ai`            | AI/LLM client for OpenAI-compatible APIs (or use `router.ai()` for a pre-configured in-process client) |
 | `scriptling.ai.agent`      | Agentic AI loop with automatic tool execution |
 | `scriptling.mcp`           | MCP tool interaction                          |
+| `scriptling.mercure`       | Publish to and subscribe at Mercure hubs      |
 | `scriptling.toon`          | TOON encoding/decoding                        |
 | `scriptling.similarity`    | String matching and similarity utilities      |
 | `scriptling.net.resolve`   | DNS resolution (IP, SRV, srv+http URLs)       |
@@ -519,6 +520,8 @@ lib_paths = ["./libs"]             # Additional directories for scriptling libra
 ```
 
 Tools can be marked as `discoverable = true` to hide them from `tools/list` and make them searchable via `tool_search` only.
+
+Tool scripts, and code run with `execute_script`, can publish to and subscribe at Mercure hubs with `scriptling.mercure`. A client or subscription a script leaves open is closed once its call is over.
 
 ### Chat UI
 

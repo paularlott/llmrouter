@@ -245,7 +245,8 @@ func (sr *SmartRouter) route(ctx context.Context, chatReq *ChatCompletionRequest
 	selectedModel, _ := vm.GetVarAsString("output_model")
 	providerHint, _ := vm.GetVarAsString("output_provider")
 
-	// Reset env: keep only import builtin and registered lib dicts
+	// Reset env: keep only import builtin and registered lib dicts. This also
+	// closes what the script left open (Mercure clients and the like).
 	vm.ResetEnv("vars", "router")
 
 	// Return VM to pool
