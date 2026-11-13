@@ -67,6 +67,3 @@ require (
 	modernc.org/memory v1.12.1 // indirect
 	modernc.org/sqlite v1.62.0 // indirect
 )
-
-// TEMPORARY until scriptling v0.40.0 is tagged: remove and run go mod tidy
-replace github.com/paularlott/scriptling => ../scriptling
