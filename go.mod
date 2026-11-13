@@ -11,7 +11,7 @@ require (
 	github.com/paularlott/lmchatkit v0.12.1
 	github.com/paularlott/logger v0.4.0
 	github.com/paularlott/mcp v0.36.0
-	github.com/paularlott/scriptling v0.40.0
+	github.com/paularlott/scriptling v0.40.1
 	github.com/paularlott/snapshotkv v0.6.0
 )
 
@@ -36,7 +36,7 @@ require (
 	github.com/lufia/plan9stats v0.0.0-20261101121723-be84dd9509a0 // indirect
 	github.com/mattn/go-isatty v0.0.24 // indirect
 	github.com/ncruces/go-strftime v1.1.0 // indirect
-	github.com/paularlott/gossip v0.31.0 // indirect
+	github.com/paularlott/gossip v0.31.1 // indirect
 	github.com/paularlott/gossiper/client v1.0.0 // indirect
 	github.com/paularlott/jsonrpc v0.4.0 // indirect
 	github.com/power-devops/perfstat v0.0.0-20260916203055-22a1a467d9f0 // indirect
