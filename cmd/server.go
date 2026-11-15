@@ -147,6 +147,18 @@ func ServerFlags() []cli.Flag {
 			Usage:      "Enable the built-in execute_script MCP tool (runs Scriptling code passed by the caller)",
 			ConfigPath: []string{"scripting.exec_script"},
 		},
+		&cli.IntFlag{
+			Name:         "mcp-exec-script-timeout",
+			Usage:        "Maximum run time of one execute_script call in seconds (negative = no limit)",
+			ConfigPath:   []string{"scripting.exec_script_timeout"},
+			DefaultValue: 60,
+		},
+		&cli.IntFlag{
+			Name:         "mcp-exec-script-memory-mb",
+			Usage:        "Maximum interpreter memory of one execute_script call in MiB (negative = no limit)",
+			ConfigPath:   []string{"scripting.exec_script_memory_mb"},
+			DefaultValue: 256,
+		},
 		&cli.StringFlag{
 			Name:         "personas-dir",
 			Usage:        "Directory of chat persona .toml files (system_prompt, default_model, [params] table)",

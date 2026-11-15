@@ -517,7 +517,12 @@ tool.return_string(f"{a} + {b} = {result}")
 tools_dir = "./tools"              # Directory containing .toml/.py tool pairs
 plugin_dirs = ["./plugins"]        # Directories containing plugin executables
 lib_paths = ["./libs"]             # Additional directories for scriptling libraries
+exec_script = true                 # Register the built-in execute_script tool (--mcp-exec-script)
+exec_script_timeout = 60           # Seconds each execute_script run may take (negative: no limit)
+exec_script_memory_mb = 256        # Memory each execute_script run may use, in MiB (negative: no limit)
 ```
+
+`execute_script` runs code the caller supplies, so each run is limited: 60 seconds and 256 MiB by default, no single value over 8 MiB (or the memory limit, if lower), and at most 1 MiB of output returned.
 
 Tools can be marked as `discoverable = true` to hide them from `tools/list` and make them searchable via `tool_search` only.
 

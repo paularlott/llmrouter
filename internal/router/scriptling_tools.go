@@ -2,6 +2,7 @@ package router
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -9,6 +10,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+	"unicode/utf8"
 
 	"github.com/fsnotify/fsnotify"
 	"github.com/paularlott/llmrouter/internal/types"
@@ -210,12 +212,73 @@ func (stm *scriptlingToolManager) registerAll() error {
 // It backs the built-in execute_script tool, which runs arbitrary caller code
 // outside any fixed script directory.
 func (stm *scriptlingToolManager) newScriptling() *scriptling.Scriptling {
-	p := scriptling.New()
+	limits := stm.execLimits()
+	var opts []scriptling.Option
+	if limits.memoryBytes > 0 {
+		opts = append(opts, scriptling.WithMemoryLimit(limits.memoryBytes))
+	}
+	if limits.valueBytes > 0 {
+		opts = append(opts, scriptling.WithMaxValueBytes(limits.valueBytes))
+	}
+	p := scriptling.New(opts...)
 	setup.Scriptling(p, stm.config.LibPaths, false, nil, nil, secretprovider.NewRegistry(), scriptlinglog.NewNullLogger(), "", "", false)
 	if stm.plugins != nil {
 		scriptlingplugin.RegisterLibraries(p, stm.plugins)
 	}
 	return p
+}
+
+// Defaults for each execute_script run. A single value (one string, list or
+// encoded output) is held to execScriptMaxValueBytes, or the memory limit when
+// that is lower, so one oversized value fails fast instead of filling the
+// memory budget; the text handed back to the caller is cut at
+// execScriptMaxResponseBytes.
+const (
+	execScriptDefaultTimeout   = 60 * time.Second
+	execScriptDefaultMemoryMB  = 256
+	execScriptMaxValueBytes    = 8 << 20
+	execScriptMaxResponseBytes = 1 << 20
+)
+
+type execScriptLimits struct {
+	timeout     time.Duration // 0 = none
+	memoryBytes int64         // 0 = none
+	valueBytes  int64         // 0 = none
+}
+
+// execLimits resolves the configured execute_script limits: 0 takes the
+// default, a negative value turns that limit off.
+func (stm *scriptlingToolManager) execLimits() execScriptLimits {
+	l := execScriptLimits{timeout: execScriptDefaultTimeout, memoryBytes: execScriptDefaultMemoryMB << 20, valueBytes: execScriptMaxValueBytes}
+	switch t := stm.config.ExecScriptTimeoutSec; {
+	case t > 0:
+		l.timeout = time.Duration(t) * time.Second
+	case t < 0:
+		l.timeout = 0
+	}
+	switch m := stm.config.ExecScriptMemoryMB; {
+	case m > 0:
+		l.memoryBytes = int64(m) << 20
+	case m < 0:
+		l.memoryBytes = 0
+	}
+	if l.memoryBytes > 0 && l.memoryBytes < l.valueBytes {
+		l.valueBytes = l.memoryBytes
+	}
+	return l
+}
+
+// capExecResponse cuts text handed back from execute_script at
+// execScriptMaxResponseBytes, on a UTF-8 boundary, with a note saying so.
+func capExecResponse(text string) string {
+	if len(text) <= execScriptMaxResponseBytes {
+		return text
+	}
+	cut := execScriptMaxResponseBytes
+	for cut > 0 && !utf8.RuneStart(text[cut]) {
+		cut--
+	}
+	return text[:cut] + fmt.Sprintf("\n[... output truncated at %d bytes ...]", execScriptMaxResponseBytes)
 }
 
 // registerExecTool registers the built-in execute_script MCP tool, mirroring
@@ -257,11 +320,19 @@ RETURNING RESULTS:
 		func(ctx context.Context, req *mcp_lib.ToolRequest) (*mcp_lib.ToolResponse, error) {
 			code, _ := req.String("code")
 			stm.logger.Trace("MCP execute_script invoked", "code_len", len(code))
+			limits := stm.execLimits()
+			runCtx := ctx
+			if limits.timeout > 0 {
+				var cancel context.CancelFunc
+				runCtx, cancel = context.WithTimeout(ctx, limits.timeout)
+				defer cancel()
+			}
 			p := stm.newScriptling()
 			// Close what the code left open (Mercure clients and the like).
 			defer p.Close()
 
-			response, exitCode, err := scriptlingmcp.RunToolScript(ctx, p, code, map[string]interface{}{})
+			response, exitCode, err := scriptlingmcp.RunToolScript(runCtx, p, code, map[string]interface{}{})
+			response = capExecResponse(response)
 
 			// If the script produced an explicit response (via return_error,
 			// return_string, etc.), return it to the client. return_error sets a
@@ -280,7 +351,13 @@ RETURNING RESULTS:
 
 			if err != nil {
 				stm.logger.Debug("MCP execute_script failed", "exit_code", exitCode, "error", err)
-				return mcp_lib.NewToolResponseError("execution error: " + err.Error()), nil
+				switch {
+				case limits.timeout > 0 && errors.Is(runCtx.Err(), context.DeadlineExceeded) && ctx.Err() == nil:
+					return mcp_lib.NewToolResponseError(fmt.Sprintf("execution error: the script exceeded the %s time limit", limits.timeout)), nil
+				case errors.Is(err, scriptling.ErrMemoryLimitExceeded) || strings.Contains(err.Error(), scriptling.ErrMemoryLimitExceeded.Error()):
+					return mcp_lib.NewToolResponseError(fmt.Sprintf("execution error: the script went over its %d MiB memory limit", limits.memoryBytes>>20)), nil
+				}
+				return mcp_lib.NewToolResponseError(capExecResponse("execution error: " + err.Error())), nil
 			}
 
 			return mcp_lib.NewToolResponseText(""), nil

@@ -133,6 +133,11 @@ type ScriptingConfig struct {
 	PluginDirs   []string `json:"plugin_dirs,omitempty"`   // Directories containing plugin executables
 	LibPaths     []string `json:"lib_paths,omitempty"`     // Additional directories to search for libraries
 	ExecScript   bool     `json:"exec_script,omitempty"`   // Register the built-in execute_script MCP tool
+
+	// Limits on each execute_script run: 0 takes the default, a negative
+	// value turns the limit off.
+	ExecScriptTimeoutSec int `json:"exec_script_timeout,omitempty"`   // Run time in seconds (default 60)
+	ExecScriptMemoryMB   int `json:"exec_script_memory_mb,omitempty"` // Interpreter memory in MiB (default 256)
 }
 
 // ChatConfig configures the /chat UI. When PersonasDir or CommandsDir is

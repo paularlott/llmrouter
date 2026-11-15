@@ -81,6 +81,9 @@ func buildServer(cmd *cli.Command, desktopMode bool) (*router.Router, *types.Con
 			PluginDirs:   cmd.GetStringSlice("plugin-dir"),
 			LibPaths:     cmd.GetStringSlice("libpath"),
 			ExecScript:   cmd.GetBool("mcp-exec-script"),
+
+			ExecScriptTimeoutSec: cmd.GetInt("mcp-exec-script-timeout"),
+			ExecScriptMemoryMB:   cmd.GetInt("mcp-exec-script-memory-mb"),
 		},
 		Chat: types.ChatConfig{
 			PersonasDir: cmd.GetString("personas-dir"),
@@ -176,6 +179,12 @@ func buildServer(cmd *cli.Command, desktopMode bool) (*router.Router, *types.Con
 			config.Scripting.PluginDirs = scriptingCfg.GetStringSlice("plugin_dirs")
 			config.Scripting.LibPaths = scriptingCfg.GetStringSlice("lib_paths")
 			config.Scripting.ExecScript = scriptingCfg.GetBool("exec_script")
+			if v := scriptingCfg.GetInt("exec_script_timeout"); v != 0 {
+				config.Scripting.ExecScriptTimeoutSec = v
+			}
+			if v := scriptingCfg.GetInt("exec_script_memory_mb"); v != 0 {
+				config.Scripting.ExecScriptMemoryMB = v
+			}
 		}
 		if chatCfg := typedConfig.GetObject("chat"); chatCfg != nil {
 			config.Chat.PersonasDir = chatCfg.GetString("personas_dir")
