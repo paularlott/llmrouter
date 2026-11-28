@@ -367,7 +367,11 @@ func NewRouter(config *types.Config, logger Logger) (*Router, error) {
 	}
 
 	chatServer, err := lmchatkit.New(lmchatkit.Config{
-		Prefix:         "/chat",
+		Prefix: "/chat",
+		// Tools may ask the person questions (MCP elicitation); the chat
+		// shows them as a form. chatHost is a plain StandardHost, so its
+		// CallToolWithInput is the one to use.
+		ToolInput:      true,
 		PersonaSource:  router.personaSource,
 		CommandsDir:    config.Chat.CommandsDir,
 		Host:           chatHost,
